@@ -1,0 +1,251 @@
+From 412c0b5e70694ca812b21559a66dcf1214cfb5cd Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Thu, 18 Oct 2012 09:59:27 +0100
+Subject: [PATCH 48/70] pc73032: add a work round for the pc30xx rgmii transmit issue
+
+This commit forms part of the resolution of Mantis Issue #10742
+---
+ arch/arm/cpu/arm926ejs/picoxcell/utilities.c    |   12 +++
+ arch/arm/include/asm/arch-picoxcell/axi2cfg.h   |    5 ++
+ arch/arm/include/asm/arch-picoxcell/picoxcell.h |    4 +-
+ arch/arm/include/asm/arch-picoxcell/utilities.h |    8 ++
+ drivers/net/macb.c                              |   87 +++++++++++++++++------
+ 5 files changed, 93 insertions(+), 23 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+index 518393c..2e5cb23 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+@@ -113,6 +113,18 @@ unsigned int picoxcell_is_rmii_enabled (void)
+ 	return ! !rmii_enabled;
+ }
+ 
++unsigned int picoxcell_is_rgmii_enabled (void)
++{
++	unsigned int mii_mode;
++
++	mii_mode = axi2cfg_readl (AXI2CFG_SYS_CONFIG_REG_OFFSET);
++	mii_mode &= AXI2CFG_PC30XX_MII_MODE;
++	if (mii_mode == AXI2CFG_PC30XX_RGMII_EN)
++                return 1;
++
++	return 0;
++}
++
+ u32 syscfg_read (void)
+ {
+ 	return axi2cfg_readl (AXI2CFG_SYS_CONFIG_REG_OFFSET);
+diff --git a/arch/arm/include/asm/arch-picoxcell/axi2cfg.h b/arch/arm/include/asm/arch-picoxcell/axi2cfg.h
+index 6ad03e1..69039bd 100644
+--- a/arch/arm/include/asm/arch-picoxcell/axi2cfg.h
++++ b/arch/arm/include/asm/arch-picoxcell/axi2cfg.h
+@@ -135,6 +135,8 @@
+ #define AXI2CFG_DMA_CHAN_7_MUX_IDX                  (2)
+ #define AXI2CFG_BOOT_MODE_IDX                       (0)
+ 
++#define AXI2CFG_PC30XX_MII_MODE_IDX                 (11)
++
+ #define AXI2CFG_PA_SOFT_RESET               (1 << AXI2CFG_PA_SOFT_RESET_IDX)
+ #define AXI2CFG_SHD_GPIO_7                  (1 << AXI2CFG_SHD_GPIO_7_IDX)
+ #define AXI2CFG_SHD_GPIO_6                  (1 << AXI2CFG_SHD_GPIO_6_IDX)
+@@ -159,6 +161,9 @@
+ #define AXI2CFG_DMA_CHAN_7_MUX              (1 << AXI2CFG_DMA_CHAN_7_MUX_IDX)
+ #define AXI2CFG_BOOT_MODE                   (1 << AXI2CFG_BOOT_MODE_IDX)
+ 
++#define AXI2CFG_PC30XX_MII_MODE             (0x7 << AXI2CFG_PC30XX_MII_MODE_IDX)
++#define AXI2CFG_PC30XX_RGMII_EN             (0x2 << AXI2CFG_PC30XX_MII_MODE_IDX)
++
+ /* Clock Control Stuff */
+ #define PICOXCELL_TZ_PROT_CTRL_CLOCK        (1 << 0)
+ #define PICOXCELL_SSI_CLOCK                 (1 << 1)
+diff --git a/arch/arm/include/asm/arch-picoxcell/picoxcell.h b/arch/arm/include/asm/arch-picoxcell/picoxcell.h
+index 8f42459..a034580 100644
+--- a/arch/arm/include/asm/arch-picoxcell/picoxcell.h
++++ b/arch/arm/include/asm/arch-picoxcell/picoxcell.h
+@@ -6,7 +6,7 @@
+ * \file picoxcell.h
+ * \brief Definitions for the picoxcell ARM sub-system.
+ *
+-* Copyright (c) 2006-2011 Picochip Ltd
++* Copyright (c) 2006-2012 Picochip Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -83,6 +83,8 @@
+ #define PC3X2_REV_A                 (0)
+ #define PC3X2_REV_D                 (1)
+ 
++#define PC30XX_REV_A                (0)
++
+ /*****************************************************************************/
+ /* Device Ids                                                                */
+ /*****************************************************************************/
+diff --git a/arch/arm/include/asm/arch-picoxcell/utilities.h b/arch/arm/include/asm/arch-picoxcell/utilities.h
+index 1763697..6f55277 100644
+--- a/arch/arm/include/asm/arch-picoxcell/utilities.h
++++ b/arch/arm/include/asm/arch-picoxcell/utilities.h
+@@ -61,6 +61,14 @@ unsigned int picoxcell_get_revision (void);
+ unsigned int picoxcell_is_rmii_enabled (void);
+ 
+ /*!
++ * \brief Are we setup for RGMII on PC30XX ?
++ *
++ * \return 0 - RGMII not enabled
++ *         1 - RGMII enabled
++ */
++unsigned int picoxcell_is_rgmii_enabled (void);
++
++/*!
+  * \brief Read a 32 bit value from an axi2cfg register.
+  *
+  * \param offs The register offset to read from
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index 467fc35..5c0473a 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -376,18 +376,22 @@ static int macb_phy_find(struct macb_device *macb)
+ }
+ #endif /* CONFIG_MACB_SEARCH_PHY */
+ 
+-#if defined (CONFIG_PICOCHIP_PC7302)
+-static int is_link_speed_100mpbs(struct macb_device *macb)
++#if defined (CONFIG_PICOCHIP_PC7302) || defined (CONFIG_PICOCHIP_PC73032)
++static int is_link_up(struct macb_device *macb)
++{
++        u16 status = macb_mdio_read(macb, MII_BMSR);
++
++        return ! !(status & BMSR_LSTATUS);
++}
++
++static int is_link_speed_100mbps(struct macb_device *macb)
+ {
+-	u16 status, adv, lpa;
++	u16 adv, lpa;
+ 
+ 	int media;
+ 
+-	status = macb_mdio_read(macb, MII_BMSR);
+-	if (!(status & BMSR_LSTATUS)) {
+-		/* No link setup */
+-		return 0;
+-	}
++	if (!is_link_up(macb))
++            return 0;
+ 
+ 	/* We have a link, get the speed */
+ 	adv = macb_mdio_read(macb, MII_ADVERTISE);
+@@ -397,20 +401,41 @@ static int is_link_speed_100mpbs(struct macb_device *macb)
+ 	return media & (ADVERTISE_100FULL | ADVERTISE_100HALF) ? 1 : 0;
+ }
+ 
++static int is_link_speed_1000mbps(struct macb_device *macb)
++{
++	u16 btsr;
++
++	if (macb->is_gem) {
++		btsr = macb_mdio_read(macb, MII_STAT1000);
++		if (btsr != 0xFFFF &&
++                    (btsr & (PHY_1000BTSR_1000FD | PHY_1000BTSR_1000HD))){
++                        return 1;
++	        }
++        }
++        return 0;
++}
++
++static void disable_1000mpbs_advertisment(struct macb_device *macb)
++{
++        u16 btcr;
++
++        btcr = macb_mdio_read(macb, MII_CTRL1000);
++        btcr &= ~(PHY_1000BTCR_1000FD | PHY_1000BTCR_1000HD);
++        macb_mdio_write(macb, MII_CTRL1000, btcr);
++}
++
+ static void setup_autoneg_advertisment(struct macb_device *macb)
+ {
+ 	u16 adv;
+ 
+ 	adv = ADVERTISE_CSMA | ADVERTISE_100HALF | ADVERTISE_100FULL;
+-	macb_mdio_write (macb, MII_ADVERTISE, adv);
++	macb_mdio_write(macb, MII_ADVERTISE, adv);
+ }
+ 
+ static void restart_phy_autoneg(struct macb_device *macb)
+ {
+-	macb_mdio_write (macb, MII_BMCR, (BMCR_ANENABLE | BMCR_ANRESTART));
+-
+-	/* Make sure the autonegotiation has started */
+-	udelay (100);
++	macb_mdio_write(macb, MII_BMCR, (BMCR_ANENABLE | BMCR_ANRESTART));
++	udelay(100);
+ }
+ 
+ static void wait_for_autonegotiation_complete(struct macb_device *macb)
+@@ -435,13 +460,28 @@ static void picoxcell_rmii_fixup(struct macb_device *macb)
+ 	 * Reduced MII (RMII) connected Ethernet Phy then we need the
+ 	 * link speed to be 100 mbps.
+ 	 */
+-	if (picoxcell_is_pc3x2 () && (rev == PC3X2_REV_D) &&
+-	    picoxcell_is_rmii_enabled () && !is_link_speed_100mpbs(macb)) {
++	if (picoxcell_is_pc3x2() && (rev == PC3X2_REV_D) &&
++	    picoxcell_is_rmii_enabled() && !is_link_speed_100mbps(macb)) {
+ 		setup_autoneg_advertisment(macb);
+ 		restart_phy_autoneg(macb);
+ 		wait_for_autonegotiation_complete(macb);
+ 	}
+ }
++
++static void picoxcell_rgmii_fixup(struct macb_device *macb)
++{
++	unsigned int rev = picoxcell_get_revision ();
++
++        /* If we are running on PC3032 Rev A silicon and we are using
++         * an rgmii interface then we can only transmit at 10/100 mpbs
++         */
++        if (picoxcell_is_pc30xx() && (rev == PC30XX_REV_A) &&
++            picoxcell_is_rgmii_enabled() && is_link_speed_1000mbps(macb)) {
++                disable_1000mpbs_advertisment(macb);
++                restart_phy_autoneg(macb);
++		wait_for_autonegotiation_complete(macb);
++        }
++}
+ #endif
+ 
+ static int macb_phy_init(struct macb_device *macb)
+@@ -470,6 +510,10 @@ static int macb_phy_init(struct macb_device *macb)
+         picoxcell_rmii_fixup(macb);
+ #endif
+ 
++#if defined (CONFIG_PICOCHIP_PC73032)
++        picoxcell_rgmii_fixup(macb);
++#endif
++
+ 	status = macb_mdio_read(macb, MII_BMSR);
+ 	if (!(status & BMSR_LSTATUS)) {
+ 		/* Try to re-negotiate if we don't have link already. */
+@@ -498,16 +542,15 @@ static int macb_phy_init(struct macb_device *macb)
+ 	        if (macb->is_gem) {
+ 			/* Do we have a gigabit link ? */
+ 			btsr = macb_mdio_read(macb, MII_STAT1000);
+-			if (btsr != 0xFFFF &&
+-                                (btsr & (PHY_1000BTSR_1000FD |
+-                                         PHY_1000BTSR_1000HD))){
+-                                speed = _1000BASET;
+-			}
+ 			if (btsr != 0xFFFF) {
+-		                if (btsr & PHY_1000BTSR_1000FD)
++		                if (btsr & PHY_1000BTSR_1000FD) {
+ 			                duplex = 1;
+-		                else if (btsr & PHY_1000BTSR_1000HD)
++                                        speed = _1000BASET;
++                                }
++		                else if (btsr & PHY_1000BTSR_1000HD) {
+ 			                duplex = 0;
++                                        speed = _1000BASET;
++                                }
+ 	                }
+                 }
+ 
+-- 
+1.7.0.4
+

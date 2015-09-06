@@ -1,0 +1,163 @@
+From 64c1c15a33c64bb7a3703b17acea12b13e4efca0 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 29 Jul 2011 16:09:52 +0100
+Subject: [PATCH 20/70] macb: initial support for Cadence GEM
+
+The Cadence GEM is based on the MACB Ethernet controller but has a few
+small changes with regards to register and bitfield placement.  This
+patch detects the presence of a GEM by reading the module ID register
+and setting a flag appropriately.
+
+This handles the new HW address, USRIO and hash register base register
+locations in GEM.
+---
+ drivers/net/macb.c |   18 +++++++++++-----
+ drivers/net/macb.h |   55 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 67 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index c63eea9..d52dda0 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -88,6 +88,7 @@ struct macb_dma_desc {
+ 
+ struct macb_device {
+ 	void			*regs;
++        int                     is_gem;
+ 
+ 	unsigned int		rx_tail;
+ 	unsigned int		tx_head;
+@@ -473,18 +474,19 @@ static int macb_init(struct eth_device *netdev, bd_t *bd)
+ 	defined(CONFIG_AT91SAM9263) || defined(CONFIG_AT91SAM9G20) || \
+ 	defined(CONFIG_AT91SAM9G45) || defined(CONFIG_AT91SAM9M10G45) || \
+ 	defined(CONFIG_AT91SAM9XE)
+-	macb_writel(macb, USRIO, MACB_BIT(RMII) | MACB_BIT(CLKEN));
++	macb_or_gem_writel(macb, USRIO, (MACB_BIT(RMII) |
++				         MACB_BIT(CLKEN)));
+ #else
+-	macb_writel(macb, USRIO, 0);
++	macb_or_gem_writel(macb, USRIO, 0);
+ #endif
+ #else
+ #if	defined(CONFIG_AT91CAP9) || defined(CONFIG_AT91SAM9260) || \
+ 	defined(CONFIG_AT91SAM9263) || defined(CONFIG_AT91SAM9G20) || \
+ 	defined(CONFIG_AT91SAM9G45) || defined(CONFIG_AT91SAM9M10G45) || \
+ 	defined(CONFIG_AT91SAM9XE)
+-	macb_writel(macb, USRIO, MACB_BIT(CLKEN));
++	macb_or_gem_writel(macb, USRIO, MACB_BIT(CLKEN));
+ #else
+-	macb_writel(macb, USRIO, MACB_BIT(MII));
++	macb_or_gem_writel(macb, USRIO, MACB_BIT(MII));
+ #endif
+ #endif /* CONFIG_RMII */
+ 
+@@ -524,9 +526,9 @@ static int macb_write_hwaddr(struct eth_device *dev)
+ 	/* set hardware address */
+ 	hwaddr_bottom = dev->enetaddr[0] | dev->enetaddr[1] << 8 |
+ 			dev->enetaddr[2] << 16 | dev->enetaddr[3] << 24;
+-	macb_writel(macb, SA1B, hwaddr_bottom);
++	macb_or_gem_writel(macb, SA1B, hwaddr_bottom);
+ 	hwaddr_top = dev->enetaddr[4] | dev->enetaddr[5] << 8;
+-	macb_writel(macb, SA1T, hwaddr_top);
++	macb_or_gem_writel(macb, SA1T, hwaddr_top);
+ 	return 0;
+ }
+ 
+@@ -581,6 +583,10 @@ int macb_eth_initialize(int id, void *regs, unsigned int phy_addr)
+ 
+ 	macb_writel(macb, NCFGR, ncfgr);
+ 
++	/* Cadence GEM has a module ID of 2. */
++	if (MACB_BFEXT(IDNUM, macb_readl(macb, MID)) == 0x2)
++		macb->is_gem = 1;
++
+ 	eth_register(netdev);
+ 
+ #if defined(CONFIG_CMD_MII)
+diff --git a/drivers/net/macb.h b/drivers/net/macb.h
+index f92a20c..a2913f2 100644
+--- a/drivers/net/macb.h
++++ b/drivers/net/macb.h
+@@ -71,6 +71,15 @@
+ #define MACB_TPQ				0x00bc
+ #define MACB_USRIO				0x00c0
+ #define MACB_WOL				0x00c4
++#define MACB_MID				0x00fc
++
++/* GEM register offsets. */
++#define GEM_NCFGR				0x0004
++#define GEM_USRIO				0x000c
++#define GEM_HRB					0x0080
++#define GEM_HRT					0x0084
++#define GEM_SA1B				0x0088
++#define GEM_SA1T				0x008C
+ 
+ /* Bitfields in NCR */
+ #define MACB_LB_OFFSET				0
+@@ -240,6 +249,12 @@
+ #define MACB_WOL_MTI_OFFSET			19
+ #define MACB_WOL_MTI_SIZE			1
+ 
++/* Bitfields in MID */
++#define MACB_IDNUM_OFFSET			16
++#define MACB_IDNUM_SIZE				16
++#define MACB_REV_OFFSET				0
++#define MACB_REV_SIZE				16
++
+ /* Constants for CLK */
+ #define MACB_CLK_DIV8				0
+ #define MACB_CLK_DIV16				1
+@@ -266,10 +281,50 @@
+ 		    << MACB_##name##_OFFSET))		\
+ 	 | MACB_BF(name,value))
+ 
++#define GEM_BIT(name)					\
++	(1 << GEM_##name##_OFFSET)
++#define GEM_BF(name, value)				\
++	(((value) & ((1 << GEM_##name##_SIZE) - 1))	\
++	 << GEM_##name##_OFFSET)
++#define GEM_BFEXT(name, value)\
++	(((value) >> GEM_##name##_OFFSET)		\
++	 & ((1 << GEM_##name##_SIZE) - 1))
++#define GEM_BFINS(name, value, old)			\
++	(((old) & ~(((1 << GEM_##name##_SIZE) - 1)	\
++		    << GEM_##name##_OFFSET))		\
++	 | GEM_BF(name, value))
++
+ /* Register access macros */
+ #define macb_readl(port,reg)				\
+ 	readl((port)->regs + MACB_##reg)
+ #define macb_writel(port,reg,value)			\
+ 	writel((value), (port)->regs + MACB_##reg)
++#define gem_readl(port, reg)				\
++	__raw_readl((port)->regs + GEM_##reg)
++#define gem_writel(port, reg, value)			\
++	__raw_writel((value), (port)->regs + GEM_##reg)
++
++/*
++ * Conditional GEM/MACB macros.  These perform the operation to the correct
++ * register dependent on whether the device is a GEM or a MACB.  For registers
++ * and bitfields that are common across both devices, use macb_{read,write}l
++ * to avoid the cost of the conditional.
++ */
++#define macb_or_gem_writel(__macb, __reg, __value) \
++	({ \
++		if ((__macb)->is_gem) \
++			gem_writel((__macb), __reg, __value); \
++		else \
++			macb_writel((__macb), __reg, __value); \
++	})
+ 
++#define macb_or_gem_readl(__macb, __reg) \
++	({ \
++		u32 __v; \
++		if ((__macb)->is_gem) \
++			__v = gem_readl((__macb), __reg); \
++		else \
++			__v = macb_readl((__macb), __reg); \
++		__v; \
++	})
+ #endif /* __DRIVERS_MACB_H__ */
+-- 
+1.7.0.4
+

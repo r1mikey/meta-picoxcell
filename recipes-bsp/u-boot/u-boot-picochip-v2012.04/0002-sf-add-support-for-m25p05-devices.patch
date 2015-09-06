@@ -1,0 +1,31 @@
+From 35bfc07b16c471c2d98a29a332a29ec64ea41e0e Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Wed, 19 Oct 2011 09:38:25 +0100
+Subject: [PATCH 02/70] sf: add support for m25p05 devices
+
+Signed-off-by: Dave Aldridge <fovsoft@gmail.com>
+---
+ drivers/mtd/spi/stmicro.c |    7 +++++++
+ 1 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/mtd/spi/stmicro.c b/drivers/mtd/spi/stmicro.c
+index a9b33cf..e9ccbde 100644
+--- a/drivers/mtd/spi/stmicro.c
++++ b/drivers/mtd/spi/stmicro.c
+@@ -56,6 +56,13 @@ struct stmicro_spi_flash_params {
+ 
+ static const struct stmicro_spi_flash_params stmicro_spi_flash_table[] = {
+ 	{
++		.idcode1 = 0x10,
++		.page_size = 256,
++		.pages_per_sector = 128,
++		.nr_sectors = 2,
++		.name = "M25P05-A",
++	},
++	{
+ 		.idcode1 = 0x11,
+ 		.page_size = 256,
+ 		.pages_per_sector = 128,
+-- 
+1.7.0.4
+

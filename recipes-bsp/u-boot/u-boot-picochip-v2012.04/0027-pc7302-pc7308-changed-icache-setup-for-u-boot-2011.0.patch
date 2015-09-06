@@ -1,0 +1,57 @@
+From d0d33b837ca470d16801c0215fabd5636d8df816 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Wed, 19 Oct 2011 09:06:29 +0100
+Subject: [PATCH 27/70] pc7302/pc7308: changed icache setup for u-boot 2011.09
+
+---
+ arch/arm/cpu/arm926ejs/picoxcell/cpu.c |    7 +++++++
+ board/picochip/pc7302/pc7302.c         |    3 ---
+ board/picochip/pc7308/pc7308.c         |    3 ---
+ 3 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/cpu.c b/arch/arm/cpu/arm926ejs/picoxcell/cpu.c
+index e65bf17..4dbbb0d 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/cpu.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/cpu.c
+@@ -53,3 +53,10 @@ int cpu_eth_init (bd_t *bis)
+ 
+ 	return ret;
+ }
++
++void enable_caches(void)
++{
++#ifndef CONFIG_SYS_ICACHE_OFF
++	icache_enable();
++#endif
++}
+diff --git a/board/picochip/pc7302/pc7302.c b/board/picochip/pc7302/pc7302.c
+index e0303a1..7e12f58 100644
+--- a/board/picochip/pc7302/pc7302.c
++++ b/board/picochip/pc7302/pc7302.c
+@@ -160,9 +160,6 @@ int board_init (void)
+ 
+ 	gd->flags = 0;
+ 
+-	/* Enable the Instruction Cache */
+-	icache_enable ();
+-
+ 	/* Start timer #0 */
+ 	picoxcell_timer_start (0);
+ 
+diff --git a/board/picochip/pc7308/pc7308.c b/board/picochip/pc7308/pc7308.c
+index e7a6809..e6271b6 100644
+--- a/board/picochip/pc7308/pc7308.c
++++ b/board/picochip/pc7308/pc7308.c
+@@ -131,9 +131,6 @@ int board_init (void)
+ 
+ 	gd->flags = 0;
+ 
+-	/* Enable the Instruction Cache */
+-	icache_enable ();
+-
+         /* Turn on some picoxcell block clocks */
+         picoxcell_clk_enable (PICOXCELL_SSI_CLOCK);
+         picoxcell_clk_enable (PICOXCELL_NAND_CLOCK);
+-- 
+1.7.0.4
+

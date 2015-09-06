@@ -1,0 +1,28 @@
+From 57fd0b49666d6aede63325a29c37123726e28668 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Thu, 12 Jan 2012 15:10:13 +0000
+Subject: [PATCH 30/70] nand: disable the nand controller dma during initialisation
+
+Having the dma enabled (maybe left set by firware) causes problems
+sending commands to the nand flash memory devices.
+
+This commit forms part of the resoultion of Mantis Issue #9601
+---
+ drivers/mtd/nand/denali.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index 9542ca7..5ca8b21 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -1292,6 +1292,7 @@ static void denali_hw_init (struct denali_nand_info *denali)
+ {
+ 	nand_dbg ("denali_hw_init()\n");
+ 
++        denali_enable_dma (denali, false); 
+         detect_max_banks (denali);
+ 
+ 	/* tell driver how many bit controller will skip before
+-- 
+1.7.0.4
+

@@ -1,0 +1,27 @@
+From ceec92ad6711b997d1ce33a12585eadbe48defa9 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Thu, 3 Nov 2011 13:21:23 +0000
+Subject: [PATCH 28/70] pc7308: changed the Ethernet phy address to 3
+
+The Ethernet Phy on the MB700000 Single Phy Ethernet Module has a
+Phy Address of 3.
+---
+ include/configs/picochippc7308.h |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index b54490e..0f59068 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -206,7 +206,7 @@
+  * Ethernet Stuff
+  */
+ #define CONFIG_MACB
+-#define CONFIG_PHY_ADDR         (1)
++#define CONFIG_PHY_ADDR         (3)
+ #define CONFIG_NET_MULTI
+ 
+ /*-----------------------------------------------------------------------------
+-- 
+1.7.0.4
+

@@ -1,0 +1,2781 @@
+From 0d79a2dee6b4fdedc8e23fe134645b4a788e5233 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 7 Sep 2012 16:00:27 +0100
+Subject: [PATCH 46/70] pc73032: add support for the pc73032 platform
+
+---
+ arch/arm/cpu/arm926ejs/picoxcell/utilities.c       |   46 ++
+ arch/arm/include/asm/arch-picoxcell/axi2cfg.h      |    6 +-
+ arch/arm/include/asm/arch-picoxcell/fuse.h         |    3 +-
+ .../include/asm/arch-picoxcell/pc30xx_mem_arm.h    |  213 ++++++++
+ .../include/asm/arch-picoxcell/pc30xx_mem_common.h |  152 ++++++
+ .../include/asm/arch-picoxcell/pc30xx_mem_shd.h    |  520 ++++++++++++++++++
+ arch/arm/include/asm/arch-picoxcell/utilities.h    |    9 +-
+ arch/arm/include/asm/mach-types.h                  |   13 +
+ board/picochip/pc73032/Makefile                    |   46 ++
+ board/picochip/pc73032/config.mk                   |   18 +
+ board/picochip/pc73032/lowlevel_init.S             |  143 +++++
+ board/picochip/pc73032/pc30xx_memif_init.c         |  562 ++++++++++++++++++++
+ board/picochip/pc73032/pc73032.c                   |  275 ++++++++++
+ boards.cfg                                         |    2 +
+ include/configs/picochippc73032-common.h           |  363 +++++++++++++
+ include/configs/picochippc73032nand.h              |  114 ++++
+ include/configs/picochippc73032nor.h               |   90 ++++
+ 17 files changed, 2572 insertions(+), 3 deletions(-)
+ create mode 100644 arch/arm/include/asm/arch-picoxcell/pc30xx_mem_arm.h
+ create mode 100644 arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h
+ create mode 100644 arch/arm/include/asm/arch-picoxcell/pc30xx_mem_shd.h
+ create mode 100644 board/picochip/pc73032/Makefile
+ create mode 100644 board/picochip/pc73032/config.mk
+ create mode 100644 board/picochip/pc73032/lowlevel_init.S
+ create mode 100644 board/picochip/pc73032/pc30xx_memif_init.c
+ create mode 100644 board/picochip/pc73032/pc73032.c
+ create mode 100644 include/configs/picochippc73032-common.h
+ create mode 100644 include/configs/picochippc73032nand.h
+ create mode 100644 include/configs/picochippc73032nor.h
+
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+index a56fd58..518393c 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+@@ -41,6 +41,21 @@
+ /* Types ------------------------------------------------------------------- */
+ 
+ /* Prototypes--------------------------------------------------------------- */
++/*
++ * \brief Is the memif arm present on a PC30xx ?
++ *
++ * \return 1 if memif arm present
++ *         0 if memif arm not present
++ */
++static int is_memif_arm_present_on_pc30xx (void);
++
++/*!
++ * \brief Is the memif arm interface disabled ?
++ *
++ * \return 1 if memif arm is disabled
++ *         0 if memif arm is not disabled
++ */
++static int is_memif_arm_disabled (void);
+ 
+ /* Functions --------------------------------------------------------------- */
+ __inline unsigned int picoxcell_read_register (const unsigned int address)
+@@ -183,3 +198,34 @@ void picoxcell_clk_enable (unsigned long clock)
+         axi2cfg_writel (clk_gate, AXI2CFG_CLK_GATING_REG_OFFSET);
+     }
+ }
++
++static int is_memif_arm_present_on_pc30xx (void)
++{
++	unsigned int memif_present;
++
++	memif_present = picoxcell_read_register (PICOXCELL_AXI2CFG_BASE +
++					         AXI2CFG_ID_REG_OFFSET);
++	memif_present &= PICOXCELL_MEMIF_ARM_NOT_PRESENT;
++
++	return !memif_present;
++}
++
++static int is_memif_arm_disabled (void)
++{
++	unsigned int memif_disabled;
++
++	memif_disabled = picoxcell_read_register (PICOXCELL_FUSE_BASE +
++					          FUSE_MAP_31_REG_OFFSET);
++	memif_disabled &= PICOXCELL_DISABLE_MEMIF_ARM;
++
++	return ! !memif_disabled;
++}
++
++int is_memif_arm_usable_on_pc30xx (void)
++{
++	if (is_memif_arm_present_on_pc30xx () && !is_memif_arm_disabled ()) {
++		return 1;
++	} else {
++		return 0;
++	}
++}
+diff --git a/arch/arm/include/asm/arch-picoxcell/axi2cfg.h b/arch/arm/include/asm/arch-picoxcell/axi2cfg.h
+index ced57be..6ad03e1 100644
+--- a/arch/arm/include/asm/arch-picoxcell/axi2cfg.h
++++ b/arch/arm/include/asm/arch-picoxcell/axi2cfg.h
+@@ -6,7 +6,7 @@
+ * \file axi2cfg.h
+ * \brief Definitions for the picoxcell axi2cfg block.
+ *
+-* Copyright (c) 2006-2011 Picochip Ltd
++* Copyright (c) 2006-2012 Picochip Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -41,6 +41,7 @@
+ #define AXI2CFG_CLK_GATING_REG_OFFSET               (0x0048)
+ #define AXI2CFG_ARM_PLL_CLK_REG_OFFSET              (0x0050)
+ #define AXI2CFG_FREQ_SENSE_REG_OFFSET               (0x0054)
++#define AXI2CFG_ID_REG_OFFSET                       (0x0068)
+ #define AXI2CFG_CONFIG_WRITE_REG_OFFSET             (0x0100)
+ #define AXI2CFG_CONFIG_READ_REG_OFFSET              (0x0200)
+ #define AXI2CFG_DMAC1_CONFIG_REG_OFFSET             (0x0300)
+@@ -176,4 +177,7 @@
+ #define PICOXCELL_MEMIF_SHD_SDRAM_CLOCK     (1 << 14)
+ #define PICOXCELL_AXI2PICO_CLOCK            (1 << 15)
+ 
++/* Id Register Stuff */
++#define PICOXCELL_MEMIF_ARM_NOT_PRESENT     (1 << 10)
++
+ #endif /* __PICOXCELL_AXI2CFG_H__ */
+diff --git a/arch/arm/include/asm/arch-picoxcell/fuse.h b/arch/arm/include/asm/arch-picoxcell/fuse.h
+index f569f10..19030c5 100644
+--- a/arch/arm/include/asm/arch-picoxcell/fuse.h
++++ b/arch/arm/include/asm/arch-picoxcell/fuse.h
+@@ -6,7 +6,7 @@
+ * \file fuse.h
+ * \brief Definitions for the picoxcell fuse block.
+ *
+-* Copyright (c) 2006-2011 Picochip Ltd
++* Copyright (c) 2006-2012 Picochip Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -72,5 +72,6 @@
+ /*****************************************************************************/
+ 
+ #define FUSE_WRITE_FUSE_ENABLE          (0x66757365)
++#define PICOXCELL_DISABLE_MEMIF_ARM     (1 << 10)
+ 
+ #endif /*__PICOXCELL_FUSE_H__ */
+diff --git a/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_arm.h b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_arm.h
+new file mode 100644
+index 0000000..54d0aa5
+--- /dev/null
++++ b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_arm.h
+@@ -0,0 +1,213 @@
++/*!
++* \file pc30xx_mem_arm.h
++* \brief Definitions for pc30xx memif-arm block.
++*
++* Copyright (c) 2010-2011 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++#ifndef __PC30XX_MEM_ARM_H__
++#define __PC30XX_MEM_ARM_H__
++
++/* Includes ---------------------------------------------------------------- */
++#include <asm/arch/picoxcell.h>
++#include <asm/arch/pc30xx_mem_common.h>
++
++/* Constants --------------------------------------------------------------- */
++
++/*****************************************************************************/
++/* Component Base Addresses                                                  */
++/*****************************************************************************/
++
++#define MEMIF_ARM_PCTL_BASE (PICOXCELL_MEMIF_BASE)
++#define MEMIF_ARM_PUBL_BASE (PICOXCELL_MEMIF_BASE + 0x8000)
++
++/*****************************************************************************/
++/* Register Offset Addresses                                                 */
++/*****************************************************************************/
++
++#define MEMIF_ARM_INDIRECT_RW_CMD_OFFSET    (0x00 * 4)
++#define MEMIF_ARM_RSVD_0_OFFSET             (0x01 * 4)
++#define MEMIF_ARM_HPR_OFFSET                (0x02 * 4)
++#define MEMIF_ARM_LPR_OFFSET                (0x03 * 4)
++#define MEMIF_ARM_WR_OFFSET                 (0x04 * 4)
++#define MEMIF_ARM_DRAM_PARAM_0_OFFSET       (0x05 * 4)
++#define MEMIF_ARM_DRAM_PARAM_1_OFFSET       (0x06 * 4)
++#define MEMIF_ARM_DRAM_PARAM_2_OFFSET       (0x07 * 4)
++#define MEMIF_ARM_DRAM_PARAM_3_OFFSET       (0x08 * 4)
++#define MEMIF_ARM_DRAM_PARAM_4_OFFSET       (0x09 * 4)
++#define MEMIF_ARM_DRAM_INIT_PARAM_OFFSET    (0x0A * 4)
++#define MEMIF_ARM_DRAM_EMR2_EMR3_OFFSET     (0x0B * 4)
++#define MEMIF_ARM_DRAM_EMR_MR_OFFSET        (0x0C * 4)
++#define MEMIF_ARM_DRAM_BL_OFFSET            (0x0D * 4)
++#define MEMIF_ARM_DRAM_FORCE_LPR_OFFSET     (0x0E * 4)
++#define MEMIF_ARM_ADDR_MAP_0_OFFSET         (0x0F * 4)
++#define MEMIF_ARM_ADDR_MAP_1_OFFSET         (0x10 * 4)
++#define MEMIF_ARM_ADDR_MAP_2_OFFSET         (0x11 * 4)
++#define MEMIF_ARM_DRAM_ODT_OFFSET           (0x12 * 4)
++#define MEMIF_ARM_PHY_DEBUG_0_OFFSET        (0x13 * 4)
++#define MEMIF_ARM_PHY_CMD_RDC_OFFSET        (0x14 * 4)
++#define MEMIF_ARM_CTRL_MODE_OFFSET          (0x15 * 4)
++#define MEMIF_ARM_DLL_CALIB_OFFSET          (0x16 * 4)
++#define MEMIF_ARM_ODT_CTRL_OFFSET           (0x17 * 4)
++#define MEMIF_ARM_DDRC_CTRL_0_OFFSET        (0x18 * 4)
++#define MEMIF_ARM_DDRC_CTRL_1_OFFSET        (0x19 * 4)
++#define MEMIF_ARM_PHY_SLV_DLL_OFFSET        (0x1A * 4)
++#define MEMIF_ARM_PHY_DEBUG_1_OFFSET        (0x1B * 4)
++#define MEMIF_ARM_PHY_DEBUG_2_OFFSET        (0x1C * 4)
++#define MEMIF_ARM_PHY_DEBUG_3_OFFSET        (0x1D * 4)
++#define MEMIF_ARM_PHY_DEBUG_4_OFFSET        (0x1E * 4)
++#define MEMIF_ARM_PHY_LOCAL_ODT_OFFSET      (0x1F * 4)
++#define MEMIF_ARM_AXI_GP0_OFFSET            (0x20 * 4)
++#define MEMIF_ARM_AXI_GP1_OFFSET            (0x21 * 4)
++#define MEMIF_ARM_AXI_GP2_OFFSET            (0x22 * 4)
++#define MEMIF_ARM_AXI_GP3_OFFSET            (0x23 * 4)
++#define MEMIF_ARM_AXI_GP4_OFFSET            (0x24 * 4)
++#define MEMIF_ARM_AXI_GPSTATUS0_OFFSET      (0x2A * 4)
++#define MEMIF_ARM_AXI_GPSTATUS1_OFFSET      (0x2B * 4)
++#define MEMIF_ARM_AXI_GPSTATUS2_OFFSET      (0x2C * 4)
++#define MEMIF_ARM_AXI_GPSTATUS3_OFFSET      (0x2D * 4)
++#define MEMIF_ARM_AXI_GPSTATUS4_OFFSET      (0x2E * 4)
++
++/* 31 - 57 UNUSED */
++
++#define MEMIF_ARM_AXI_HP_MSTR_0_OFFSET      (0x3A * 4)
++#define MEMIF_ARM_AXI_HP_MSTR_1_OFFSET      (0x3B * 4)
++#define MEMIF_ARM_AXI_HP_MSTR_2_OFFSET      (0x3C * 4)
++#define MEMIF_ARM_AXI_HP_MSTR_3_OFFSET      (0x3D * 4)
++#define MEMIF_ARM_AXI_START_ADDR_OFFSET     (0x3E * 4)
++#define MEMIF_ARM_AXI_END_ADDR_OFFSET       (0x3F * 4)
++
++/*****************************************************************************/
++/* Register Values                                                           */
++/*****************************************************************************/
++
++/* MEMIF_ARM_DRAM_EMR_MR */
++
++#define MEMIF_ARM_DRAM_EMR_MR_VAL                 0x00000A63
++
++/* MEMIF_ARM_ADDR_MAP0-2 */
++
++#define MEMIF_ARM_ADDR_MAP_0_BANK_BIT0_IDX        0
++#define MEMIF_ARM_ADDR_MAP_0_BANK_BIT1_IDX        4
++#define MEMIF_ARM_ADDR_MAP_0_BANK_BIT2_IDX        8
++
++#define MEMIF_ARM_ADDR_MAP_1_COL_BIT2_IDX         0
++#define MEMIF_ARM_ADDR_MAP_1_COL_BIT3_IDX         4
++#define MEMIF_ARM_ADDR_MAP_1_COL_BIT4_6_IDX       8
++#define MEMIF_ARM_ADDR_MAP_1_COL_BIT7_IDX         12
++#define MEMIF_ARM_ADDR_MAP_1_COL_BIT8_IDX         16
++#define MEMIF_ARM_ADDR_MAP_1_COL_BIT9_IDX         20
++#define MEMIF_ARM_ADDR_MAP_1_COL_BIT10_IDX        24
++#define MEMIF_ARM_ADDR_MAP_1_COL_BIT11_IDX        28
++
++#define MEMIF_ARM_ADDR_MAP_2_ROW_BIT0_IDX         0
++#define MEMIF_ARM_ADDR_MAP_2_ROW_BIT1_IDX         4
++#define MEMIF_ARM_ADDR_MAP_2_ROW_BIT2_11_IDX      8
++#define MEMIF_ARM_ADDR_MAP_2_ROW_BIT12_IDX        12
++#define MEMIF_ARM_ADDR_MAP_2_ROW_BIT13_IDX        16
++#define MEMIF_ARM_ADDR_MAP_2_ROW_BIT14_IDX        20
++#define MEMIF_ARM_ADDR_MAP_2_ROW_BIT15_IDX        24
++
++#define MEMIF_ARM_ADDR_MAP_0_VAL_512Mbx16         0x00000F77  /* bank */
++#define MEMIF_ARM_ADDR_MAP_1_VAL_512Mbx16         0xFFF00000  /* col */
++#define MEMIF_ARM_ADDR_MAP_2_VAL_512Mbx16         0x0FF22222  /* row */
++
++/* MEMIF_ARM_PHY_CMD_RDC */
++
++#define MEMIF_ARM_PHY_CMD_RDC_USE_FIXED_RE_IDX    16
++#define MEMIF_ARM_PHY_CMD_RDC_WE_TO_RE_DEL_IDX    8
++#define MEMIF_ARM_PHY_CMD_RDC_WR_CMD_TO_DATA_IDX  4
++#define MEMIF_ARM_PHY_CMD_RDC_RD_CMD_TO_DATA_IDX  0
++
++#define MEMIF_ARM_PHY_CMD_RDC_USE_FIXED_RE_MSK    0x1
++#define MEMIF_ARM_PHY_CMD_RDC_WE_TO_RE_DEL_MSK    0x3
++#define MEMIF_ARM_PHY_CMD_RDC_WR_CMD_TO_DATA_MSK  0xF
++#define MEMIF_ARM_PHY_CMD_RDC_RD_CMD_TO_DATA_MSK  0xF
++
++/* MEMIF_ARM_PHY_SLV_DLL */
++
++/* note Hoyle_DDRC spec v0.12 is wrong, this is the correct bit mapping */
++#define MEMIF_ARM_PHY_SLV_DLL_RD_RATIO0_IDX       16
++#define MEMIF_ARM_PHY_SLV_DLL_RD_RATIO1_IDX       24
++#define MEMIF_ARM_PHY_SLV_DLL_WR_RATIO_IDX        0
++
++#define MEMIF_ARM_PHY_SLV_DLL_RD_RATIO0_MSK       0xff
++#define MEMIF_ARM_PHY_SLV_DLL_RD_RATIO1_MSK       0xff
++#define MEMIF_ARM_PHY_SLV_DLL_WR_RATIO_MSK        0xff
++
++/* MEMIF_ARM_PHY_DEBUG_1 */
++
++#define MEMIF_ARM_PHY_DEBUG_1_RC_DLL_SVAL0_IDX    0
++#define MEMIF_ARM_PHY_DEBUG_1_RC_DLL_SVAL1_IDX    9
++#define MEMIF_ARM_PHY_DEBUG_1_WR_DLL_SVAL_IDX     18
++
++#define MEMIF_ARM_PHY_DEBUG_1_RC_DLL_SVAL0_MSK    0x1ff
++#define MEMIF_ARM_PHY_DEBUG_1_RC_DLL_SVAL1_MSK    0x1ff
++#define MEMIF_ARM_PHY_DEBUG_1_WR_DLL_SVAL_MSK     0x1ff
++
++/* MEMIF_ARM_PHY_DEBUG_2 */
++
++#define MEMIF_ARM_PHY_DEBUG_2_MSTR_DLL_LOCK0_IDX  0
++#define MEMIF_ARM_PHY_DEBUG_2_MSTR_DLL_SVAL0_IDX  2
++
++#define MEMIF_ARM_PHY_DEBUG_2_MSTR_DLL_LOCK0_MSK  0x1
++#define MEMIF_ARM_PHY_DEBUG_2_MSTR_DLL_SVAL0_MSK  0x1ff
++
++/* MEMIF_ARM_PHY_DEBUG_3 */
++
++#define MEMIF_ARM_PHY_DEBUG_3_IN_LOCK_IDX         0
++#define MEMIF_ARM_PHY_DEBUG_3_IN_DELAY_IDX        2
++#define MEMIF_ARM_PHY_DEBUG_3_OUT_DELAY_IDX       11
++
++#define MEMIF_ARM_PHY_DEBUG_3_IN_LOCK_MSK         0x3
++#define MEMIF_ARM_PHY_DEBUG_3_IN_DELAY_MSK        0x1ff
++#define MEMIF_ARM_PHY_DEBUG_3_OUT_DELAY_MSK       0x1ff
++
++/* MEMIF_ARM_AXI_GP0 */
++
++#define MEMIF_ARM_AXI_GP0_LOOPBACK_MODE_IDX       0
++#define MEMIF_ARM_AXI_GP0_LOOPBACK_ERR_CLR_IDX    1
++
++/* MEMIF_ARM_AXI_GP1 */
++
++#define MEMIF_ARM_AXI_GP1_WL_DLL_FORCE_IDX        0
++#define MEMIF_ARM_AXI_GP1_RC_DLL_FORCE0_IDX       1
++#define MEMIF_ARM_AXI_GP1_RC_DLL_FORCE1_IDX       2
++#define MEMIF_ARM_AXI_GP1_WL_DLL_VALUE_IDX        3
++#define MEMIF_ARM_AXI_GP1_RC_DLL_VALUE0_IDX       12
++#define MEMIF_ARM_AXI_GP1_RC_DLL_VALUE1_IDX       21
++
++/* MEMIF_ARM_AXI_GPSTATUS0 */
++
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_DONE_IDX  0
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_FAIL_IDX  1
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_ERR0_IDX  2
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_ERR1_IDX  3
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_ERR2_IDX  4
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_ERR3_IDX  5
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_ERR4_IDX  6
++
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_DONE_MSK 0x1
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_FAIL_MSK 0x1
++#define MEMIF_ARM_AXI_GPSTATUS0_LOOPBACK_ERR_MSK  0x1f
++
++
++/*****************************************************************************/
++/* Base Addresses                                                            */
++/*****************************************************************************/
++
++/* col  [9:0]  = axaddr[10:1] */
++/* bank [1:0]  = axaddr[12:11] */
++/* row  [12:0] = axaddr[25:13] */
++#define BANK0_BASE_512Mbx16                 0x00000000
++#define BANK1_BASE_512Mbx16                 0x00000800
++#define BANK2_BASE_512Mbx16                 0x00001000
++#define BANK3_BASE_512Mbx16                 0x00001800
++
++#endif /* __PC30XX_MEM_ARM_H__ */
+diff --git a/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h
+new file mode 100644
+index 0000000..faf2cda
+--- /dev/null
++++ b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h
+@@ -0,0 +1,152 @@
++/*!
++* \file pc30xx_mem_common.h
++* \brief Definitions for the pc30xx memif_arm and memif-shared block.
++*
++* Copyright (c) 2010-2011 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++#ifndef __PC30XX_MEM_COMMON_H__
++#define __PC30XX_MEM_COMMON_H__
++
++/*****************************************************************************/
++/* PCTL Registers                                                            */
++/*****************************************************************************/
++#define PCTL_SCFG_OFFSET        0x0000
++#define PCTL_SCTL_OFFSET        0x0004
++#define PCTL_STAT_OFFSET        0x0008
++#define PCTL_POWCTL_OFFSET      0x0044
++#define PCTL_POWSTAT_OFFSET     0x0048
++#define PCTL_CMDSTAT_OFFSET     0x004C
++#define PCTL_CMDSTATEN_OFFSET   0x0050
++#define PCTL_MCFG_OFFSET        0x0080
++#define PCTL_DTUAWDT_OFFSET     0x00B0
++#define PCTL_TOGCNT1U_OFFSET    0x00C0
++#define PCTL_TINIT_OFFSET       0x00C4
++#define PCTL_TRSTH_OFFSET       0x00C8
++#define PCTL_TOGCNT100N_OFFSET  0x00CC
++
++#define PCTL_TREFI_OFFSET       0x00D0
++#define PCTL_TMRD_OFFSET        0x00D4
++#define PCTL_TRFC_OFFSET        0x00D8
++#define PCTL_TRP_OFFSET         0x00DC
++#define PCTL_TRTW_OFFSET        0x00E0
++#define PCTL_TAL_OFFSET         0x00E4
++#define PCTL_TCL_OFFSET         0x00E8
++#define PCTL_TCWL_OFFSET        0x00EC
++#define PCTL_TRAS_OFFSET        0x00F0
++#define PCTL_TRC_OFFSET         0x00F4
++#define PCTL_TRCD_OFFSET        0x00F8
++#define PCTL_TRRD_OFFSET        0x00FC
++#define PCTL_TRTP_OFFSET        0x0100
++#define PCTL_TWR_OFFSET         0x0104
++#define PCTL_TWTR_OFFSET        0x0108
++#define PCTL_TEXSR_OFFSET       0x010C
++#define PCTL_TCKSRE_OFFSET      0x0124
++#define PCTL_TCKSRE_OFFSET      0x0124
++#define PCTL_TCKSRX_OFFSET      0x0128
++
++#define PCTL_DFIPHYWRLAT_OFFSET 0x0254
++#define PCTL_DFITRDDATEN_OFFSET 0x0260
++#define PCTL_DFIPHYRDLAT_OFFSET 0x0264
++#define PCTL_DFISTSTAT0_OFFSET  0x02C0
++#define PCTL_DFISTCFG0_OFFSET   0x02C4
++#define PCTL_DFIUPDCFG_OFFSET   0x0290
++
++#define PCTL_IPVR_OFFSET   0x03F8
++#define PCTL_IPTR_OFFSET   0x03FC
++
++
++/*****************************************************************************/
++/* PUBL Registers                                                            */
++/*****************************************************************************/
++#define PUBL_RIDR_OFFSET        0x0000
++#define PUBL_PIR_OFFSET         0x0004
++#define PUBL_PGCR_OFFSET        0x0008
++#define PUBL_PGSR_OFFSET        0x000C
++#define PUBL_DLLGCR_OFFSET      0x0010
++#define PUBL_ACDLLCR_OFFSET     0x0014
++#define PUBL_PTR0_OFFSET        0x0018
++#define PUBL_PTR1_OFFSET        0x001C
++#define PUBL_ACIOCR_OFFSET      0x0024
++#define PUBL_DCR_OFFSET         0x0030
++#define PUBL_DTPR0_OFFSET       0x0034
++#define PUBL_DTPR1_OFFSET       0x0038
++#define PUBL_DTPR2_OFFSET       0x003C
++#define PUBL_MR0_OFFSET         0x0040
++#define PUBL_MR1_OFFSET         0x0044
++#define PUBL_MR2_OFFSET         0x0048
++
++#define PUBL_BISTRR_OFFSET       0x0100
++#define PUBL_BISTMSKR0_OFFSET    0x0104
++#define PUBL_BISTMSKR1_OFFSET    0x0108
++#define PUBL_BISTWCR_OFFSET      0x010C
++#define PUBL_BISTLSR_OFFSET      0x0110
++#define PUBL_BISTAR0_OFFSET      0x0114
++#define PUBL_BISTAR1_OFFSET      0x0118
++#define PUBL_BISTAR2_OFFSET      0x011C
++#define PUBL_BISTUDPR_OFFSET     0x0120
++#define PUBL_BISTGSR_OFFSET      0x0124
++#define PUBL_BISTWER_OFFSET      0x0128
++#define PUBL_BISTBER0_OFFSET     0x012C
++#define PUBL_BISTBER1_OFFSET     0x0130
++#define PUBL_BISTBER2_OFFSET     0x0134
++#define PUBL_BISTWCSR_OFFSET     0x0138
++#define PUBL_BISTFWR0_OFFSET     0x013C
++#define PUBL_BISTFWR1_OFFSET     0x0140
++#define PUBL_GPR0_OFFSET         0x0178
++#define PUBL_GPR1_OFFSET         0x017C
++#define PUBL_DX1DQTR_OFFSET     0x0210
++#define PUBL_DX1DQSTR_OFFSET    0x0214
++
++
++
++/*****************************************************************************/
++/* MCTL Registers                                                            */
++/*****************************************************************************/
++#define MCTL_PCFG_0_OFFSET 0x0400
++#define MCTL_PCFG_1_OFFSET 0x0404
++#define MCTL_PCFG_2_OFFSET 0x0408
++#define MCTL_PCFG_3_OFFSET 0x040C
++#define MCTL_CCFG_OFFSET   0x0480
++#define MCTL_DCFG_OFFSET   0x0484
++#define MCTL_CSTAT_OFFSET  0x048C
++
++#define MCTL_DCFG_IO_WIDTH_16BIT    2
++#define MCTL_DCFG_IO_WIDTH_IDX      0
++#define MCTL_DCFG_DRAM_DENSITY_2Gb  5
++#define MCTL_DCFG_DRAM_DENSITY_1Gb  4
++#define MCTL_DCFG_DRAM_DENSITY_IDX  2
++#define MCTL_DCFG_DRAM_TYPE_14x9    0
++#define MCTL_DCFG_DRAM_TYPE_13x10   1
++#define MCTL_DCFG_DRAM_TYPE_IDX     6
++#define MCTL_DCFG_ADDR_MAP_BRC      0
++#define MCTL_DCFG_ADDR_MAP_RBC      1
++#define MCTL_DCFG_ADDR_MAP_IDX      8
++#define MCTL_PCFG_BP_RD_EN_IDX      5
++#define MCTL_PCFG_BP_WR_EN_IDX      4
++
++/* PIR Register bit fields */
++#define PUBL_PIR_INIT           (1 << 0)
++#define PUBL_PIR_DLLSRST        (1 << 1)
++#define PUBL_PIR_DLLLOCK        (1 << 2)
++#define PUBL_PIR_ZCAL           (1 << 3)
++#define PUBL_PIR_ITMSRST        (1 << 4)
++#define PUBL_PIR_DRAMRST        (1 << 5)
++#define PUBL_PIR_DRAMINIT       (1 << 6)
++#define PUBL_PIR_QSTRN          (1 << 7)
++#define PUBL_PIR_EYETRN         (1 << 8)
++#define PUBL_PIR_ICPC           (1 << 16)
++#define PUBL_PIR_DLLBYP         (1 << 17)
++#define PUBL_PIR_CTLDINIT       (1 << 18)
++#define PUBL_PIR_CLRSR          (1 << 28)
++#define PUBL_PIR_LOCKBYP        (1 << 29)
++#define PUBL_PIR_ZCALBYP        (1 << 30)
++#define PUBL_PIR_INITBYP        (1 << 31)
++
++#endif /* __PC30XX_MEM_COMMON_H__ */
+diff --git a/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_shd.h b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_shd.h
+new file mode 100644
+index 0000000..da87d32
+--- /dev/null
++++ b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_shd.h
+@@ -0,0 +1,520 @@
++/*!
++* \file pc30xx_mem_shd.h
++* \brief Definitions for the pc30xx memif-shared block.
++*
++* Copyright (c) 2010-2012 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++#ifndef __PC30XX_MEM_SHD_H__
++#define __PC30XX_MEM_SHD_H__
++
++/* Includes ---------------------------------------------------------------- */
++#include <asm/arch/pc30xx_mem_common.h>
++
++/*****************************************************************************/
++/* Component Base Addresses                                                  */
++/*****************************************************************************/
++#define MEMIF_SHD_PCTL_BASE 0xC000
++#define MEMIF_SHD_PUBL_BASE 0xC400
++
++/*****************************************************************************/
++/* Memif Shared Registers                                                    */
++/*****************************************************************************/
++#define MEMIF_SHD_REGS_PA_BUF0_SETUP_OFFSET		0x0000
++#define   MEMIF_SHD_REGS_PA_BUF0_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF0_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF0_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF0_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF0_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF0_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF0_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF0_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF0_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF0_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF0_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF0_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF0_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF0_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF0_ADDR_OFFSET		0x0001
++#define   MEMIF_SHD_REGS_PA_BUF0_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF0_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF1_SETUP_OFFSET		0x0002
++#define   MEMIF_SHD_REGS_PA_BUF1_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF1_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF1_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF1_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF1_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF1_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF1_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF1_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF1_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF1_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF1_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF1_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF1_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF1_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF1_ADDR_OFFSET		0x0003
++#define   MEMIF_SHD_REGS_PA_BUF1_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF1_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF2_SETUP_OFFSET		0x0004
++#define   MEMIF_SHD_REGS_PA_BUF2_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF2_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF2_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF2_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF2_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF2_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF2_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF2_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF2_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF2_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF2_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF2_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF2_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF2_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF2_ADDR_OFFSET		0x0005
++#define   MEMIF_SHD_REGS_PA_BUF2_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF2_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF3_SETUP_OFFSET		0x0006
++#define   MEMIF_SHD_REGS_PA_BUF3_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF3_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF3_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF3_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF3_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF3_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF3_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF3_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF3_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF3_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF3_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF3_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF3_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF3_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF3_ADDR_OFFSET		0x0007
++#define   MEMIF_SHD_REGS_PA_BUF3_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF3_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF4_SETUP_OFFSET		0x0008
++#define   MEMIF_SHD_REGS_PA_BUF4_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF4_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF4_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF4_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF4_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF4_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF4_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF4_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF4_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF4_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF4_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF4_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF4_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF4_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF4_ADDR_OFFSET		0x0009
++#define   MEMIF_SHD_REGS_PA_BUF4_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF4_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF5_SETUP_OFFSET		0x000A
++#define   MEMIF_SHD_REGS_PA_BUF5_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF5_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF5_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF5_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF5_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF5_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF5_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF5_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF5_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF5_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF5_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF5_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF5_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF5_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF5_ADDR_OFFSET		0x000B
++#define   MEMIF_SHD_REGS_PA_BUF5_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF5_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF6_SETUP_OFFSET		0x000C
++#define   MEMIF_SHD_REGS_PA_BUF6_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF6_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF6_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF6_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF6_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF6_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF6_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF6_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF6_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF6_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF6_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF6_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF6_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF6_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF6_ADDR_OFFSET		0x000D
++#define   MEMIF_SHD_REGS_PA_BUF6_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF6_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF7_SETUP_OFFSET		0x000E
++#define   MEMIF_SHD_REGS_PA_BUF7_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF7_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF7_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF7_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF7_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF7_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF7_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF7_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF7_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF7_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF7_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF7_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF7_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF7_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF7_ADDR_OFFSET		0x000F
++#define   MEMIF_SHD_REGS_PA_BUF7_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF7_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF8_SETUP_OFFSET		0x0010
++#define   MEMIF_SHD_REGS_PA_BUF8_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF8_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF8_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF8_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF8_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF8_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF8_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF8_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF8_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF8_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF8_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF8_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF8_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF8_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF8_ADDR_OFFSET		0x0011
++#define   MEMIF_SHD_REGS_PA_BUF8_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF8_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF9_SETUP_OFFSET		0x0012
++#define   MEMIF_SHD_REGS_PA_BUF9_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF9_SIZE_MSK		((1<<4)-1)
++#define   MEMIF_SHD_REGS_PA_BUF9_WDWW_IDX		4
++#define      MEMIF_SHD_REGS_PA_BUF9_WDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF9_RDWW_IDX		6
++#define      MEMIF_SHD_REGS_PA_BUF9_RDWW_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF9_WIAP_IDX		8
++#define      MEMIF_SHD_REGS_PA_BUF9_WIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF9_RIAP_IDX		10
++#define      MEMIF_SHD_REGS_PA_BUF9_RIAP_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_PA_BUF9_BANK_IDX		12
++#define      MEMIF_SHD_REGS_PA_BUF9_BANK_MSK		((1<<3)-1)
++#define   MEMIF_SHD_REGS_PA_BUF9_ONE_ADDR_IDX		15
++#define      MEMIF_SHD_REGS_PA_BUF9_ONE_ADDR_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_PA_BUF9_ADDR_OFFSET		0x0013
++#define   MEMIF_SHD_REGS_PA_BUF9_SADDR_IDX		0
++#define      MEMIF_SHD_REGS_PA_BUF9_SADDR_MSK		((1<<14)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G0_S0_S1_OFFSET		0x0020
++#define   MEMIF_SHD_REGS_SDRAM_G0_S0_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G0_S0_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G0_S1_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G0_S1_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G0_S2_S3_OFFSET		0x0021
++#define   MEMIF_SHD_REGS_SDRAM_G0_S2_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G0_S2_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G0_S3_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G0_S3_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G1_S0_S1_OFFSET		0x0022
++#define   MEMIF_SHD_REGS_SDRAM_G1_S0_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G1_S0_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G1_S1_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G1_S1_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G1_S2_S3_OFFSET		0x0023
++#define   MEMIF_SHD_REGS_SDRAM_G1_S2_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G1_S2_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G1_S3_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G1_S3_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G2_S0_S1_OFFSET		0x0024
++#define   MEMIF_SHD_REGS_SDRAM_G2_S0_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G2_S0_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G2_S1_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G2_S1_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G2_S2_S3_OFFSET		0x0025
++#define   MEMIF_SHD_REGS_SDRAM_G2_S2_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G2_S2_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G2_S3_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G2_S3_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G3_S0_S1_OFFSET		0x0026
++#define   MEMIF_SHD_REGS_SDRAM_G3_S0_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G3_S0_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G3_S1_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G3_S1_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G3_S2_S3_OFFSET		0x0027
++#define   MEMIF_SHD_REGS_SDRAM_G3_S2_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G3_S2_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G3_S3_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G3_S3_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G4_S0_S1_OFFSET		0x0028
++#define   MEMIF_SHD_REGS_SDRAM_G4_S0_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G4_S0_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G4_S1_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G4_S1_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G4_S2_S3_OFFSET		0x0029
++#define   MEMIF_SHD_REGS_SDRAM_G4_S2_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G4_S2_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G4_S3_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G4_S3_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G5_S0_S1_OFFSET		0x002A
++#define   MEMIF_SHD_REGS_SDRAM_G5_S0_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G5_S0_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G5_S1_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G5_S1_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G5_S2_S3_OFFSET		0x002B
++#define   MEMIF_SHD_REGS_SDRAM_G5_S2_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G5_S2_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G5_S3_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G5_S3_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G6_S0_S1_OFFSET		0x002C
++#define   MEMIF_SHD_REGS_SDRAM_G6_S0_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G6_S0_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G6_S1_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G6_S1_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G6_S2_S3_OFFSET		0x002D
++#define   MEMIF_SHD_REGS_SDRAM_G6_S2_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G6_S2_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G6_S3_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G6_S3_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G7_S0_S1_OFFSET		0x002E
++#define   MEMIF_SHD_REGS_SDRAM_G7_S0_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G7_S0_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G7_S1_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G7_S1_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_G7_S2_S3_OFFSET		0x002F
++#define   MEMIF_SHD_REGS_SDRAM_G7_S2_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_G7_S2_CFG_MSK		((1<<6)-1)
++#define   MEMIF_SHD_REGS_SDRAM_G7_S3_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SDRAM_G7_S3_CFG_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_VALID_GROUPS_OFFSET		0x0030
++#define   MEMIF_SHD_REGS_SDRAM_VALID_GROUPS_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_VALID_GROUPS_MSK		((1<<8)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_ARB_CFG_OFFSET             0x0031
++
++#define MEMIF_SHD_REGS_SRAM_ARB_S0_S1_OFFSET		0x0040
++#define   MEMIF_SHD_REGS_SRAM_S0_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SRAM_S0_CFG_MSK		((1<<7)-1)
++#define   MEMIF_SHD_REGS_SRAM_S1_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SRAM_S1_CFG_MSK		((1<<7)-1)
++
++#define MEMIF_SHD_REGS_SRAM_ARB_S2_S3_OFFSET		0x0041
++#define   MEMIF_SHD_REGS_SRAM_S2_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SRAM_S2_CFG_MSK		((1<<7)-1)
++#define   MEMIF_SHD_REGS_SRAM_S3_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SRAM_S3_CFG_MSK		((1<<7)-1)
++
++#define MEMIF_SHD_REGS_SRAM_ARB_S4_S5_OFFSET		0x0042
++#define   MEMIF_SHD_REGS_SRAM_S4_CFG_IDX		0
++#define      MEMIF_SHD_REGS_SRAM_S4_CFG_MSK		((1<<7)-1)
++#define   MEMIF_SHD_REGS_SRAM_S5_CFG_IDX		8
++#define      MEMIF_SHD_REGS_SRAM_S5_CFG_MSK		((1<<7)-1)
++
++#define MEMIF_SHD_REGS_SRAM_VALID_SLOTS_OFFSET		0x0043
++#define   MEMIF_SHD_REGS_SRAM_VALID_SLOTS_IDX		0
++#define      MEMIF_SHD_REGS_SRAM_VALID_SLOTS_MSK		((1<<6)-1)
++
++#define MEMIF_SHD_REGS_ARB_UPDATE_OFFSET		0x004F
++#define   MEMIF_SHD_REGS_SDRAM_ARB_UPDATE_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_ARB_UPDATE_MSK		((1<<1)-1)
++#define   MEMIF_SHD_REGS_SRAM_ARB_UPDATE_IDX		1
++#define      MEMIF_SHD_REGS_SRAM_ARB_UPDATE_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_SETUP_OFFSET		0x0050
++#define   MEMIF_SHD_REGS_SDRAM_SIZE_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_SIZE_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_SDRAM_BANKS_IDX		2
++#define      MEMIF_SHD_REGS_SDRAM_BANKS_MSK		((1<<1)-1)
++#define   MEMIF_SHD_REGS_SDRAM_BL_IDX		3
++#define      MEMIF_SHD_REGS_SDRAM_BL_MSK		((1<<1)-1)
++
++
++#define MEMIF_SHD_REGS_SDRAM_CFG_DONE_OFFSET		0x0057
++#define   MEMIF_SHD_REGS_SDRAM_CFG_DONE_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_CFG_DONE_MSK		((1<<1)-1)
++
++#define MEMIF_SHD_REGS_SDRAM_AXI_CONFIG_OFFSET		0x0058
++#define   MEMIF_SHD_REGS_SDRAM_AXI_RBC_IDX		0
++#define      MEMIF_SHD_REGS_SDRAM_AXI_RBC_MSK		((1<<1)-1)
++#define   MEMIF_SHD_REGS_SDRAM_AXI_SIZE_IDX		1
++#define      MEMIF_SHD_REGS_SDRAM_AXI_SIZE_MSK		((1<<2)-1)
++#define   MEMIF_SHD_REGS_SDRAM_AXI_BANKS_IDX		3
++#define      MEMIF_SHD_REGS_SDRAM_AXI_BANKS_MSK		((1<<1)-1)
++
++
++#define MEMIF_SHD_REGS_PA_FIFO_STATUS_LWR_OFFSET		0x0080
++#define   MEMIF_SHD_REGS_PA_FIFO_STATUS_LWR_IDX		0
++#define      MEMIF_SHD_REGS_PA_FIFO_STATUS_LWR_MSK		((1<<10)-1)
++
++#define MEMIF_SHD_REGS_PA_FIFO_STATUS_UPR_OFFSET		0x0081
++#define   MEMIF_SHD_REGS_PA_FIFO_STATUS_UPR_IDX		0
++#define      MEMIF_SHD_REGS_PA_FIFO_STATUS_UPR_MSK		((1<<10)-1)
++
++#define MEMIF_SHD_REGS_PA_ADDR_ERROR_LWR_OFFSET		0x0082
++#define   MEMIF_SHD_REGS_PA_ADDR_ERROR_LWR_IDX		0
++#define      MEMIF_SHD_REGS_PA_ADDR_ERROR_LWR_MSK		((1<<10)-1)
++
++#define MEMIF_SHD_REGS_PA_ADDR_ERROR_UPR_OFFSET		0x0083
++#define   MEMIF_SHD_REGS_PA_ADDR_ERROR_UPR_IDX		0
++#define      MEMIF_SHD_REGS_PA_ADDR_ERROR_UPR_MSK		((1<<10)-1)
++
++#define MEMIF_SHD_REGS_PA_ADDR_ERROR_MASK_LWR_OFFSET		0x0084
++#define   MEMIF_SHD_REGS_PA_ADDR_ERROR_MASK_LWR_IDX		0
++#define      MEMIF_SHD_REGS_PA_ADDR_ERROR_MASK_LWR_MSK		((1<<10)-1)
++
++#define MEMIF_SHD_REGS_PA_ADDR_ERROR_MASK_UPR_OFFSET		0x0085
++#define   MEMIF_SHD_REGS_PA_ADDR_ERROR_MASK_UPR_IDX		0
++#define      MEMIF_SHD_REGS_PA_ADDR_ERROR_MASK_UPR_MSK		((1<<10)-1)
++
++
++#define CBFM_SLEEPREG_ADDR     0xA060
++#define CBFM_RUNREG_ADDR       0xA061
++#define CBFM_ERRREG_ADDR       0xA062
++#define CBFM_RESETREG_ADDR     0xA063
++#define CBFM_IDREG_ADDR        0xA064
++#define CBFM_RSTRUNMASK_ADDR   0xA065
++#define CBFM_BISTEN_ADDR       0xA066
++#define CBFM_BISTDATA_ADDR     0xA067
++#define CBFM_TM_ADDR           0xA068
++
++#define DDR2_ROW_13_COL_9                 0x2
++#define DDR2_ROW_13_COL_10                0x1
++#define DDR2_ROW_14_COL_10                0x0
++#define DDR2_8_BANKS                      0x1
++#define DDR2_4_BANKS                      0x0
++#define DDR2_BL4                          0x1
++#define DDR2_BL8                          0x0
++#define DDR2_BRC_ADDR                     0x0
++#define DDR2_RBC_ADDR                     0x1
++#define DDR2_RW_GAP                       0x3
++#define DDR2_WR_GAP                       0xa
++#define DDR2_CAS_4                        0x4
++#define DDR2_CAS_5                        0x5
++#define DDR2_CAS_6                        0x6
++#define DDR2_CAS_7                        0x7
++#define DDR2_REFRESH_TIME                 0x07d0
++#define DDR2_BURST_SEQUENTIAL             0x0000
++#define DDR2_WR                           0x05
++#define DDR2_DQSN_DISABLE                 0x1
++
++#define SDRAM_ARB_AXI_SLOT               0
++#define SDRAM_ARB_PA_SLOT                1
++#define SDRAM_ARB_DET_SLOT               0
++#define SDRAM_ARB_OPP_SLOT               1
++#define SDRAM_ARB_RD_SLOT                0
++#define SDRAM_ARB_WR_SLOT                1
++#define SDRAM_ARB_CSP_1_SLOT             0
++#define SDRAM_ARB_CSP_2_SLOT             1
++#define SDRAM_ARB_CSP_4_SLOT             2
++#define SDRAM_ARB_CSP_8_SLOT             3
++
++#define SDRAM_ARB_1_VALID_GRPS           1
++#define SDRAM_ARB_2_VALID_GRPS           3
++#define SDRAM_ARB_3_VALID_GRPS           7
++#define SDRAM_ARB_4_VALID_GRPS           15
++#define SDRAM_ARB_5_VALID_GRPS           31
++#define SDRAM_ARB_6_VALID_GRPS           63
++#define SDRAM_ARB_7_VALID_GRPS           127
++#define SDRAM_ARB_8_VALID_GRPS           255
++
++
++#define SDRAM_SETUP_SIZE_IDX            0
++#define SDRAM_SETUP_BANK_IDX            2
++#define SDRAM_SETUP_BL_IDX              3
++
++#define SDRAM_AXI_SETUP_RBC_IDX         0
++#define SDRAM_AXI_SETUP_SIZE_IDX        1
++#define SDRAM_AXI_SETUP_BANK_IDX        3
++
++#define SDRAM_ARB_S0_AP_IDX             0
++#define SDRAM_ARB_S0_APOD_IDX           1
++#define SDRAM_ARB_S0_RW_IDX             2
++#define SDRAM_ARB_S0_RWOD_IDX           3
++#define SDRAM_ARB_S0_CSP_IDX            4
++
++#define SDRAM_ARB_S1_AP_IDX             8
++#define SDRAM_ARB_S1_APOD_IDX           9
++#define SDRAM_ARB_S1_RW_IDX             10
++#define SDRAM_ARB_S1_RWOD_IDX           11
++#define SDRAM_ARB_S1_CSP_IDX            12
++
++#define SDRAM_ARB_S2_AP_IDX             0
++#define SDRAM_ARB_S2_APOD_IDX           1
++#define SDRAM_ARB_S2_RW_IDX             2
++#define SDRAM_ARB_S2_RWOD_IDX           3
++#define SDRAM_ARB_S2_CSP_IDX            4
++
++#define SDRAM_ARB_S3_AP_IDX             8
++#define SDRAM_ARB_S3_APOD_IDX           9
++#define SDRAM_ARB_S3_RW_IDX             10
++#define SDRAM_ARB_S3_RWOD_IDX           11
++#define SDRAM_ARB_S3_CSP_IDX            12
++
++#define SDRAM_ARB_DATA                  (SDRAM_ARB_OPP_SLOT   << SDRAM_ARB_S0_APOD_IDX) | \
++                                        (SDRAM_ARB_OPP_SLOT   << SDRAM_ARB_S0_RWOD_IDX) | \
++                                        (SDRAM_ARB_CSP_2_SLOT << SDRAM_ARB_S0_CSP_IDX)  | \
++                                        (SDRAM_ARB_OPP_SLOT   << SDRAM_ARB_S1_APOD_IDX) | \
++                                        (SDRAM_ARB_OPP_SLOT   << SDRAM_ARB_S1_RWOD_IDX) | \
++                                        (SDRAM_ARB_CSP_2_SLOT << SDRAM_ARB_S1_CSP_IDX)
++
++#define SDRAM_CFG_DONE_DATA              0x0001
++
++
++#define MEMIF_SHD_REGS_SDRAM_BW_CONFIG                  0x0032
++#define   MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_EN_IDX     14
++#define   MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_RW_IDX     12
++#define     MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_RW_READ  (1 << MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_RW_IDX)
++#define     MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_RW_WRITE (2 << MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_RW_IDX)
++#define     MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_RW_ALL   (3 << MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_RW_IDX)
++#define   MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_BANK_IDX   8
++#define     MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_BANK_ALL (8 << MEMIF_SHD_REGS_SDRAM_BW_CONFIG_ARM_BANK_IDX)
++#define   MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_EN_IDX      6
++#define   MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_RW_IDX      4
++#define     MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_RW_READ   (1 << MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_RW_IDX)
++#define     MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_RW_WRITE  (2 << MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_RW_IDX)
++#define     MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_RW_ALL    (3 << MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_RW_IDX)
++#define   MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_BANK_IDX    0
++#define     MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_BANK_ALL  (8 << MEMIF_SHD_REGS_SDRAM_BW_CONFIG_PA_BANK_IDX)
++
++#define MEMIF_SHD_REGS_SDRAM_BW_ARM_COUNT_LSB           0x0033
++#define MEMIF_SHD_REGS_SDRAM_BW_ARM_COUNT_MSB           0x0034
++#define MEMIF_SHD_REGS_SDRAM_BW_PA_COUNT_LSB            0x0035
++#define MEMIF_SHD_REGS_SDRAM_BW_PA_COUNT_MSB            0x0036
++
++#endif /* __PC30XX_MEM_SHD_H__ */
+diff --git a/arch/arm/include/asm/arch-picoxcell/utilities.h b/arch/arm/include/asm/arch-picoxcell/utilities.h
+index a48e3ac..1763697 100644
+--- a/arch/arm/include/asm/arch-picoxcell/utilities.h
++++ b/arch/arm/include/asm/arch-picoxcell/utilities.h
+@@ -6,7 +6,7 @@
+ * \file utilities.h
+ * \brief Definitions for some useful functions.
+ *
+-* Copyright (c) 2006-2011 Picochip Ltd
++* Copyright (c) 2006-2012 Picochip Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -150,5 +150,12 @@ void picoxcell_timer_start (int timer);
+  */
+ void picoxcell_clk_enable (unsigned long clock);
+ 
++/*!
++ * \brief Is the memif arm available for use on a PC30xx device ?
++ *
++ * \return 1 if memif arm available
++ *         0 if memif arm not available
++ */
++int is_memif_arm_usable_on_pc30xx (void);
+ 
+ #endif /* __PICOXCELL_UTILS_H__ */
+diff --git a/arch/arm/include/asm/mach-types.h b/arch/arm/include/asm/mach-types.h
+index b0639b3..0979adf 100644
+--- a/arch/arm/include/asm/mach-types.h
++++ b/arch/arm/include/asm/mach-types.h
+@@ -1105,6 +1105,7 @@ extern unsigned int __machine_arch_type;
+ #define MACH_TYPE_UBISYS_P9D_EVP       3493
+ #define MACH_TYPE_ATDGP318             3494
+ #define MACH_TYPE_OMAP5_SEVM           3777
++#define MACH_TYPE_PC73032              4336
+ 
+ #ifdef CONFIG_ARCH_EBSA110
+ # ifdef machine_arch_type
+@@ -14234,6 +14235,18 @@ extern unsigned int __machine_arch_type;
+ # define machine_is_pc7308()	(0)
+ #endif
+ 
++#ifdef CONFIG_MACH_PC73032
++# ifdef machine_arch_type
++#  undef machine_arch_type
++#  define machine_arch_type	__machine_arch_type
++# else
++#  define machine_arch_type	MACH_TYPE_PC73032
++# endif
++# define machine_is_pc73032()	(machine_arch_type == MACH_TYPE_PC73032)
++#else
++# define machine_is_pc73032()	(0)
++#endif
++
+ /*
+  * These have not yet been registered
+  */
+diff --git a/board/picochip/pc73032/Makefile b/board/picochip/pc73032/Makefile
+new file mode 100644
+index 0000000..b29488b
+--- /dev/null
++++ b/board/picochip/pc73032/Makefile
+@@ -0,0 +1,46 @@
++#/*****************************************************************************
++# * $picoChipHeaderSubst$
++# *****************************************************************************/
++
++#/*!
++#* \file Makefile
++#* \brief Used during the build process.
++#*
++#* Copyright (c) 2006-2011 Picochip Ltd
++#*
++#* This program is free software; you can redistribute it and/or modify
++#* it under the terms of the GNU General Public License version 2 as
++#* published by the Free Software Foundation.
++#*
++#* All enquiries to support@picochip.com
++#*/
++
++include $(TOPDIR)/config.mk
++
++LIB	= $(obj)lib$(BOARD).o
++
++SOBJS-y := lowlevel_init.o
++
++COBJS-y	:= pc73032.o pc30xx_memif_init.o
++
++SRCS    := $(SOBJS:.o=.S) $(COBJS-y:.o=.c)
++OBJS    := $(addprefix $(obj),$(COBJS-y))
++SOBJS	:= $(addprefix $(obj),$(SOBJS-y))
++
++$(LIB):	$(obj).depend $(OBJS) $(SOBJS)
++	$(call cmd_link_o_target, $(OBJS) $(SOBJS))
++
++clean:
++	rm -f $(SOBJS) $(OBJS)
++
++distclean:	clean
++	rm -f $(LIB) core *.bak $(obj).depend
++
++#########################################################################
++
++# defines $(obj).depend target
++include $(SRCTREE)/rules.mk
++
++sinclude $(obj).depend
++
++#########################################################################
+diff --git a/board/picochip/pc73032/config.mk b/board/picochip/pc73032/config.mk
+new file mode 100644
+index 0000000..b5703b6
+--- /dev/null
++++ b/board/picochip/pc73032/config.mk
+@@ -0,0 +1,18 @@
++#/*****************************************************************************
++# * $picoChipHeaderSubst$
++# *****************************************************************************/
++
++#/*!
++#* \file config.mk
++#* \brief Used during the build process.
++#*
++#* Copyright (c) 2006-2011 Picochip Ltd
++#*
++#* This program is free software; you can redistribute it and/or modify
++#* it under the terms of the GNU General Public License version 2 as
++#* published by the Free Software Foundation.
++#*
++#* All enquiries to support@picochip.com
++#*/
++
++PLATFORM_CPPFLAGS += -DPICOCHIP_PLATFORM_VERSION=\"$(DISTRO_VERSION)\"
+diff --git a/board/picochip/pc73032/lowlevel_init.S b/board/picochip/pc73032/lowlevel_init.S
+new file mode 100644
+index 0000000..d7f287a
+--- /dev/null
++++ b/board/picochip/pc73032/lowlevel_init.S
+@@ -0,0 +1,143 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file lowlevel_init.S
++* \brief Various low level setup functions.
++*
++* Copyright (c) 2006-2012 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++/* Includes ---------------------------------------------------------------- */
++#include <config.h>
++#include <asm/arch/picoxcell.h>
++#include <asm/arch/gpio.h>
++#include <asm/arch/axi2cfg.h>
++
++/* Macros ------------------------------------------------------------------ */
++/* This gives us a peripheral bus base address of 0x80000000
++   and a memory region size of 4Mbytes */
++#define PERIPHERAL_BUS_SETUP        0x8000000D
++
++#define ASSERT_BOOT_ERROR_PIN       0
++#define NEGATE_BOOT_ERROR_PIN       1
++#define BOOT_ERROR_PIN_IS_OUTPUT    1
++
++/* Prototypes--------------------------------------------------------------- */
++
++/* Macros ------------------------------------------------------------------ */
++
++/* Functions --------------------------------------------------------------- */
++
++/*****************************************************************************
++ *
++ * lowlevel_init
++ *
++ * Description: Perform some low level PC3032 initialisation
++ *
++ *****************************************************************************/
++ .global lowlevel_init
++
++ lowlevel_init:
++        /* The memory interface setup code uses the stack, so we
++         * temporarily set one up.
++         */
++        ldr	sp, =(PICOXCELL_SRAM_BASE + PICOXCELL_SRAM_SIZE)
++
++        /* Setup the Periheral Port Memory Remap Register */
++        ldr     r0, =PERIPHERAL_BUS_SETUP
++        mcr     p15, 0, r0, c15, c2, 4
++
++        /* Now we need to remap the flash memory otherwsie we'll not be
++         * able to talk to sdram later on.
++         */
++        orr     pc, pc, #PICOXCELL_FLASH_BASE
++        nop
++        nop
++
++        /* We are now executing code from the 'correct' flash memory address.
++         * Now we fix up the ip and the lr registers. This ensures that when
++         * we return from here to the cpu_init_crit() and ultimately the
++         * reset() we keep running code in the remapped address.
++         */
++        orr     ip, ip, #PICOXCELL_FLASH_BASE
++        orr     lr, lr, #PICOXCELL_FLASH_BASE
++
++        /* Perform the 'remap' in the axi2cfg block
++         * This turns off the address aliasing in the hardware
++         */
++        ldr     r0, =PICOXCELL_AXI2CFG_BASE
++        ldr     r1, [r0, #AXI2CFG_SYS_CONFIG_REG_OFFSET]
++        bic     r1, #AXI2CFG_SYS_CONFIG_RW_REMAP_MASK
++        str     r1, [r0, #AXI2CFG_SYS_CONFIG_REG_OFFSET]
++        nop
++        nop
++
++        push    {r0-r14}
++
++        bl      initialiseBootErrorPin
++
++        bl      pc30xx_memif_shared_init
++        bl      pc30xx_check_memif_shared_setup
++
++        bl      pc30xx_memif_arm_init
++
++        pop {r0-r14}
++
++        /* Return to my caller */
++        mov	pc, lr
++
++/*****************************************************************************
++ *
++ * initialiseBootErrorPin
++ *
++ * Initialise the GPIO that is used as the Boot Error pin
++ *
++ *****************************************************************************/
++ initialiseBootErrorPin:
++
++        /* Get base address of the arm gpio block */
++        ldr     r0,=PICOXCELL_GPIO_BASE
++
++        /* Negate the Boot error pin (in the data register) */
++        ldr     r1,[r0, #GPIO_SW_PORT_D_DR_REG_OFFSET]
++        orr     r1,r1,#NEGATE_BOOT_ERROR_PIN
++        str     r1,[r0, #GPIO_SW_PORT_D_DR_REG_OFFSET]
++
++        /* Set up Boot Error pin to be an output */
++        ldr     r1,[r0, #GPIO_SW_PORT_D_DDR_REG_OFFSET]
++        orr     r1,r1,#BOOT_ERROR_PIN_IS_OUTPUT
++        str     r1,[r0, #GPIO_SW_PORT_D_DDR_REG_OFFSET]
++
++        /* Return to my caller */
++        mov	pc, lr
++
++/*****************************************************************************
++ *
++ * assertBootError
++ *
++ * Assert the Boot Error pin.
++ *
++ * Note: On the PC73032 platform this is used to illuminate an led.
++ *
++ *****************************************************************************/
++ .global assertBootError
++
++ assertBootError:
++
++        /* Get base address of the arm gpio block */
++        ldr     r0,=PICOXCELL_GPIO_BASE
++
++        /* Assert the Boot Error pin */
++        mov     r1, #ASSERT_BOOT_ERROR_PIN
++        str     r1,[r0, #GPIO_SW_PORT_D_DR_REG_OFFSET]
++
++        /* Return to my caller */
++        mov	pc, lr
+diff --git a/board/picochip/pc73032/pc30xx_memif_init.c b/board/picochip/pc73032/pc30xx_memif_init.c
+new file mode 100644
+index 0000000..9e6e821
+--- /dev/null
++++ b/board/picochip/pc73032/pc30xx_memif_init.c
+@@ -0,0 +1,562 @@
++/*!
++ * \file memif_initialise.c
++ * \brief Memory interface setup for PC30xx devices.
++ *
++ * Copyright (c) 2010-2012 Picochip Ltd.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++
++/* Includes ---------------------------------------------------------------- */
++#include <common.h>
++#include <asm/arch/picoxcell.h>
++#include <asm/arch/utilities.h>
++#include <asm/arch/axi2cfg.h>
++#include <asm/arch/pc30xx_mem_arm.h>
++#include <asm/arch/pc30xx_mem_shd.h>
++
++/* Macros ------------------------------------------------------------------ */
++#define MEMIF_SHD_AEID             0x0068
++
++/* Constants --------------------------------------------------------------- */
++
++/* Types ------------------------------------------------------------------- */
++
++/* Prototypes--------------------------------------------------------------- */
++/*!
++ * \brief Read a 32 bit value from the 'apb' on memif shared
++ *
++ * \param base The block base address
++ * \param addr The register address offset
++ * \param data Store the read value
++ */
++static void memif_shd_apb_read (unsigned int base, unsigned short addr,
++				unsigned int *data);
++
++/*!
++ * \brief Poll for a value from the 'apb' on memif shared
++ *
++ * \param base The block base address
++ * \param addr The register address offset
++ * \param mask The data bits we are interested in
++ * \param data The data bit value we are interested in
++ */
++static void memif_shd_apb_poll (unsigned int base, unsigned short addr,
++				unsigned int mask, unsigned int data);
++
++/*!
++ * \brief Write a 32 bit value to the 'apb' on memif shared
++ *
++ * \param base The block base address
++ * \param addr The register address offset
++ * \param data The value to write
++ */
++static void memif_shd_apb_write (unsigned int base, unsigned short addr,
++				 unsigned int data);
++
++/*!
++ * \brief Read a 32 bit value from the 'apb' in the arm subsystem
++ *
++ * \param base The block base address
++ * \param addr The register address offset
++ * \param data Store the read value
++ */
++static void memif_arm_apb_read (unsigned int base, unsigned int addr,
++				unsigned int *data);
++
++/*!
++ * \brief Poll for a value from the 'apb' in the arm subsystem
++ *
++ * \param base The block base address
++ * \param addr The register address offset
++ * \param mask The data bits we are interested in
++ * \param data The data bit value we are interested in
++ */
++static void memif_arm_apb_poll (unsigned int base, unsigned int addr,
++				unsigned int mask, unsigned int data);
++
++/*!
++ * \brief Write a 32 bit value to the 'apb' in the arm subsystem
++ *
++ * \param base The block base address
++ * \param addr The register address offset
++ * \param data The value to write
++ */
++static void memif_arm_apb_write (unsigned int base, unsigned int addr,
++				 unsigned int data);
++
++/* Functions -------------------------------------------------------------- */
++
++/* ------------------------------------------------------------------------ */
++/*  PC30xx MEMIF_SHD initialisation routines                                */
++/* ------------------------------------------------------------------------ */
++static void memif_shd_apb_read (unsigned int base, unsigned short addr,
++				unsigned int *data)
++{
++
++	unsigned short read_value_upr = 0;
++	unsigned short read_value_lwr = 0;
++
++	axi2cfg_config_read (MEMIF_SHD_AEID, (base + (addr >> 1) + 1),
++			     &read_value_upr, 1);
++	axi2cfg_config_read (MEMIF_SHD_AEID, (base + (addr >> 1)),
++			     &read_value_lwr, 1);
++
++	*data = (read_value_upr << 16) | read_value_lwr;
++}
++
++static void memif_shd_apb_poll (unsigned int base, unsigned short addr,
++				unsigned int mask, unsigned int data)
++{
++	unsigned int read_value;
++
++	do {
++		memif_shd_apb_read (base, addr, &read_value);
++	} while ((read_value & mask) != data);
++}
++
++static void memif_shd_apb_write (unsigned int base, unsigned short addr,
++				 unsigned int data)
++{
++
++	unsigned short value_upr;
++	unsigned short value_lwr;
++
++	value_upr = data >> 16;
++	value_lwr = data & 0xFFFF;
++
++	axi2cfg_config_write (MEMIF_SHD_AEID, (base + (addr >> 1)), &value_lwr,
++			      1);
++	axi2cfg_config_write (MEMIF_SHD_AEID, (base + (addr >> 1) + 1),
++			      &value_upr, 1);
++}
++
++void pc30xx_memif_shared_init (void)
++{
++
++	unsigned int data;
++
++	unsigned short value;
++
++	/* PCTL MCFG Register */
++	unsigned int tfaw_cfg = 2;
++	unsigned int ddr3_en = 1;	/* 0=DDR2, 1=DDR3 */
++	unsigned int mem_bl = 1;	/* 0=BL4, 1=BL8 */
++
++	/* PUBL DCR Register */
++	unsigned int ddrmd = 3;
++	unsigned int ddr8bnk = 1;
++
++	/* PCTL TIMING Registers */
++	unsigned int togcnt1u = 534;
++	unsigned int t_init = 200;
++	unsigned int t_rsth = 500;
++	unsigned int togcnt100n = 53;
++	unsigned int t_refi = 70;
++	unsigned int t_mrd = 4;
++	unsigned int t_rfc = 105;
++	unsigned int t_rp = 9;
++	unsigned int prea_extra = 2;
++	unsigned int t_cl = 8;
++	unsigned int t_cwl = 6;
++	unsigned int t_ras = 20;
++	unsigned int t_rc = 29;
++	unsigned int t_rcd = t_cl;
++	unsigned int t_rtp = 4;
++	unsigned int t_wr = 8;
++
++	/* cas latency */
++	unsigned int mrd_ddr3_cl = 4;
++
++	/* write recovery */
++	unsigned int mrd_ddr3_wr = 4;
++	unsigned int mr2_ddr3_cwl = 1;
++
++	/* Make sure the memory interface is being clocked */
++	picoxcell_clk_enable (PICOXCELL_MEMIF_SHD_SDRAM_CLOCK);
++
++	/* Arbitration algorithm setup */
++
++	/* wake up */
++	value = 0x0000;
++	axi2cfg_config_write (MEMIF_SHD_AEID, CBFM_SLEEPREG_ADDR, &value, 1);
++
++	/* configure the sdram arbitration for all banks */
++	value = SDRAM_ARB_DATA;
++	axi2cfg_config_write (MEMIF_SHD_AEID,
++			      MEMIF_SHD_REGS_SDRAM_ARB_G0_S0_S1_OFFSET, &value,
++			      1);
++	axi2cfg_config_write (MEMIF_SHD_AEID,
++			      MEMIF_SHD_REGS_SDRAM_ARB_G0_S2_S3_OFFSET, &value,
++			      1);
++	axi2cfg_config_write (MEMIF_SHD_AEID,
++			      MEMIF_SHD_REGS_SDRAM_ARB_G1_S0_S1_OFFSET, &value,
++			      1);
++	axi2cfg_config_write (MEMIF_SHD_AEID,
++			      MEMIF_SHD_REGS_SDRAM_ARB_G1_S2_S3_OFFSET, &value,
++			      1);
++
++	value = SDRAM_ARB_2_VALID_GRPS;
++	axi2cfg_config_write (MEMIF_SHD_AEID,
++			      MEMIF_SHD_REGS_SDRAM_VALID_GROUPS_OFFSET, &value,
++			      1);
++
++	/* configure the sdram_setup and sdram_axi_config registers
++	 * for the type of ddr sdram
++	 */
++	value = (DDR2_ROW_13_COL_10 << SDRAM_SETUP_SIZE_IDX) |
++	    (DDR2_8_BANKS << SDRAM_SETUP_BANK_IDX) |
++	    (~mem_bl << SDRAM_SETUP_BL_IDX);
++	axi2cfg_config_write (MEMIF_SHD_AEID,
++			      MEMIF_SHD_REGS_SDRAM_SETUP_OFFSET, &value, 1);
++
++	value = (DDR2_ROW_13_COL_10 << SDRAM_AXI_SETUP_SIZE_IDX) |
++	    (DDR2_BRC_ADDR << SDRAM_AXI_SETUP_RBC_IDX) |
++	    (DDR2_8_BANKS << SDRAM_AXI_SETUP_BANK_IDX);
++	axi2cfg_config_write (MEMIF_SHD_AEID,
++			      MEMIF_SHD_REGS_SDRAM_AXI_CONFIG_OFFSET, &value,
++			      1);
++
++	/* Bank opportunistic mode disabled, Bank row pre-charge mode enabled */
++	value = 0x2;
++	axi2cfg_config_write (MEMIF_SHD_AEID,
++			      MEMIF_SHD_REGS_SDRAM_ARB_CFG_OFFSET, &value, 1);
++
++	/* hit the go button on the sdram arbitration */
++	value = SDRAM_CFG_DONE_DATA;
++	axi2cfg_config_write (MEMIF_SHD_AEID,
++			      MEMIF_SHD_REGS_SDRAM_CFG_DONE_OFFSET, &value, 1);
++
++	/* PCTL and PUBL setup */
++
++	/* 1. uPCTL timer reg configuration */
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TOGCNT1U_OFFSET,
++			     togcnt1u);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TINIT_OFFSET, t_init);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRSTH_OFFSET, t_rsth);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE,
++			     PCTL_TOGCNT100N_OFFSET, togcnt100n);
++
++	/* 2. PHY initialisation start
++	 * - not required, PUBL initiates automatically following reset
++	 */
++	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PIR_OFFSET,
++			     PUBL_PIR_CLRSR);
++
++	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PIR_OFFSET,
++			     (PUBL_PIR_INIT | PUBL_PIR_DLLSRST |
++			      PUBL_PIR_DLLLOCK));
++
++	/* 3. Wait for PHY initialisation following reset
++	 * (DLL lock and Zo calibration)
++	 */
++	memif_shd_apb_poll (MEMIF_SHD_PUBL_BASE, PUBL_PGSR_OFFSET,
++			    0x0001, 0x0001);
++
++	/* 4. DFI initialisation status, wait for dfi_init_complete */
++	memif_shd_apb_poll (MEMIF_SHD_PCTL_BASE, PCTL_DFISTSTAT0_OFFSET,
++			    0x0001, 0x0001);
++
++	/* 5. uPTCL MCFG register configuration */
++	data = (tfaw_cfg << 18) | (ddr3_en << 5) | (mem_bl << 0);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_MCFG_OFFSET, data);
++
++	/* 6. uPCTL Power-up sequence */
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_POWCTL_OFFSET, 0x0001);
++	memif_shd_apb_poll (MEMIF_SHD_PCTL_BASE, PCTL_POWSTAT_OFFSET,
++			    0x0001, 0x0001);
++
++	/* 7. uPCTL timing register setup */
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TREFI_OFFSET, t_refi);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TMRD_OFFSET, t_mrd);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRFC_OFFSET, t_rfc);
++
++	data = (t_rp << 0) | (prea_extra << 16);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRP_OFFSET, data);
++
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCL_OFFSET, t_cl);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCWL_OFFSET, t_cwl);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRAS_OFFSET, t_ras);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRC_OFFSET, t_rc);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRCD_OFFSET, t_rcd);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRTP_OFFSET, t_rtp);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TWR_OFFSET, t_wr);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE,
++			     PCTL_DFIPHYWRLAT_OFFSET, (t_cwl - 1));
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE,
++			     PCTL_DFITRDDATEN_OFFSET, (t_cl - 2));
++
++	/* 8. DRAM initialisation via PUBL */
++	/* DRAM configuration register */
++	data = (ddrmd << 0) | (ddr8bnk << 3);
++	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_DCR_OFFSET, data);
++
++	/* DRAM mode register 0 (DDRS3) */
++	data = (mrd_ddr3_cl << 4) | (mrd_ddr3_wr << 9);
++	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR0_OFFSET, data);
++
++	/* DRAM mode register 1 */
++	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR1_OFFSET, 0x0000);
++
++	/* DRAM mode register 2 */
++	data = (mr2_ddr3_cwl << 3);
++	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR2_OFFSET, data);
++
++	/* PHY timing register */
++	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PIR_OFFSET,
++			     PUBL_PIR_CLRSR);
++
++	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PIR_OFFSET,
++			     (PUBL_PIR_INIT |
++			      PUBL_PIR_ITMSRST |
++			      PUBL_PIR_DRAMRST |
++			      PUBL_PIR_DRAMINIT | PUBL_PIR_QSTRN));
++
++	memif_shd_apb_poll (MEMIF_SHD_PUBL_BASE, PUBL_PGSR_OFFSET,
++			    0x0001, 0x0001);
++
++	/* 9. Move uPCTL to Config state */
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_SCTL_OFFSET, 0x0001);
++	memif_shd_apb_poll (MEMIF_SHD_PCTL_BASE, PCTL_STAT_OFFSET,
++			    0x0007, 0x0001);
++
++	/* 10. Further uPCTL configuration */
++
++	/* 11. Wait for uPCTL initialisation to complete */
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_CMDSTATEN_OFFSET,
++			     0x0001);
++	memif_shd_apb_poll (MEMIF_SHD_PCTL_BASE, PCTL_CMDSTAT_OFFSET,
++			    0x0001, 0x0001);
++
++	/* 12. PUBL training */
++
++	/* 13. Move uPCTL to Access state */
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_SCTL_OFFSET, 0x0002);
++	memif_shd_apb_poll (MEMIF_SHD_PCTL_BASE, PCTL_STAT_OFFSET,
++			    0x0007, 0x0003);
++}
++
++/* ------------------------------------------------------------------------ */
++/*  PC30xx MEMIF_ARM initialisation routines                                */
++/* ------------------------------------------------------------------------ */
++
++static void memif_arm_apb_read (unsigned int base, unsigned int addr,
++				unsigned int *data)
++{
++	*data = *(volatile unsigned int *)(base + addr);
++}
++
++static void memif_arm_apb_poll (unsigned int base, unsigned int addr,
++				unsigned int mask, unsigned int data)
++{
++	unsigned int read_value;
++
++	do {
++		memif_arm_apb_read (base, addr, &read_value);
++	} while ((read_value & mask) != data);
++}
++
++static void memif_arm_apb_write (unsigned int base,
++				 unsigned int addr, unsigned int data)
++{
++	*(volatile unsigned int *)(base + addr) = data;
++}
++
++void pc30xx_memif_arm_init (void)
++{
++	/* PCTL MCFG Register */
++	unsigned int tfaw_cfg = 1;	/* 2=t_faw=5*t_rrd */
++	unsigned int ddr3_en = 1;	/* 0=DDR2, 1=DDR3 */
++	unsigned int mem_bl = 1;	/* 0=BL4, 1=BL8 */
++
++	/* PUBL DCR Register */
++	unsigned int ddrmd = 3;
++	unsigned int ddr8bnk = 1;
++
++	/* PCTL TIMING Registers */
++	unsigned int togcnt1u = 534;
++	unsigned int t_init = 200;
++	unsigned int t_rsth = 500;
++	unsigned int togcnt100n = 53;
++	unsigned int t_refi = 70;
++	unsigned int t_mrd = 4;
++	unsigned int t_rfc = 105;
++	unsigned int t_rp = 9;
++	unsigned int prea_extra = 2;
++	unsigned int t_cl = 8;
++	unsigned int t_cwl = 6;
++	unsigned int t_ras = 20;
++	unsigned int t_rc = 29;
++	unsigned int t_rcd = t_cl;
++	unsigned int t_rtp = 4;
++	unsigned int t_wr = 8;
++
++	/* cas latency */
++	unsigned int mrd_ddr3_cl = 4;
++
++	/* write recovery */
++	unsigned int mrd_ddr3_wr = 4;
++	unsigned int mr2_ddr3_cwl = 1;
++
++	if (!is_memif_arm_usable_on_pc30xx ()) {
++		return;
++	}
++
++	/* Make sure the memory interface is being clocked */
++	picoxcell_clk_enable (PICOXCELL_MEMIF_ARM_CLOCK);
++
++	/* MCTL setup */
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     MCTL_DCFG_OFFSET,
++			     (MCTL_DCFG_IO_WIDTH_16BIT <<
++			      MCTL_DCFG_IO_WIDTH_IDX) |
++			     (MCTL_DCFG_DRAM_DENSITY_1Gb <<
++			      MCTL_DCFG_DRAM_DENSITY_IDX) |
++			     (MCTL_DCFG_DRAM_TYPE_13x10 <<
++			      MCTL_DCFG_DRAM_TYPE_IDX) |
++			     (MCTL_DCFG_ADDR_MAP_BRC << MCTL_DCFG_ADDR_MAP_IDX)
++	    );
++
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     MCTL_PCFG_0_OFFSET,
++			     (0x1 << MCTL_PCFG_BP_RD_EN_IDX) |
++			     (0x1 << MCTL_PCFG_BP_WR_EN_IDX)
++	    );
++
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     MCTL_PCFG_1_OFFSET,
++			     (0x1 << MCTL_PCFG_BP_RD_EN_IDX) |
++			     (0x1 << MCTL_PCFG_BP_WR_EN_IDX)
++	    );
++
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     MCTL_PCFG_2_OFFSET,
++			     (0x1 << MCTL_PCFG_BP_RD_EN_IDX) |
++			     (0x1 << MCTL_PCFG_BP_WR_EN_IDX)
++	    );
++
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     MCTL_PCFG_3_OFFSET,
++			     (0x1 << MCTL_PCFG_BP_RD_EN_IDX) |
++			     (0x1 << MCTL_PCFG_BP_WR_EN_IDX)
++	    );
++
++	/* PCTL and PUBL setup */
++
++	/* Set up the row, bank, col configuration for the attached sdram */
++	/* rank = 1
++	 * row addr = 13 bits
++	 * col addr = 10 bits
++	 * banks = 8
++	 */
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_DTUAWDT_OFFSET, 0x0B);
++
++	/* 1. uPCTL timer reg configuration */
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     PCTL_TOGCNT1U_OFFSET, togcnt1u);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TINIT_OFFSET, t_init);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTH_OFFSET, t_rsth);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     PCTL_TOGCNT100N_OFFSET, togcnt100n);
++
++	/* 2. PHY initialisation start
++	 * - not required, PUBL initiates automatically following reset
++	 */
++	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_PIR_OFFSET,
++			     PUBL_PIR_CLRSR);
++
++	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_PIR_OFFSET,
++			     (PUBL_PIR_INIT | PUBL_PIR_DLLSRST |
++			      PUBL_PIR_DLLLOCK));
++
++	/* 3. Wait for PHY initialisation following reset
++	 * (DLL lock and Zo calibration)
++	 */
++	memif_arm_apb_poll (MEMIF_ARM_PUBL_BASE,
++			    PUBL_PGSR_OFFSET, 0x0001, 0x0001);
++
++	/* 4. DFI initialisation status, wait for dfi_init_complete */
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
++			    PCTL_DFISTSTAT0_OFFSET, 0x0001, 0x0001);
++
++	/* 5. uPTCL MCFG register configuration */
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     PCTL_MCFG_OFFSET,
++			     (tfaw_cfg << 18) | (ddr3_en << 5) | (mem_bl << 0));
++
++	/* 6. uPCTL Power-up sequence */
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_POWCTL_OFFSET, 0x0001);
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
++			    PCTL_POWSTAT_OFFSET, 0x0001, 0x0001);
++
++	/* 7. uPCTL timing register setup */
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TREFI_OFFSET, t_refi);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TMRD_OFFSET, t_mrd);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRFC_OFFSET, t_rfc);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     PCTL_TRP_OFFSET, (t_rp << 0) | (prea_extra << 16));
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCL_OFFSET, t_cl);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCWL_OFFSET, t_cwl);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRAS_OFFSET, t_ras);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRC_OFFSET, t_rc);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRCD_OFFSET, t_rcd);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRTP_OFFSET, t_rtp);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TWR_OFFSET, t_wr);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     PCTL_DFIPHYWRLAT_OFFSET, (t_cwl - 1));
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     PCTL_DFITRDDATEN_OFFSET, (t_cl - 2));
++
++	/* 8. DRAM initialisation via PUBL */
++	/* DRAM configuration register */
++	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE,
++			     PUBL_DCR_OFFSET, (ddrmd << 0) | (ddr8bnk << 3));
++
++	/* DRAM mode register 0 (DDR3) */
++	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR0_OFFSET, (mrd_ddr3_cl << 4) |	/* burst length */
++			     (mrd_ddr3_wr << 9));	/* write recover */
++
++	/* DRAM mode register 1 */
++	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR1_OFFSET, 0x0000);
++
++	/* DRAM mode register 2 */
++	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR2_OFFSET,
++			     (mr2_ddr3_cwl << 3));
++
++	/* PHY timing register */
++	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_PIR_OFFSET,
++			     PUBL_PIR_CLRSR);
++
++	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_PIR_OFFSET,
++			     (PUBL_PIR_INIT |
++			      PUBL_PIR_ITMSRST |
++			      PUBL_PIR_DRAMRST |
++			      PUBL_PIR_DRAMINIT | PUBL_PIR_QSTRN));
++
++	memif_arm_apb_poll (MEMIF_ARM_PUBL_BASE, PUBL_PGSR_OFFSET, 0x0001,
++			    0x0001);
++
++	/* 9. Move uPCTL to Config state */
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_SCTL_OFFSET, 0x0001);
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
++			    PCTL_STAT_OFFSET, 0x0007, 0x0001);
++
++	/* 10. Further uPCTL configuration */
++
++	/* 11. Wait for uPCTL initialisation to complete */
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
++			     PCTL_CMDSTATEN_OFFSET, 0x0001);
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
++			    PCTL_CMDSTAT_OFFSET, 0x0001, 0x0001);
++
++	/* 12. PUBL training */
++
++	/* 13. Move uPCTL to Access state */
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_SCTL_OFFSET, 0x0002);
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
++			    PCTL_STAT_OFFSET, 0x0007, 0x0003);
++}
+diff --git a/board/picochip/pc73032/pc73032.c b/board/picochip/pc73032/pc73032.c
+new file mode 100644
+index 0000000..dbe5f3b
+--- /dev/null
++++ b/board/picochip/pc73032/pc73032.c
+@@ -0,0 +1,275 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file pc73032.c
++* \brief Various useful functions for use on a PC73032 Platform.
++*
++* Copyright (c) 2006-2012 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++/* Includes ---------------------------------------------------------------- */
++#include <common.h>
++#include <asm/arch/mux.h>
++#include <asm/arch/utilities.h>
++#include <asm/arch/axi2cfg.h>
++#include <asm/arch/picoxcell_gpio.h>
++
++/* Macros ------------------------------------------------------------------ */
++static struct mux_def pc30xx_hnb_mux[] = {
++	/*	Name		ARM	SD	PERIPH	REG	BIT	PERREG	PERBIT	FLAGS */
++	MUXGPIO(usim_clk,	0,	16,	USIM,	0x34,	0,	0xc0,	4,	MUX_INVERT_PERIPH),
++	MUXGPIO(usim_io,	1,	17,	USIM,	0x34,	1,	0xc0,	1,	MUX_INVERT_PERIPH),
++	MUXGPIO(usim_vcc,	2,	18,	RSVD,	0x34,	2,	-1,	-1,	0),
++	MUXGPIO(usim_rst,	3,	19,	RSVD,	0x34,	3,	-1,	-1,	0),
++	MUXGPIO(usim_cd,	4,	20,	RSVD,	0x34,	4,	-1,	-1,	0),
++	MUXGPIO(shd_gpio5,	5,	21,	RSVD,	0x34,	5,	-1,	-1,	0),
++	MUXGPIO(shd_gpio6,	6,	22,	RSVD,	0x34,	6,	-1,	-1,	0),
++	MUXGPIO(shd_gpio7,	7,	23,	RSVD,	0x34,	7,	-1,	-1,	0),
++	MUXGPIO(shd_gpio8,	8,	8,	RSVD,	0x34,	8,	-1,	-1,	0),
++	MUXGPIO(shd_gpio9,	9,	9,	RSVD,	0x34,	9,	-1,	-1,	0),
++	MUXGPIO(shd_gpio10,	10,	10,	RSVD,	0x34,	10,	-1,	-1,	0),
++	MUXGPIO(shd_gpio11,	11,	11,	RSVD,	0x34,	11,	-1,	-1,	0),
++	MUXGPIO(shd_gpio12,	12,	12,	RSVD,	0x34,	12,	-1,	-1,	0),
++	MUXGPIO(shd_gpio13,	13,	13,	RSVD,	0x34,	13,	-1,	-1,	0),
++	MUXGPIO(shd_gpio14,	14,	14,	RSVD,	0x34,	14,	-1,	-1,	0),
++	MUXGPIO(shd_gpio15,	15,	15,	FRACN,	0x34,	15,	0,	7,	MUX_INVERT_PERIPH),
++	MUXGPIO(boot_mode0,	16,	0,	RSVD,	0x34,	16,	-1,	-1,	0),
++	MUXGPIO(boot_mode1,	17,	1,	RSVD,	0x34,	17,	-1,	-1,	0),
++	MUXGPIO(input_clk_sel0,	18,	2,	RSVD,	0x34,	18,	-1,	-1,	0),
++	MUXGPIO(input_clk_sel1,	19,	3,	RSVD,	0x34,	19,	-1,	-1,	0),
++	MUXGPIO(ssi_data_out,	22,	6,	SSI,	0x34,	22,	0x44,	0,	0),
++	MUXGPIO(ssi_clk,	23,	7,	SSI,	0x34,	23,	0x44,	0,	0),
++	MUXGPIO(ssi_data_in,	24,	-1,	SSI,	-1,	-1,	0x44,	0,	0),
++	MUXGPIO(decode0,	25,	-1,	EBI,	-1,	-1,	0x40,	0,	0),
++	MUXGPIO(decode1,	26,	-1,	EBI,	-1,	-1,	0x40,	1,	0),
++	MUXGPIO(ebi_clk,	29,	-1,	EBI,	-1,	-1,	0x3c,	13,	0),
++	MUXGPIO(pai_tx_data0,	47,	-1,	PAI,	-1,	-1,	0x38,	0,	0),
++	MUXGPIO(pai_tx_data1,	48,	-1,	PAI,	-1,	-1,	0x38,	1,	0),
++	MUXGPIO(pai_tx_data2,	49,	-1,	PAI,	-1,	-1,	0x38,	2,	0),
++	MUXGPIO(pai_tx_data3,	50,	-1,	PAI,	-1,	-1,	0x38,	3,	0),
++	MUXGPIO(pai_tx_data4,	51,	-1,	PAI,	-1,	-1,	0x38,	4,	0),
++	MUXGPIO(pai_tx_data5,	52,	-1,	PAI,	-1,	-1,	0x38,	5,	0),
++	MUXGPIO(pai_tx_data6,	53,	-1,	PAI,	-1,	-1,	0x38,	6,	0),
++	MUXGPIO(pai_tx_data7,	54,	-1,	PAI,	-1,	-1,	0x38,	7,	0),
++	MUXGPIO(pai_rx_data0,	55,	-1,	PAI,	-1,	-1,	0x38,	8,	0),
++	MUXGPIO(pai_rx_data1,	56,	-1,	PAI,	-1,	-1,	0x38,	9,	0),
++	MUXGPIO(pai_rx_data2,	57,	-1,	PAI,	-1,	-1,	0x38,	10,	0),
++	MUXGPIO(pai_rx_data3,	58,	-1,	PAI,	-1,	-1,	0x38,	11,	0),
++	MUXGPIO(pai_rx_data4,	59,	-1,	PAI,	-1,	-1,	0x38,	12,	0),
++	MUXGPIO(pai_rx_data5,	60,	-1,	PAI,	-1,	-1,	0x38,	13,	0),
++	MUXGPIO(pai_rx_data6,	61,	-1,	PAI,	-1,	-1,	0x38,	14,	0),
++	MUXGPIO(pai_rx_data7,	62,	-1,	PAI,	-1,	-1,	0x38,	15,	0),
++
++	/*	   Name			Periph	PeriphB	Reg	Bit */
++	MUX2PERIPH(pad_pai_tx_clk,	PAI,	MAXIM,	0x4c,	0),
++	MUX2PERIPH(pad_pai_tx_ctrl,	PAI,	MAXIM,	0x4c,	0),
++	MUX2PERIPH(pad_pai_trig_clk,	PAI,	MAXIM,	0x4c,	0),
++};
++
++/* Constants --------------------------------------------------------------- */
++DECLARE_GLOBAL_DATA_PTR;
++
++/* Prototypes--------------------------------------------------------------- */
++/*!
++ * \brief Return the state of the reset switch
++ *
++ * \return 1 is the reset switch is pressed
++ *         0 if the reset switch is not pressed
++ */
++static int is_reset_pressed (void);
++
++/*!
++ * \brief Perform factory reset action
++ *
++ * \return 0 if success
++ *         not 0 for failure
++ */
++static int factory_reset_action (void);
++
++/* Functions --------------------------------------------------------------- */
++
++/*****************************************************************************
++ *
++ * show_boot_progress()
++ *
++ * Purpose: Indicate booting progress
++ *
++ * Note: see U-Boot README for a list of 'progress' values.
++ *
++ *****************************************************************************/
++#if defined(CONFIG_SHOW_BOOT_PROGRESS)
++void show_boot_progress (int progress)
++{
++	printf ("Boot reached stage %d\n", progress);
++}
++#endif
++
++/*****************************************************************************
++ *
++ * board_init()
++ *
++ * Purpose: Hardware platform initialisation functions
++ *
++ * Returns: 0 - Success
++ *
++ *****************************************************************************/
++int board_init (void)
++{
++	/* Setup some kernel boot parameters */
++	gd->bd->bi_boot_params = 0x00000100;
++
++	/* Setup the machine type */
++	gd->bd->bi_arch_number = MACH_TYPE_PC73032;
++
++	gd->flags = 0;
++
++        /* Turn on some picoxcell block clocks */
++        picoxcell_clk_enable (PICOXCELL_SSI_CLOCK);
++        picoxcell_clk_enable (PICOXCELL_NAND_CLOCK);
++
++	/* Start timer #0 */
++	picoxcell_timer_start (0);
++
++	/* Initialise the gpio muxing library */
++	picoxcell_mux_register (pc30xx_hnb_mux, ARRAY_SIZE (pc30xx_hnb_mux));
++
++	/* Initialise the gpio library */
++	picoxcell_gpio_init ();
++
++	return 0;
++}
++
++/*****************************************************************************
++ *
++ * checkboard()
++ *
++ * Purpose: Display some useful hardware platform information.
++ *
++ * Returns: 0 - Success
++ *
++ *****************************************************************************/
++int checkboard (void)
++{
++	printf ("Board: Picochip " PICOCHIP_PLATFORM " \n");
++
++	return 0;
++}
++
++static int is_reset_pressed (void)
++{
++	unsigned int reset = 0;
++
++	reset =
++	    picoxcell_read_register (PICOXCELL_GPIO_BASE +
++				     GPIO_EXT_PORT_A_REG_OFFSET);
++	reset &= CONFIG_SYS_RESET_PIN;
++
++	return !reset;
++}
++
++static int factory_reset_action (void)
++{
++        /* This function needs to implement some as yet
++         * undefined action
++         */
++        printf ("Factory reset requested...\n");
++
++        return 0;
++}
++
++/*****************************************************************************
++ *
++ * misc_init_r()
++ *
++ * Purpose: Miscellaneous platform dependent initialisations
++ *
++ * Returns: 0 - Success
++ *
++ *****************************************************************************/
++int misc_init_r (void)
++{
++	unsigned int timebase = 0;
++	int reset_held = 1;
++
++	/* Check to see if the reset push button is being held down.
++	 * If it is held down long enough we will be looking at a
++	 * factory reset situation...
++	 */
++	if (is_reset_pressed ()) {
++
++		timebase = get_timer (0);
++		do {
++			if (!is_reset_pressed ()) {
++				reset_held = 0;
++				break;
++			}
++		}
++		while (get_timer (timebase) < CONFIG_SYS_RESET_DELAY);
++
++		if (reset_held) {
++			/* Factory reset requested */
++                        factory_reset_action ();
++                }
++	}
++	return 0;
++}
++
++/*****************************************************************************
++ *
++ * dram_init()
++ *
++ * Purpose: Initialize the DDR SDRAM size info.
++ *
++ * Returns: 0 - Success
++ *
++ *****************************************************************************/
++int dram_init (void)
++{
++	gd->ram_size = PHYS_SDRAM_1_SIZE;
++
++	return 0;
++}
++
++/*****************************************************************************
++ *
++ * dram_init_banksize()
++ *
++ * Purpose: Initialize the the bd_t dram bank info.
++ *
++ *****************************************************************************/
++void dram_init_banksize (void)
++{
++	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
++	gd->bd->bi_dram[0].size = PHYS_SDRAM_1_SIZE;
++}
++
++/*****************************************************************************
++ *
++ * pc30xx_check_memif_shared_setup()
++ *
++ * Purpose: Check to make sure the memif-shared is working correctly on
++ *          PC30xx ES Si. See Mantis #9530 for full details.
++ *
++ *****************************************************************************/
++void pc30xx_check_memif_shared_setup (void)
++{
++        unsigned int read_data;
++        unsigned int write_data = 0x20120113;
++        unsigned int address =
++            is_memif_arm_usable_on_pc30xx () ? 0x10000000 : 0;
++
++        picoxcell_write_register (write_data, address);
++        read_data = picoxcell_read_register (address);
++        if (read_data != write_data) {
++                /* Oops, we have memory setup issues */
++                reset_cpu (0);
++        }
++}
+diff --git a/boards.cfg b/boards.cfg
+index 92c57ed..adc6de9 100644
+--- a/boards.cfg
++++ b/boards.cfg
+@@ -182,6 +182,8 @@ integratorcp_cm946es         arm         arm946es    integrator          armltd
+ picochippc7302nor            arm         arm926ejs   pc7302              picochip       picoxcell
+ picochippc7302nand           arm         arm926ejs   pc7302              picochip       picoxcell
+ picochippc7308               arm         arm926ejs   pc7308              picochip       picoxcell
++picochippc73032nor           arm         arm926ejs   pc73032             picochip       picoxcell
++picochippc73032nand          arm         arm926ejs   pc73032             picochip       picoxcell
+ ca9x4_ct_vxp                 arm         armv7       vexpress            armltd
+ am335x_evm                   arm         armv7       am335x              ti             am33xx
+ highbank                     arm         armv7       highbank            -              highbank
+diff --git a/include/configs/picochippc73032-common.h b/include/configs/picochippc73032-common.h
+new file mode 100644
+index 0000000..a0c07c9
+--- /dev/null
++++ b/include/configs/picochippc73032-common.h
+@@ -0,0 +1,363 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file picochippc73032-common.h
++* \brief Configuration file for U-Boot on the PC73032 platform.
++*
++* Copyright (c) 2012 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++#ifndef __CONFIG_PC73032_H
++#define __CONFIG_PC73032_H
++
++#include <asm/arch/picoxcell.h>
++#include <asm/arch/uart.h>
++#include <asm/arch/gpio.h>
++#include <asm/sizes.h>
++
++/*-----------------------------------------------------------------------------
++ * Platform Identification Stuff
++ */
++#define PICOCHIP "picochip"
++
++/* Which hardware platform I am destined for */
++#define PICOCHIP_PLATFORM "PC73032"
++
++/* Specific version of this build */
++#ifndef PICOCHIP_PLATFORM_VERSION
++#define PICOCHIP_PLATFORM_VERSION "dummy_release"
++#endif /* PICOCHIP_PLATFORM_VERSION */
++
++#define CONFIG_IDENT_STRING " "PICOCHIP"-"PICOCHIP_PLATFORM_VERSION \
++                            "-"PICOCHIP_PLATFORM
++
++/*-----------------------------------------------------------------------------
++ * High Level Configuration Options
++ */
++/* Running on Picochip PC3032 Silicon */
++#define CONFIG_PICOCHIP_PC3032
++
++/* Running on a Picochip PC73032 platform */
++#define CONFIG_PICOCHIP_PC73032
++
++/* Base address of the onchip SRAM */
++#define PICOXCELL_ONCHIP_SRAM_BASE      (PICOXCELL_SRAM_BASE)
++#define PICOXCELL_ONCHIP_SRAM_SIZE      (PICOXCELL_SRAM_SIZE)
++
++/* ARM Sub-system peripherals are clocked at 200MHz */
++#define PICOXCELL_AHB_CLOCK_FREQ        (200000000)
++
++/* Don't use Interrupts */
++#undef CONFIG_USE_IRQ
++
++/* A time tick is 1 millisecond (this is NOT CPU tick) */
++#define CONFIG_SYS_HZ               (1000)
++
++/* Display board info */
++#define CONFIG_DISPLAY_BOARDINFO
++
++/* Display cpu info */
++#define CONFIG_DISPLAY_CPUINFO
++
++/* Do not reboot the platform on a panic */
++#define CONFIG_PANIC_HANG
++
++/*-----------------------------------------------------------------------
++ * Stack Sizes
++ *
++ * The stack sizes are set up in arch/arm/lib/board.c using the
++ * settings below
++ */
++#define CONFIG_STACKSIZE	(SZ_256K) 	    /* regular stack */
++#ifdef CONFIG_USE_IRQ
++#define CONFIG_STACKSIZE_IRQ	(SZ_4K)             /* IRQ stack */
++#define CONFIG_STACKSIZE_FIQ	(SZ_4K)    	    /* FIQ stack */
++#endif /* CONFIG_USE_IRQ */
++
++/*-----------------------------------------------------------------------
++ * Initial Stack Pointer
++ *
++ * Note: This is only used before U-Boot relocation takes place.
++ *       The global data is stored above this address, whilst the stack
++ *       is below this address. After relocation the stack is automatically
++ *       moved to the top of the available sdram.
++ */
++#define CONFIG_SYS_INIT_SP_ADDR (0x00001000)
++
++/*-----------------------------------------------------------------------------
++ * Size of malloc() pool
++ */
++#define CONFIG_SYS_MALLOC_LEN   (SZ_1M)
++
++/*-----------------------------------------------------------------------------
++ * Linux Kernel Stuff
++ */
++/* Allow passing of command line args (bootargs) to the linux kernel*/
++#define CONFIG_CMDLINE_TAG          1
++#define CONFIG_SETUP_MEMORY_TAGS    1
++
++/*-----------------------------------------------------------------------------
++ * DDR2 RAM Memory Map
++ *
++ * We have 1 linear addressable RAM bank
++ *
++ * Note: CONFIG_SYS_SDRAM_BASE must start at 0
++ */
++#define CONFIG_SYS_SDRAM_BASE	(0x00000000)
++#define CONFIG_NR_DRAM_BANKS    (1)
++#define PHYS_SDRAM_1		(PICOXCELL_DDRBANK_BASE)
++#define PHYS_SDRAM_1_SIZE	(SZ_128M)
++
++/*-----------------------------------------------------------------------------
++ * SPI Flash Memory Stuff
++ */
++#define CONFIG_DW_SPI
++
++/* Include generic support for SPI Flash memory devices */
++#define CONFIG_SPI_FLASH
++
++/* Include support for SPI Flash memory devices from ST Micro/Numonyx */
++#define CONFIG_SPI_FLASH_STMICRO
++
++/*-----------------------------------------------------------------------------
++ * U-Boot Environment Stuff
++ *
++ * Note: See picochippc73032nor.h and pichippc73032nand.h
++ *       for more information.
++ */
++#if !defined(CONFIG_RUN_FROM_RAM) && !defined(CONFIG_CMD_NAND) && \
++    !defined(CONFIG_ENV_SIZE)
++
++/* We are running from ram, therefore no environment */
++#define CONFIG_ENV_IS_NOWHERE
++
++/* Size of environment variables */
++#define CONFIG_ENV_SIZE		(SZ_2K)
++
++#endif /* CONFIG_RUN_FROM_RAM && !defined(CONFIG_CMD_NAMD) &&
++	  !defined(CONFIG_ENV_SIZE) */
++
++/*-----------------------------------------------------------------------------
++ * Timer Stuff
++ */
++#define CONFIG_SYS_TIMERBASE    (PICOXCELL_TIMER_BASE)
++
++/*-----------------------------------------------------------------------------
++ * Ethernet Stuff
++ */
++#define CONFIG_MACB
++#define CONFIG_PHY_ADDR         (3)
++#define CONFIG_NET_MULTI
++
++/*-----------------------------------------------------------------------------
++ * Serial Port Stuff
++ */
++#define CONFIG_SYS_NS16550
++#define CONFIG_SYS_NS16550_SERIAL
++#define CONFIG_SYS_NS16550_REG_SIZE (-4)
++#define CONFIG_SYS_NS16550_CLK      (PICOXCELL_AHB_CLOCK_FREQ)
++#define CONFIG_SYS_NS16550_COM1     (PICOXCELL_UART1_BASE)
++
++/* Our uart registers need 32 bit access */
++#define CONFIG_SYS_NS16550_MEM32
++
++/* Console on Uart #0 */
++#define CONFIG_CONS_INDEX	    (1)
++
++/* Table of supported baud rates */
++#define CONFIG_SYS_BAUDRATE_TABLE   { 9600, 19200,  \
++                                      38400, 57600, \
++                                      115200, 230400 }
++
++/*-----------------------------------------------------------------------------
++ * U-Boot Memory Test (mtest command) Stuff
++ */
++/* Default start address for memory test */
++#define CONFIG_SYS_MEMTEST_START    (PICOXCELL_ONCHIP_SRAM_BASE)
++
++/* Default end address for memory test */
++#define CONFIG_SYS_MEMTEST_END  (CONFIG_SYS_MEMTEST_START + \
++                                 PICOXCELL_ONCHIP_SRAM_SIZE - 1)
++
++/* Define this to use the super duper memory test */
++#define CONFIG_SYS_ALT_MEMTEST
++
++/* Use Uart #1 scratch pad reg */
++#define CONFIG_SYS_MEMTEST_SCRATCH  (PICOXCELL_UART1_BASE + \
++                                     UART_SCRATCH_REG_OFFSET)
++
++/*-----------------------------------------------------------------------------
++ * U-Boot Supported Commands
++ */
++#include "config_cmd_default.h"
++
++/* Include 'ping' command */
++#define CONFIG_CMD_PING
++
++/* Include commands for SPI Flash memory */
++#define CONFIG_CMD_SF
++
++/* Turn off a bunch of default commands */
++#undef CONFIG_CMD_BOOTD
++#undef CONFIG_CMD_CONSOLE
++#undef CONFIG_CMD_ECHO
++#undef CONFIG_CMD_EDITENV
++#undef CONFIG_CMD_FPGA
++#undef CONFIG_CMD_ITEST
++#undef CONFIG_CMD_IMLS
++#undef CONFIG_CMD_LOADB
++#undef CONFIG_CMD_LOADS
++#undef CONFIG_CMD_NFS
++#undef CONFIG_CMD_SETGETDCR
++#undef CONFIG_CMD_SOURCE
++#undef CONFIG_CMD_XIMG
++
++#ifdef CONFIG_SYS_NO_FLASH
++#undef CONFIG_CMD_FLASH
++#endif /* CONFIG_SYS_NO_FLASH */
++
++#ifdef CONFIG_ENV_IS_NOWHERE
++#undef CONFIG_CMD_SAVEENV
++#endif /* CONFIG_ENV_IS_NOWHERE */
++
++/* Use the HUSH parser */
++#define CONFIG_SYS_HUSH_PARSER
++
++#ifdef  CONFIG_SYS_HUSH_PARSER
++/* This defines the secondary prompt string */
++#define CONFIG_SYS_PROMPT_HUSH_PS2 "> "
++#endif /* CONFIG_SYS_HUSH_PARSER */
++
++/* Enable command line editing and history */
++#define CONFIG_CMDLINE_EDITING
++
++/* Enable command line MTD partitioning */
++#define CONFIG_CMD_MTDPARTS
++#define CONFIG_MTD_DEVICE
++
++#ifndef CONFIG_SYS_NO_FLASH
++#define CONFIG_FLASH_CFI_MTD
++#endif
++
++/*-----------------------------------------------------------------------------
++ * Miscellaneous Configurable Options...
++ */
++/* Use 'long' help messages */
++#define CONFIG_SYS_LONGHELP
++
++/* Monitor Command Prompt */
++#define CONFIG_SYS_PROMPT   "=> "
++
++/* Console I/O Buffer Size*/
++#define CONFIG_SYS_CBSIZE   (SZ_1K)
++
++/* Print buffer size */
++#define CONFIG_SYS_PBSIZE   (CONFIG_SYS_CBSIZE + \
++                             sizeof(CONFIG_SYS_PROMPT) + 16)
++
++/* Maximum number of command args */
++#define CONFIG_SYS_MAXARGS  (16)
++
++/* Boot Argument Buffer Size */
++#define CONFIG_SYS_BARGSIZE (CONFIG_SYS_CBSIZE)
++
++/* Default load address for tftp, bootm and friends */
++#define CONFIG_SYS_LOAD_ADDR    0x00200000
++#define CONFIG_LOADADDR         CONFIG_SYS_LOAD_ADDR
++
++/* Timeout delay (mS) used for checking for the reset button
++ * being held down at boot time.
++ */
++#define CONFIG_SYS_RESET_DELAY (10000)
++
++/* Which arm gpio pin the reset button is wired to */
++#define CONFIG_SYS_RESET_PIN   (GPIO_BIT_5)
++
++/* The check for factory reset request is contained in the
++ * misc_init_r function
++ */
++#define CONFIG_MISC_INIT_R
++
++/*-----------------------------------------------------------------------
++ * Environment Configuration
++ */
++
++#if defined(CONFIG_MACB)
++
++/* Picochip OUI
++ *
++ * Note: The MAC Address defined by 'CONFIG_ETHADDR' is based on
++ * Picochip's OUI,see http://standards.ieee.org/regauth/oui/index.shtml
++ * for more information. It will need to be modified for each and every
++ * individual hardware platform.
++ */
++#define CONFIG_ETHADDR          00:15:E1:00:00:00
++
++/* Picochip default for testing, will need noodling by users */
++#define CONFIG_IPADDR           172.29.18.248
++
++#define CONFIG_HOSTNAME	        picopc73032
++#define CONFIG_ROOTPATH	        "/var/nfspc73032"
++#define CONFIG_BOOTFILE	        "uImage-pc73032"
++
++#define CONFIG_SERVERIP         172.17.7.100
++#define CONFIG_GATEWAYIP        172.29.0.1
++#define CONFIG_NETMASK          255.255.0.0
++
++/* Enable the MII utility commands */
++#define CONFIG_CMD_MII
++
++#endif /* CONFIG_MACB */
++
++/* This is the offset from the start of NAND Flash
++ * to where the Linux kernel can be found.
++ */
++#define CONFIG_NAND_KERNEL_OFFSET  0x00380000
++
++/* Time in seconds before autoboot, -1 disables auto-boot */
++#define CONFIG_BOOTDELAY        5
++
++/* The boot command will set bootargs */
++#undef  CONFIG_BOOTARGS
++
++/* Default console baud rate */
++#define CONFIG_BAUDRATE	        115200
++
++/* Unless specified here we'll just rely on the kernel default */
++#define OTHERBOOTARGS
++
++/* Define the UBIFS root filesystem partition for NAND Flash */
++#define NAND_UBIFS_ROOT         9
++
++/* Define CONFIG_BOOTCOMMAND as */
++#define CONFIG_BOOTCOMMAND  "run nand_ubifs"
++
++#define	CONFIG_EXTRA_ENV_SETTINGS				            \
++   "othbootargs=" MK_STR (OTHERBOOTARGS) "\0"                               \
++   "netdev=eth0\0"                                                          \
++   "consoledev=ttyS0\0"                                                     \
++   "kernel_nand_offset=" MK_STR(CONFIG_NAND_KERNEL_OFFSET) "\0"             \
++   "nand_ubifs_root=" MK_STR(NAND_UBIFS_ROOT) "\0"		            \
++   "nand_ubifs=run nand_ubifs_args; nboot $loadaddr 0 "                     \
++   "$kernel_nand_offset; bootm $loadaddr\0"                                 \
++   "fixed_nfs=run nfs_args; tftp; bootm\0"				    \
++   "nand_ubifs_args=setenv bootargs root=ubi0:rootfs rw rootfstype=ubifs "  \
++   "ubi.mtd=$nand_ubifs_root,2048 "                                         \
++   "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
++   "nfs_args=setenv bootargs root=/dev/nfs rw nfsroot=$serverip:$rootpath " \
++   "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
++   "partition=" MTD_PARTITION_DEFAULT "\0"                                  \
++   "mtdids=" MTDIDS_DEFAULT "\0"                                            \
++   "mtdparts=" MTDPARTS_DEFAULT "\0"
++
++#endif /* __CONFIG_PC73032_H */
+diff --git a/include/configs/picochippc73032nand.h b/include/configs/picochippc73032nand.h
+new file mode 100644
+index 0000000..0de2f75
+--- /dev/null
++++ b/include/configs/picochippc73032nand.h
+@@ -0,0 +1,114 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file picochippc73032nand.h
++* \brief Configuration file for U-Boot on the PC73032 platform.
++*
++* Copyright (c) 2012 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++#ifndef __CONFIG_PC73032_NAND__
++#define __CONFIG_PC73032_NAND__
++
++#include <asm/arch/picoxcell.h>
++#include <asm/sizes.h>
++
++/*-----------------------------------------------------------------------------
++ * High Level Configuration Options
++ */
++
++/* Build U-Boot to run at this address */
++#define CONFIG_SYS_TEXT_BASE        0x06000000
++
++/* Do not perform any low level initialisation
++ *
++ * Note: We will be running from ram and U-Boot
++ *       will have been loaded by a first stage bootloader
++ */
++#define CONFIG_SKIP_LOWLEVEL_INIT
++
++/*-----------------------------------------------------------------------------
++ * NAND Flash Memory Stuff
++ */
++#define CONFIG_NAND_DENALI
++
++#define CONFIG_SYS_NAND_BASE        (PICOXCELL_EBI_CS2_BASE)
++#define CONFIG_SYS_NAND_MAX_CHIPS   (1)
++#define CONFIG_SYS_MAX_NAND_DEVICE  (1)
++#define CONFIG_SYS_NAND_ONFI_DETECTION  (1)
++
++/* Define Flash memory sector size */
++#define NAND_FLASH_SECTOR_SIZE      (SZ_128K)
++
++/* Needed for nand_util.c */
++#define CONFIG_SYS_64BIT_VSPRINTF
++
++/* No flash memory in the system */
++#define CONFIG_SYS_NO_FLASH
++
++/*-----------------------------------------------------------------------------
++ * U-Boot Environment Stuff
++ */
++
++/* NAND Flash memory map
++ *
++ *  Block 0     spinand first stage bootloader #0
++ *  Block 1     spinand first stage bootloader #1
++ *  Block 2     spinand first stage bootloader #2
++ *  Block 3     spinand first stage bootloader #3
++ *  Block 4-7   Reserved
++ *  Block 8-15  U-Boot image
++ *  Block 16-23 Redundant U-Boot image
++ *  Block 24    U-Boot env variables
++ *  Block 25    Redundant U-Boot env variables
++ *  Block 26-27 Reserved
++ *  Block 28    Linux kernel...
++ *
++ */
++#define CONFIG_ENV_IS_IN_NAND
++
++/* Offset address of environment variables */
++#define CONFIG_ENV_OFFSET           (NAND_FLASH_SECTOR_SIZE * 24)
++
++/* Size of environment variables */
++#define CONFIG_ENV_SIZE             (NAND_FLASH_SECTOR_SIZE)
++
++/* Offset address of the redundant envinronment variables */
++#define CONFIG_ENV_OFFSET_REDUND    (NAND_FLASH_SECTOR_SIZE * 25)
++
++/* Turn off wite protection for vendor parameters */
++#define CONFIG_ENV_OVERWRITE
++
++#define CONFIG_CMD_NAND
++
++/* Default command line mtd partitioning */
++#define MTD_PARTITION_DEFAULT   "nand0,0"
++
++#define MTDIDS_DEFAULT          "nand0=denali-nand"
++
++#define MTDPARTS_DEFAULT	"mtdparts=denali-nand:"\
++                                "128K(NandFirstStage0),"\
++                                "128K(NandFirstStage1),"\
++                                "128K(NandFirstStage2),"\
++                                "128K(NandFirstStage3),"\
++                                "1M@1M(Boot),"\
++				"1M(RedundantBoot),"\
++				"128K(BootEnvironment),"\
++                                "128K(RedundantBootEnv),"\
++                                "8M@0x380000(KernelA),"\
++                                "80M(FileSystemA),"\
++                                "8M(Configuration),"\
++                                "8M(KernelB),"\
++                                "80M(FileSystemB)"
++
++#include <configs/picochippc73032-common.h>
++
++#endif /* __CONFIG_PC73032_NAND__ */
+diff --git a/include/configs/picochippc73032nor.h b/include/configs/picochippc73032nor.h
+new file mode 100644
+index 0000000..9c2924d
+--- /dev/null
++++ b/include/configs/picochippc73032nor.h
+@@ -0,0 +1,90 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file picochippc73032nor.h
++* \brief Configuration file for U-Boot on the PC73032 platform.
++*
++* Copyright (c) 2012 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++#ifndef __CONFIG_PC73032_NOR__
++#define __CONFIG_PC73032_NOR__
++
++#include <asm/arch/picoxcell.h>
++#include <asm/sizes.h>
++/* Start address of the flash memory */
++#define CONFIG_SYS_FLASH_BASE   (PICOXCELL_FLASH_BASE)
++
++/* Define Flash memory sector size */
++#define FLASH_SECTOR_SIZE	(SZ_128K)
++
++/* Use buffered writes to flash memory */
++#define CONFIG_SYS_FLASH_USE_BUFFER_WRITE
++
++/* Maximum number of memory banks (devices) */
++#define CONFIG_SYS_MAX_FLASH_BANKS  (1)
++
++/* Maximum number of sectors per flash device */
++#define CONFIG_SYS_MAX_FLASH_SECT   (1024)
++
++/* Timeouts for Flash Erasing and writing */
++#define CONFIG_SYS_FLASH_ERASE_TOUT (2 * CONFIG_SYS_HZ)
++#define CONFIG_SYS_FLASH_WRITE_TOUT (2 * CONFIG_SYS_HZ)
++
++/* Build the cfi mtd driver */
++#define CONFIG_FLASH_CFI_DRIVER
++#define CONFIG_SYS_FLASH_CFI
++
++/* print 'E' for empty sector on flinfo */
++#define CONFIG_SYS_FLASH_EMPTY_INFO
++
++/* U-Boot lives in the bottom of the Flash memory */
++#define CONFIG_SYS_MONITOR_BASE (CONFIG_SYS_FLASH_BASE)
++
++/* U-Boot occupies 2 flash sectors */
++#define CONFIG_SYS_MONITOR_LEN  (2 * FLASH_SECTOR_SIZE)
++
++/* Environment variables stored in Flash memory */
++#define CONFIG_ENV_IS_IN_FLASH
++
++/* Start address of environment variables */
++#define CONFIG_ENV_ADDR         (CONFIG_SYS_MONITOR_BASE + CONFIG_SYS_MONITOR_LEN)
++
++/* One flash sector for environment varisbles */
++#define CONFIG_ENV_SECT_SIZE    (FLASH_SECTOR_SIZE)
++
++/* But 64 KBytes is sufficient */
++#define CONFIG_ENV_SIZE		(SZ_64K)
++
++/* Turn off wite protection for vendor parameters */
++#define CONFIG_ENV_OVERWRITE
++
++#ifdef CONFIG_RUN_FROM_RAM
++#define CONFIG_SKIP_LOWLEVEL_INIT
++#define CONFIG_SYS_TEXT_BASE        0x06000000
++#else
++#define CONFIG_SYS_TEXT_BASE        0x40000000
++#endif /* CONFIG_RUN_FROM_RAM */
++
++/* Default command line mtd partitioning */
++#define MTD_PARTITION_DEFAULT   "nor0,0"
++
++#define MTDIDS_DEFAULT          "nor0=physmap-flash"
++
++#define MTDPARTS_DEFAULT	"mtdparts=physmap-flash:"\
++                                "256K(Boot),"\
++                                "128K(BootEnvironment),"\
++                                "4M(Kernel),"\
++                                "-(Application)"
++
++#include <configs/picochippc73032-common.h>
++
++#endif /* __CONFIG_PC73032_NOR__ */
+-- 
+1.7.0.4
+

@@ -1,0 +1,42 @@
+From 0c981322d4f40858247532822ef69344bfd71e58 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Thu, 20 Sep 2012 15:12:42 +0100
+Subject: [PATCH 47/70] picoxcell/pc73032: fixup checking for memif-arm being present
+
+Also, on the PC73032 platfrom is memif-arm is disabled then only use
+half the available sdram.
+---
+ arch/arm/include/asm/arch-picoxcell/fuse.h |    2 +-
+ board/picochip/pc73032/pc73032.c           |    4 +++-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/include/asm/arch-picoxcell/fuse.h b/arch/arm/include/asm/arch-picoxcell/fuse.h
+index 19030c5..7b96255 100644
+--- a/arch/arm/include/asm/arch-picoxcell/fuse.h
++++ b/arch/arm/include/asm/arch-picoxcell/fuse.h
+@@ -72,6 +72,6 @@
+ /*****************************************************************************/
+ 
+ #define FUSE_WRITE_FUSE_ENABLE          (0x66757365)
+-#define PICOXCELL_DISABLE_MEMIF_ARM     (1 << 10)
++#define PICOXCELL_DISABLE_MEMIF_ARM     (1 << 9)
+ 
+ #endif /*__PICOXCELL_FUSE_H__ */
+diff --git a/board/picochip/pc73032/pc73032.c b/board/picochip/pc73032/pc73032.c
+index dbe5f3b..5064baf 100644
+--- a/board/picochip/pc73032/pc73032.c
++++ b/board/picochip/pc73032/pc73032.c
+@@ -248,7 +248,9 @@ int dram_init (void)
+ void dram_init_banksize (void)
+ {
+ 	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
+-	gd->bd->bi_dram[0].size = PHYS_SDRAM_1_SIZE;
++	gd->bd->bi_dram[0].size =
++	    is_memif_arm_usable_on_pc30xx ()? PHYS_SDRAM_1_SIZE
++	    : (PHYS_SDRAM_1_SIZE / 2);
+ }
+ 
+ /*****************************************************************************
+-- 
+1.7.0.4
+

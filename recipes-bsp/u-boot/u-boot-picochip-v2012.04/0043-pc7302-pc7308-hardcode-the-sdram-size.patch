@@ -1,0 +1,90 @@
+From 1d23fc38873f310472147d87396960e571b47814 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Wed, 15 Aug 2012 14:12:56 +0100
+Subject: [PATCH 43/70] pc7302/pc7308: hardcode the sdram size
+
+We no longer use the get_ram_size(). In a system where we load
+u-boot into sdram with a first stage bootloader arm and run it
+from there it has potentially dangerious consequences.
+
+This commit forms part of the resolution of Mantis Issue #10515
+---
+ board/picochip/pc7302/pc7302.c |    9 +++------
+ board/picochip/pc7308/pc7308.c |    9 +++------
+ 2 files changed, 6 insertions(+), 12 deletions(-)
+
+diff --git a/board/picochip/pc7302/pc7302.c b/board/picochip/pc7302/pc7302.c
+index 7e12f58..53e766a 100644
+--- a/board/picochip/pc7302/pc7302.c
++++ b/board/picochip/pc7302/pc7302.c
+@@ -6,7 +6,7 @@
+ * \file pc7302.c
+ * \brief Various useful functions for use on a PC7302 Platform.
+ *
+-* Copyright (c) 2006-2011 Picochip Ltd
++* Copyright (c) 2006-2012 Picochip Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -218,7 +218,7 @@ int misc_init_r (void)
+  *****************************************************************************/
+ int dram_init (void)
+ {
+-	gd->ram_size = get_ram_size ((long *)PHYS_SDRAM_1, PHYS_SDRAM_1_SIZE);
++	gd->ram_size = PHYS_SDRAM_1_SIZE;
+ 
+ 	return 0;
+ }
+@@ -229,12 +229,9 @@ int dram_init (void)
+  *
+  * Purpose: Initialize the the bd_t dram bank info.
+  *
+- * Returns: 0 - Success
+- *
+  *****************************************************************************/
+ void dram_init_banksize (void)
+ {
+ 	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
+-	gd->bd->bi_dram[0].size =
+-	    get_ram_size ((long *)PHYS_SDRAM_1, PHYS_SDRAM_1_SIZE);
++	gd->bd->bi_dram[0].size = PHYS_SDRAM_1_SIZE;
+ }
+diff --git a/board/picochip/pc7308/pc7308.c b/board/picochip/pc7308/pc7308.c
+index e6271b6..519481a 100644
+--- a/board/picochip/pc7308/pc7308.c
++++ b/board/picochip/pc7308/pc7308.c
+@@ -6,7 +6,7 @@
+ * \file pc7308.c
+ * \brief Various useful functions for use on a PC7308 Platform.
+ *
+-* Copyright (c) 2006-2011 Picochip Ltd
++* Copyright (c) 2006-2012 Picochip Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -233,7 +233,7 @@ int misc_init_r (void)
+  *****************************************************************************/
+ int dram_init (void)
+ {
+-	gd->ram_size = get_ram_size ((long *)PHYS_SDRAM_1, PHYS_SDRAM_1_SIZE);
++	gd->ram_size = PHYS_SDRAM_1_SIZE;
+ 
+ 	return 0;
+ }
+@@ -244,12 +244,9 @@ int dram_init (void)
+  *
+  * Purpose: Initialize the the bd_t dram bank info.
+  *
+- * Returns: 0 - Success
+- *
+  *****************************************************************************/
+ void dram_init_banksize (void)
+ {
+ 	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
+-	gd->bd->bi_dram[0].size =
+-	    get_ram_size ((long *)PHYS_SDRAM_1, PHYS_SDRAM_1_SIZE);
++	gd->bd->bi_dram[0].size = PHYS_SDRAM_1_SIZE;
+ }
+-- 
+1.7.0.4
+

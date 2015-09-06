@@ -1,0 +1,431 @@
+From 52924bb879da65b985f8b1721764375f6ac44838 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Tue, 13 Dec 2011 10:26:44 +0000
+Subject: [PATCH 29/70] pc7308: life out of the nand driver
+
+Note: There are some hard coded changes in drivers/mtd/nand/nand_base.c
+that shouldn't need to be there. However in the interests of expediting
+Linux bring up we'll just have to live with this for now.
+---
+ drivers/mtd/nand/denali.c        |  137 ++++++++++++++++++++++++++++---------
+ drivers/mtd/nand/denali.h        |    1 +
+ drivers/mtd/nand/nand_base.c     |   14 +++-
+ include/configs/picochippc7308.h |    7 +-
+ 4 files changed, 118 insertions(+), 41 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index f85d658..9542ca7 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -99,6 +99,10 @@ static int onfi_timing_mode = NAND_DEFAULT_TIMINGS;
+ 
+ #define NAND_TIMEOUT    (1000)
+ 
++/* DMA operation */
++#define DMA_INT_GENERATION  ( 1 << 24 )
++#define DMA_BURST_LENGTH    ( 8 << 16 )
++
+ /* Prototypes--------------------------------------------------------------- */
+ /* forward declarations */
+ static void clear_interrupts (struct denali_nand_info *denali);
+@@ -135,7 +139,9 @@ static void index_addr_read_data (struct denali_nand_info *denali,
+  * The operations manage buffering that data. */
+ static void reset_buf (struct denali_nand_info *denali)
+ {
+-	denali->buf.head = denali->buf.tail = 0;
++	nand_dbg ("reset_buf()\n");
++
++        denali->buf.head = denali->buf.tail = 0;
+ }
+ 
+ static void write_byte_to_buf (struct denali_nand_info *denali, uint8_t byte)
+@@ -149,6 +155,8 @@ static void read_status (struct denali_nand_info *denali)
+ {
+ 	uint32_t cmd = 0x0;
+ 
++	nand_dbg ("read_status()\n");
++
+ 	/* initialize the data buffer to store status */
+ 	reset_buf (denali);
+ 
+@@ -165,7 +173,9 @@ static void reset_bank (struct denali_nand_info *denali)
+ 	uint32_t irq_status = 0;
+ 	uint32_t irq_mask = INTR_STATUS__RST_COMP | INTR_STATUS__TIME_OUT;
+ 
+-	clear_interrupts (denali);
++	nand_dbg ("reset_bank()\n");
++
++        clear_interrupts (denali);
+ 
+ 	iowrite32 (1 << denali->flash_bank, denali->flash_reg + DEVICE_RESET);
+ 
+@@ -180,7 +190,7 @@ static uint16_t denali_nand_reset (struct denali_nand_info *denali)
+ {
+ 	uint32_t i;
+ 
+-	nand_dbg ("resetting\n");
++	nand_dbg ("denali_nand_reset()\n");
+ 
+ 	for (i = 0; i < denali->max_banks; i++)
+ 		iowrite32 (INTR_STATUS__RST_COMP | INTR_STATUS__TIME_OUT,
+@@ -232,7 +242,7 @@ static void nand_onfi_timing_set (struct denali_nand_info *denali,
+ 	uint16_t acc_clks;
+ 	uint16_t addr_2_data, re_2_we, re_2_re, we_2_re, cs_cnt;
+ 
+-	nand_dbg ("init timing\n");
++	nand_dbg ("nand_onfi_timing_set()\n");
+ 
+ 	en_lo = CEIL_DIV (Trp[mode], CLK_X);
+ 	en_hi = CEIL_DIV (Treh[mode], CLK_X);
+@@ -476,9 +486,9 @@ static uint16_t denali_nand_timing_set (struct denali_nand_info *denali)
+ 	uint32_t id_bytes[5], addr;
+ 	uint8_t i, maf_id, device_id;
+ 
+-	nand_dbg ("set the timing\n");
++	nand_dbg ("denali_nand_timing_set()\n");
+ 
+-	/* Use read id method to get device ID and other
++        /* Use read id method to get device ID and other
+ 	 * params. For some NAND chips, controller can't
+ 	 * report the correct device ID by reading from
+ 	 * DEVICE_ID register
+@@ -531,7 +541,7 @@ static uint16_t denali_nand_timing_set (struct denali_nand_info *denali)
+ static void denali_set_intr_modes (struct denali_nand_info *denali,
+ 				   uint16_t INT_ENABLE)
+ {
+-	nand_dbg ("set interrupt modes\n");
++	nand_dbg ("denali_set_intr_modes()\n");
+ 
+ 	if (INT_ENABLE)
+ 		iowrite32 (1, denali->flash_reg + GLOBAL_INT_ENABLE);
+@@ -762,7 +772,9 @@ static int write_oob_data (struct mtd_info *mtd, uint8_t * buf, int page)
+ 	    INTR_STATUS__PROGRAM_FAIL;
+ 	int status = 0;
+ 
+-	denali->page = page;
++	nand_dbg ("write_oob_data()\n");
++
++        denali->page = page;
+ 
+ 	if (denali_send_pipeline_cmd (denali, false, false, SPARE_ACCESS,
+ 				      DENALI_WRITE) == PASS) {
+@@ -791,6 +803,8 @@ static void read_oob_data (struct mtd_info *mtd, uint8_t * buf, int page)
+ 	uint32_t irq_mask = INTR_STATUS__LOAD_COMP,
+ 	    irq_status = 0, addr = 0x0, cmd = 0x0;
+ 
++	nand_dbg ("read_oob_data()\n");
++
+ 	denali->page = page;
+ 
+ 	if (denali_send_pipeline_cmd (denali, false, true, SPARE_ACCESS,
+@@ -930,19 +944,41 @@ static void denali_setup_dma (struct denali_nand_info *denali, int op)
+ 
+ 	mode = MODE_10 | BANK (denali->flash_bank);
+ 
+-	/* DMA is a four step process */
++        if (denali->platform == PICOCHIP_PC3008) {
++
++                /* DMA is a three step process on Picochip Hoyle3 devices */
++
++	        /* 1. setup transfer type (op) and # of pages */
++	        index_addr (denali, (uint32_t)(mode | denali->page),
++                            (uint32_t)(DMA_INT_GENERATION |
++                                       DMA_BURST_LENGTH |
++                                       0x2000 | op | page_count));
++
++	        /* 2. set memory address bits 31:0 */
++	        index_addr (denali, (uint32_t)(mode | denali->page),
++                             (uint32_t)(addr));
+ 
+-	/* 1. setup transfer type and # of pages */
+-	index_addr (denali, mode | denali->page, 0x2000 | op | page_count);
++	        /* 3. set memory address bits 64:32 */
++	        index_addr (denali, (uint32_t)(mode | denali->page),
++                             (uint32_t)(0));
++        }
++        else {
++                /* DMA is a four step process */
+ 
+-	/* 2. set memory high address bits 23:8 */
+-	index_addr (denali, mode | ((uint16_t) (addr >> 16) << 8), 0x2200);
++	        /* 1. setup transfer type and # of pages */
++	        index_addr (denali, mode | denali->page,
++                            0x2000 | op | page_count);
+ 
+-	/* 3. set memory low address bits 23:8 */
+-	index_addr (denali, mode | ((uint16_t) addr << 8), 0x2300);
++	        /* 2. set memory high address bits 23:8 */
++	        index_addr (denali, mode | ((uint16_t) (addr >> 16) << 8),
++                            0x2200);
+ 
+-	/* 4.  interrupt when complete, burst len = 64 bytes */
+-	index_addr (denali, mode | 0x14000, 0x2400);
++	        /* 3. set memory low address bits 23:8 */
++	        index_addr (denali, mode | ((uint16_t) addr << 8), 0x2300);
++
++	        /* 4.  interrupt when complete, burst len = 64 bytes */
++	        index_addr (denali, mode | 0x14000, 0x2400);
++        }
+ }
+ 
+ /* writes a page. user specifies type, and this function handles the
+@@ -1026,10 +1062,12 @@ static int denali_write_oob (struct mtd_info *mtd, struct nand_chip *chip,
+ static int denali_read_oob (struct mtd_info *mtd, struct nand_chip *chip,
+ 			    int page, int sndcmd)
+ {
+-	read_oob_data (mtd, chip->oob_poi, page);
++	struct denali_nand_info *denali = chip->priv;
++
++        reset_buf (denali);
++        read_oob_data (mtd, denali->buf.buf, page);
+ 
+-	return 0;		/* notify NAND core to send command to
+-				   NAND device. */
++	return 0;
+ }
+ 
+ static int denali_read_page (struct mtd_info *mtd, struct nand_chip *chip,
+@@ -1076,7 +1114,7 @@ static int denali_read_page (struct mtd_info *mtd, struct nand_chip *chip,
+ 				denali->mtd.ecc_stats.failed++;
+ 		}
+ 	}
+-	return 0;
++        return 0;
+ }
+ 
+ static int denali_read_page_raw (struct mtd_info *mtd, struct nand_chip *chip,
+@@ -1150,7 +1188,9 @@ static void denali_erase (struct mtd_info *mtd, int page)
+ 
+ 	uint32_t cmd = 0x0, irq_status = 0;
+ 
+-	/* clear interrupts */
++	nand_dbg ("denali_erase()\n");
++
++        /* clear interrupts */
+ 	clear_interrupts (denali);
+ 
+ 	/* setup page read request for access type */
+@@ -1174,6 +1214,8 @@ static void denali_cmdfunc (struct mtd_info *mtd, unsigned int cmd, int col,
+ 	uint32_t addr, id;
+ 	int i;
+ 
++	nand_dbg ("denali_cmdfunc()\n");
++
+ 	switch (cmd) {
+ 	case NAND_CMD_PAGEPROG:
+ 		break;
+@@ -1183,7 +1225,7 @@ static void denali_cmdfunc (struct mtd_info *mtd, unsigned int cmd, int col,
+ 	case NAND_CMD_READID:
+ 	case NAND_CMD_PARAM:
+ 		reset_buf (denali);
+-		/*sometimes ManufactureId read from register is not right
++		/* sometimes ManufactureId read from register is not right
+ 		 * e.g. some of Micron MT29F32G08QAA MLC NAND chips
+ 		 * So here we send READID cmd to NAND insteand
+ 		 * */
+@@ -1203,7 +1245,16 @@ static void denali_cmdfunc (struct mtd_info *mtd, unsigned int cmd, int col,
+ 		reset_bank (denali);
+ 		break;
+ 	case NAND_CMD_READOOB:
+-		/* TODO: Read OOB data */
++                denali_read_oob (mtd, nand, page, 0);
++		break;
++	case NAND_CMD_ERASE1:
++		denali_erase (mtd, page);
++		break;
++	case NAND_CMD_ERASE2:
++		/* We action the erase on the NAND_CMD_ERASE1
++		 * being received, so no need to do
++		 * anything here
++		 */
+ 		break;
+ 	default:
+ 		printf ("unsupported command received 0x%x\n", cmd);
+@@ -1239,7 +1290,9 @@ static void denali_ecc_hwctl (struct mtd_info *mtd, int mode)
+ /* Initialization code to bring the device up to a known good state */
+ static void denali_hw_init (struct denali_nand_info *denali)
+ {
+-	detect_max_banks (denali);
++	nand_dbg ("denali_hw_init()\n");
++
++        detect_max_banks (denali);
+ 
+ 	/* tell driver how many bit controller will skip before
+ 	 * writing ECC code in OOB, this register may be already
+@@ -1248,16 +1301,19 @@ static void denali_hw_init (struct denali_nand_info *denali)
+ 	 * */
+ 	denali->bbtskipbytes = ioread32 (denali->flash_reg +
+ 					 SPARE_AREA_SKIP_BYTES);
++
+ 	denali_nand_reset (denali);
+ 	iowrite32 (((1 << denali->max_banks) - 1),
+ 		   denali->flash_reg + RB_PIN_ENABLED);
+-	iowrite32 (CHIP_EN_DONT_CARE__FLAG,
+-		   denali->flash_reg + CHIP_ENABLE_DONT_CARE);
++	//iowrite32 (CHIP_EN_DONT_CARE__FLAG,
++	//	   denali->flash_reg + CHIP_ENABLE_DONT_CARE);
+ 
+ 	iowrite32 (0xffff, denali->flash_reg + SPARE_AREA_MARKER);
++        iowrite32 (2, denali->flash_reg + SPARE_AREA_SKIP_BYTES);
++        denali->bbtskipbytes = 2;
+ 
+ 	/* Should set value for these registers when init */
+-	iowrite32 (0, denali->flash_reg + TWO_ROW_ADDR_CYCLES);
++	//iowrite32 (0, denali->flash_reg + TWO_ROW_ADDR_CYCLES);
+ 	iowrite32 (1, denali->flash_reg + ECC_ENABLE);
+ 
+ 	denali_nand_timing_set (denali);
+@@ -1303,17 +1359,20 @@ static struct nand_bbt_descr bbt_mirror_descr = {
+ 
+ int board_nand_init (struct nand_chip *nand)
+ {
+-	struct mtd_info *mtd;
++	struct mtd_info *mtd = NULL;
+ 	struct denali_nand_info *denali = NULL;
+ 
+-	denali = (struct denali_nand_info *)malloc (sizeof (*denali));
++	nand_dbg ("board_nand_init()\n");
++
++	denali = (struct denali_nand_info *)malloc
++                    (sizeof (struct denali_nand_info));
+ 	if (denali == NULL) {
+ 		/* Oops, no memory available */
+ 		return -ENOMEM;
+ 	}
+ 
+ 	/* Initialise our private structure */
+-        memset (denali, 0, (sizeof (*denali)));
++        memset (denali, 0, sizeof (struct denali_nand_info));
+ 
+ 	/* Link all our structures */
+ 	mtd = &denali->mtd;
+@@ -1321,6 +1380,10 @@ int board_nand_init (struct nand_chip *nand)
+ 	denali->nand = nand;
+ 	nand->priv = denali;
+ 
++        denali->max_banks=1;
++
++        nand->numchips = CONFIG_SYS_NAND_MAX_CHIPS;
++
+ 	denali->flash_reg = (unsigned char *)PICOXCELL_NAND_BASE;
+ 	denali->flash_mem = (unsigned char *)PICOXCELL_NAND_DATA_BASE;
+ 
+@@ -1365,13 +1428,16 @@ int board_nand_init (struct nand_chip *nand)
+ 
+ 	/* skip the scan for now until we have OOB read and write support */
+ 	nand->options |= NAND_USE_FLASH_BBT | NAND_SKIP_BBTSCAN;
+-	nand->ecc.mode = NAND_ECC_HW_SYNDROME;
++	nand->ecc.mode = NAND_ECC_HW;
+ 
+ 	/* Denali Controller only support 15bit and 8bit ECC in MRST,
+ 	 * so just let controller do 15bit ECC for MLC and 8bit ECC for
+ 	 * SLC if possible.
+ 	 * */
+-	if (nand->cellinfo & 0xc &&
++	denali->mtd.oobsize = 64;
++        denali->mtd.writesize = 2048;
++
++        if (nand->cellinfo & 0xc &&
+ 	    (denali->mtd.oobsize > (denali->bbtskipbytes +
+ 				    ECC_15BITS * (denali->mtd.writesize /
+ 						  ECC_SECTOR_SIZE)))) {
+@@ -1405,7 +1471,7 @@ int board_nand_init (struct nand_chip *nand)
+ 	 * blocks is taken by FW.
+ 	 * */
+ 	denali->totalblks = denali->mtd.size >> nand->phys_erase_shift;
+-	denali->blksperchip = denali->totalblks / nand->numchips;
++        denali->blksperchip = denali->totalblks / nand->numchips;
+ 
+ 	/* These functions are required by the NAND core framework, otherwise,
+ 	 * the NAND core will assert. However, we don't need them, so we'll stub
+@@ -1424,5 +1490,8 @@ int board_nand_init (struct nand_chip *nand)
+ 	nand->ecc.write_oob = denali_write_oob;
+ 	nand->erase_cmd = denali_erase;
+ 
++#ifdef CONFIG_PICOCHIP_PC3008
++	denali->platform = PICOCHIP_PC3008;
++#endif
+ 	return 0;
+ }
+diff --git a/drivers/mtd/nand/denali.h b/drivers/mtd/nand/denali.h
+index 71646a6..b0d837c 100644
+--- a/drivers/mtd/nand/denali.h
++++ b/drivers/mtd/nand/denali.h
+@@ -475,6 +475,7 @@ struct nand_buf {
+ #define INTEL_CE4100	1
+ #define INTEL_MRST	2
+ #define MMIO		3
++#define PICOCHIP_PC3008 4
+ 
+ #define bool int
+ 
+diff --git a/drivers/mtd/nand/nand_base.c b/drivers/mtd/nand/nand_base.c
+index 44f7b91..8831aab 100644
+--- a/drivers/mtd/nand/nand_base.c
++++ b/drivers/mtd/nand/nand_base.c
+@@ -2413,8 +2413,8 @@ static void nand_sync(struct mtd_info *mtd)
+  * @offs:	offset relative to mtd start
+  */
+ static int nand_block_isbad(struct mtd_info *mtd, loff_t offs)
+-{
+-	/* Check for invalid offset */
++{        
++        /* Check for invalid offset */
+ 	if (offs > mtd->size)
+ 		return -EINVAL;
+ 
+@@ -2570,9 +2570,15 @@ static int nand_flash_detect_onfi(struct mtd_info *mtd, struct nand_chip *chip,
+ 	if (!mtd->name)
+ 		mtd->name = p->model;
+ 	mtd->writesize = le32_to_cpu(p->byte_per_page);
+-	mtd->erasesize = le32_to_cpu(p->pages_per_block) * mtd->writesize;
++#ifdef CONFIG_PICOCHIP_PC3008
++	mtd->writesize = 2048;
++#endif        
++        mtd->erasesize = le32_to_cpu(p->pages_per_block) * mtd->writesize;
+ 	mtd->oobsize = le16_to_cpu(p->spare_bytes_per_page);
+-	chip->chipsize = (uint64_t)le32_to_cpu(p->blocks_per_lun) * mtd->erasesize;
++#ifdef CONFIG_PICOCHIP_PC3008
++	mtd->oobsize = 64;
++#endif        
++        chip->chipsize = (uint64_t)le32_to_cpu(p->blocks_per_lun) * mtd->erasesize;
+ 	*busw = 0;
+ 	if (le16_to_cpu(p->features) & 1)
+ 		*busw = NAND_BUSWIDTH_16;
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index 0f59068..cc10d14 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -151,6 +151,7 @@
+ #define CONFIG_SYS_NAND_BASE        (PICOXCELL_EBI_CS2_BASE)
+ #define CONFIG_SYS_NAND_MAX_CHIPS   (1)
+ #define CONFIG_SYS_MAX_NAND_DEVICE  (1)
++#define CONFIG_SYS_NAND_ONFI_DETECTION  (1)
+ 
+ /* Define Flash memory sector size */
+ #define NAND_FLASH_SECTOR_SIZE      (SZ_128K)
+@@ -373,18 +374,18 @@
+ #define CONFIG_ETHADDR          00:15:E1:00:00:00
+ 
+ /* Picochip default for testing, will need noodling by users */
+-#define CONFIG_IPADDR           172.17.16.248
++#define CONFIG_IPADDR           172.29.16.248
+ 
+ #define CONFIG_HOSTNAME	        picopc7308
+ #define CONFIG_ROOTPATH	        /var/nfspc7308
+ #define CONFIG_BOOTFILE	        uImage-pc7308
+ 
+ #define CONFIG_SERVERIP         172.17.7.100
+-#define CONFIG_GATEWAYIP        172.17.0.1
++#define CONFIG_GATEWAYIP        172.29.0.1
+ #define CONFIG_NETMASK          255.255.0.0
+ 
+ /* Enable the MII utility commands */
+-#undef CONFIG_CMD_MII
++#define CONFIG_CMD_MII
+ 
+ #endif /* CONFIG_MACB */
+ 
+-- 
+1.7.0.4
+

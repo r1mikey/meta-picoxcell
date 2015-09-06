@@ -1,0 +1,46 @@
+From b501a6100cb5998b7200b0760d02248ba84858e0 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Wed, 10 Aug 2011 15:48:37 +0100
+Subject: [PATCH 24/70] macb/picoxcell: DMA bus width setup for PC3x2 devices
+
+PC3x2 devices do not have the gem design configuration registers
+so we detect this and just setup for a bus width of 64 bits.
+---
+ drivers/net/macb.c |   14 ++++++++++++++
+ 1 files changed, 14 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index 4d21f14..e10e111 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -51,6 +51,10 @@
+ 
+ #include "macb.h"
+ 
++#if defined (CONFIG_PICOCHIP_PC7302)
++#include <asm/arch/utilities.h>
++#endif
++
+ #define barrier() asm volatile("" ::: "memory")
+ 
+ #define CONFIG_SYS_MACB_RX_BUFFER_SIZE		4096
+@@ -603,6 +607,16 @@ static u32 macb_dbw(struct macb_device *macb)
+ 	if (!macb->is_gem)
+ 		return 0;
+ 
++#if defined (CONFIG_PICOCHIP_PC7302)
++        if (picoxcell_is_pc3x2 ()) {
++		/* PC3x2 devices do not have the design configuration
++		 * registers so there is no way of detecting the bus
++		 * width at run time but we know that it is always 64 bits.
++		 */
++		return GEM_BF(DBW, GEM_DBW64);
++        }
++#endif
++
+ 	switch (GEM_BFEXT(DBWDEF, gem_readl(macb, DCFG1))) {
+ 	case 4:
+ 		return GEM_BF(DBW, GEM_DBW128);
+-- 
+1.7.0.4
+

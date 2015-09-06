@@ -1,0 +1,165 @@
+From 8fafdf7a48e2a571d776d4d5f6013b956ac796eb Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Tue, 24 May 2011 11:11:26 +0100
+Subject: [PATCH 14/70] pc7302/pc7308: enabled use of 'mtdparts' command
+
+---
+ include/configs/picochippc7302-common.h |   23 +++++++++++++++++++----
+ include/configs/picochippc7302nand.h    |   15 +++++++++++++++
+ include/configs/picochippc7302nor.h     |   10 ++++++++++
+ include/configs/picochippc7308.h        |   28 ++++++++++++++++++++++++++--
+ 4 files changed, 70 insertions(+), 6 deletions(-)
+
+diff --git a/include/configs/picochippc7302-common.h b/include/configs/picochippc7302-common.h
+index ab0a49f..e5d0de7 100644
+--- a/include/configs/picochippc7302-common.h
++++ b/include/configs/picochippc7302-common.h
+@@ -241,6 +241,14 @@
+ /* Enable command line editing and history */
+ #define CONFIG_CMDLINE_EDITING
+ 
++/* Enable command line MTD partitioning */
++#define CONFIG_CMD_MTDPARTS
++#define CONFIG_MTD_DEVICE
++
++#ifndef CONFIG_SYS_NO_FLASH
++#define CONFIG_FLASH_CFI_MTD
++#endif
++
+ /*-----------------------------------------------------------------------------
+  * Miscellaneous Configurable Options...
+  */
+@@ -345,18 +353,25 @@
+    "fixed_nfs=run nfs_args; tftp; bootm\0"				    \
+    "jffs2_args=setenv bootargs root=$nor_jffs2_root rw rootfstype=jffs2 "   \
+    "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+-   "console=$consoledev,$baudrate $othbootargs;\0"                          \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
+    "ubifs_args=setenv bootargs root=ubi0:rootfs rw rootfstype=ubifs "       \
+    "ubi.mtd=$nor_ubifs_root "                                               \
+    "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+-   "console=$consoledev,$baudrate $othbootargs;\0"                          \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
++   "nand_jffs2_args=setenv bootargs root=$nand_jffs2_root rw "              \
++   "rootfstype=jffs2 "                                                      \
++   "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
+    "nand_ubifs_args=setenv bootargs root=ubi0:rootfs rw rootfstype=ubifs "  \
+    "ubi.mtd=$nand_ubifs_root,2048 "                                         \
+    "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+-   "console=$consoledev,$baudrate $othbootargs;\0"                          \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
+    "nfs_args=setenv bootargs root=/dev/nfs rw nfsroot=$serverip:$rootpath " \
+    "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+-   "console=$consoledev,$baudrate $othbootargs;"                            \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
++   "partition=" MTD_PARTITION_DEFAULT "\0"                                  \
++   "mtdids=" MTDIDS_DEFAULT "\0"                                            \
++   "mtdparts=" MTDPARTS_DEFAULT "\0"                                        \
+ 
+ /* Define CONFIG_BOOTCOMMAND as
+  * "run nand_ubifs" for boot from NAND flash with ubifs filesystem
+diff --git a/include/configs/picochippc7302nand.h b/include/configs/picochippc7302nand.h
+index c9ec9d6..7d375c3 100644
+--- a/include/configs/picochippc7302nand.h
++++ b/include/configs/picochippc7302nand.h
+@@ -83,6 +83,21 @@
+ /* Build U-Boot to run at this address */
+ #define CONFIG_SYS_TEXT_BASE    0x06000000
+ 
++/* Default command line mtd partitioning */
++#define MTD_PARTITION_DEFAULT   "nand0,0"
++
++#define MTDIDS_DEFAULT          "nand0=gpio-nand"
++
++#define MTDPARTS_DEFAULT	"mtdparts=gpio-nand:1M@0x100000(Boot),"\
++				"1M(RedundantBoot),"\
++				"128K(BootEnvironment),"\
++                                "128K(RedundantBootEnv),"\
++                                "8M@0x380000(KernelA),"\
++                                "80M(FileSystemA),"\
++                                "8M(Configuration),"\
++                                "8M(KernelB),"\
++                                "80M(FileSystemB)"
++
+ #include <configs/picochippc7302-common.h>
+ 
+ #endif /* __CONFIG_PC7302_NAND__ */
+diff --git a/include/configs/picochippc7302nor.h b/include/configs/picochippc7302nor.h
+index 5e1c0c3..67486f5 100644
+--- a/include/configs/picochippc7302nor.h
++++ b/include/configs/picochippc7302nor.h
+@@ -75,6 +75,16 @@
+ #define CONFIG_SYS_TEXT_BASE        0x40000000
+ #endif /* CONFIG_RUN_FROM_RAM */
+ 
++/* Default command line mtd partitioning */
++#define MTD_PARTITION_DEFAULT   "nor0,0"
++
++#define MTDIDS_DEFAULT          "nor0=physmap-flash"
++
++#define MTDPARTS_DEFAULT	"mtdparts=physmap-flash:256K(Boot),"\
++                                "128K(BootEnvironment),"\
++                                "4M(Kernel),"\
++                                "-(Application)"
++
+ #include <configs/picochippc7302-common.h>
+ 
+ #endif /* __CONFIG_PC7302_NOR__ */
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index 3c05745..310230a 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -284,6 +284,12 @@
+ /* Enable command line editing and history */
+ #define CONFIG_CMDLINE_EDITING
+ 
++#ifdef CONFIG_CMD_NAND
++/* Enable command line MTD partitioning */
++#define CONFIG_CMD_MTDPARTS
++#define CONFIG_MTD_DEVICE
++#endif
++
+ /*-----------------------------------------------------------------------------
+  * Miscellaneous Configurable Options...
+  */
+@@ -310,6 +316,21 @@
+ #define CONFIG_SYS_LOAD_ADDR    0x00200000
+ #define CONFIG_LOADADDR         CONFIG_SYS_LOAD_ADDR
+ 
++/* Default command line mtd partitioning */
++#define MTD_PARTITION_DEFAULT   "nand0,0"
++
++#define MTDIDS_DEFAULT          "nand0=gpio-nand"
++
++#define MTDPARTS_DEFAULT	"mtdparts=gpio-nand:1M@0x100000(Boot),"\
++				"1M(RedundantBoot),"\
++				"128K(BootEnvironment),"\
++                                "128K(RedundantBootEnv),"\
++                                "8M@0x380000(KernelA),"\
++                                "80M(FileSystemA),"\
++                                "8M(Configuration),"\
++                                "8M(KernelB),"\
++                                "80M(FileSystemB)"
++
+ /*-----------------------------------------------------------------------
+  * Environment Configuration
+  */
+@@ -376,9 +397,12 @@
+    "nand_ubifs_args=setenv bootargs root=ubi0:rootfs rw rootfstype=ubifs "  \
+    "ubi.mtd=$nand_ubifs_root,2048 "                                         \
+    "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+-   "console=$consoledev,$baudrate $othbootargs;\0"                          \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
+    "nfs_args=setenv bootargs root=/dev/nfs rw nfsroot=$serverip:$rootpath " \
+    "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+-   "console=$consoledev,$baudrate $othbootargs;\0"                          \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
++   "partition=" MTD_PARTITION_DEFAULT "\0"                                  \
++   "mtdids=" MTDIDS_DEFAULT "\0"                                            \
++   "mtdparts=" MTDPARTS_DEFAULT "\0"
+ 
+ #endif /* __CONFIG_PC7308_H */
+-- 
+1.7.0.4
+

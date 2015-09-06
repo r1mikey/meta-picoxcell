@@ -1,0 +1,41 @@
+From e134d2949b200513aefe0e8be1e766280e3a5252 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 29 Jul 2011 11:15:00 +0100
+Subject: [PATCH 19/70]  pc7302: change the mtd partition mapping definition
+
+---
+ include/configs/picochippc7302nand.h |    3 ++-
+ include/configs/picochippc7302nor.h  |    3 ++-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/include/configs/picochippc7302nand.h b/include/configs/picochippc7302nand.h
+index 7d375c3..6862ad9 100644
+--- a/include/configs/picochippc7302nand.h
++++ b/include/configs/picochippc7302nand.h
+@@ -88,7 +88,8 @@
+ 
+ #define MTDIDS_DEFAULT          "nand0=gpio-nand"
+ 
+-#define MTDPARTS_DEFAULT	"mtdparts=gpio-nand:1M@0x100000(Boot),"\
++#define MTDPARTS_DEFAULT	"mtdparts=gpio-nand:"\
++                                "1M@1M(Boot),"\
+ 				"1M(RedundantBoot),"\
+ 				"128K(BootEnvironment),"\
+                                 "128K(RedundantBootEnv),"\
+diff --git a/include/configs/picochippc7302nor.h b/include/configs/picochippc7302nor.h
+index 67486f5..d8b7984 100644
+--- a/include/configs/picochippc7302nor.h
++++ b/include/configs/picochippc7302nor.h
+@@ -80,7 +80,8 @@
+ 
+ #define MTDIDS_DEFAULT          "nor0=physmap-flash"
+ 
+-#define MTDPARTS_DEFAULT	"mtdparts=physmap-flash:256K(Boot),"\
++#define MTDPARTS_DEFAULT	"mtdparts=physmap-flash:"\
++                                "256K(Boot),"\
+                                 "128K(BootEnvironment),"\
+                                 "4M(Kernel),"\
+                                 "-(Application)"
+-- 
+1.7.0.4
+

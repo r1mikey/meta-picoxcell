@@ -1,0 +1,279 @@
+From f740a157c73a637b0817b0712fb67df292526d88 Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Wed, 3 Jul 2013 12:55:02 +0100
+Subject: [PATCH 67/70] pc73032: u-boot memif-arm section updated for latest timing parameters from MS-111258-RP-2B
+ Mantis Issue #11112
+
+---
+ board/picochip/pc73032/pc30xx_memif_init.c |  205 ++++++++++++++++-----------
+ 1 files changed, 121 insertions(+), 84 deletions(-)
+
+diff --git a/board/picochip/pc73032/pc30xx_memif_init.c b/board/picochip/pc73032/pc30xx_memif_init.c
+index a25c61c..c7af80b 100644
+--- a/board/picochip/pc73032/pc30xx_memif_init.c
++++ b/board/picochip/pc73032/pc30xx_memif_init.c
+@@ -440,39 +440,6 @@ static void memif_arm_apb_write (unsigned int base,
+ 
+ void pc30xx_memif_arm_init (void)
+ {
+-	/* PCTL MCFG Register */
+-	unsigned int tfaw_cfg = 1;	/* 2=t_faw=5*t_rrd */
+-	unsigned int ddr3_en = 1;	/* 0=DDR2, 1=DDR3 */
+-	unsigned int mem_bl = 1;	/* 0=BL4, 1=BL8 */
+-
+-	/* PUBL DCR Register */
+-	unsigned int ddrmd = 3;
+-	unsigned int ddr8bnk = 1;
+-
+-	/* PCTL TIMING Registers */
+-	unsigned int togcnt1u = 534;
+-	unsigned int t_init = 200;
+-	unsigned int t_rsth = 500;
+-	unsigned int togcnt100n = 53;
+-	unsigned int t_refi = 70;
+-	unsigned int t_mrd = 4;
+-	unsigned int t_rfc = 105;
+-	unsigned int t_rp = 9;
+-	unsigned int prea_extra = 2;
+-	unsigned int t_cl = 8;
+-	unsigned int t_cwl = 6;
+-	unsigned int t_ras = 20;
+-	unsigned int t_rc = 29;
+-	unsigned int t_rcd = t_cl;
+-	unsigned int t_rtp = 4;
+-	unsigned int t_wr = 8;
+-
+-	/* cas latency */
+-	unsigned int mrd_ddr3_cl = 4;
+-
+-	/* write recovery */
+-	unsigned int mrd_ddr3_wr = 4;
+-	unsigned int mr2_ddr3_cwl = 1;
+ 
+ 	if (!is_memif_arm_usable_on_pc30xx ()) {
+ 		return;
+@@ -528,16 +495,33 @@ void pc30xx_memif_arm_init (void)
+ 	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_DTUAWDT_OFFSET, 0x0B);
+ 
+ 	/* 1. uPCTL timer reg configuration */
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
+-			     PCTL_TOGCNT1U_OFFSET, togcnt1u);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TINIT_OFFSET, t_init);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTH_OFFSET, t_rsth);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
+-			     PCTL_TOGCNT100N_OFFSET, togcnt100n);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TOGCNT1U_OFFSET,
++                             TOGCNT1U_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TINIT_OFFSET,
++                             TINIT_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTH_OFFSET,
++                             TRSTH_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TOGCNT100N_OFFSET,
++                             TOGCNT100N_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTH_OFFSET,
++                             TZQCL_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTH_OFFSET,
++                             TZQCS_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTH_OFFSET,
++                             TZQCSI_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTH_OFFSET,
++                             PTR0_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTH_OFFSET,
++                             PTR1_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTH_OFFSET,
++                             PTR2_VALUE);
+ 
+ 	/* 2. PHY initialisation start
+ 	 * - not required, PUBL initiates automatically following reset
+ 	 */
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_PGCR_OFFSET,
++                             PGCR_VALUE);
++
+ 	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_PIR_OFFSET,
+ 			     PUBL_PIR_CLRSR);
+ 
+@@ -548,56 +532,107 @@ void pc30xx_memif_arm_init (void)
+ 	/* 3. Wait for PHY initialisation following reset
+ 	 * (DLL lock and Zo calibration)
+ 	 */
+-	memif_arm_apb_poll (MEMIF_ARM_PUBL_BASE,
+-			    PUBL_PGSR_OFFSET, 0x0001, 0x0001);
++	memif_arm_apb_poll (MEMIF_ARM_PUBL_BASE, PUBL_PGSR_OFFSET, 
++                            0x0001, 0x0001);
+ 
+ 	/* 4. DFI initialisation status, wait for dfi_init_complete */
+-	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
+-			    PCTL_DFISTSTAT0_OFFSET, 0x0001, 0x0001);
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE, PCTL_DFISTSTAT0_OFFSET, 
++                            0x0001, 0x0001);
+ 
+ 	/* 5. uPTCL MCFG register configuration */
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
+-			     PCTL_MCFG_OFFSET,
+-			     (tfaw_cfg << 18) | (ddr3_en << 5) | (mem_bl << 0));
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_MCFG_OFFSET,
++                             MCFG_VALUE);
+ 
+ 	/* 6. uPCTL Power-up sequence */
+ 	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_POWCTL_OFFSET, 0x0001);
+-	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
+-			    PCTL_POWSTAT_OFFSET, 0x0001, 0x0001);
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE, PCTL_POWSTAT_OFFSET, 
++                            0x0001, 0x0001);
+ 
+ 	/* 7. uPCTL timing register setup */
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TREFI_OFFSET, t_refi);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TMRD_OFFSET, t_mrd);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRFC_OFFSET, t_rfc);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
+-			     PCTL_TRP_OFFSET, (t_rp << 0) | (prea_extra << 16));
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCL_OFFSET, t_cl);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCWL_OFFSET, t_cwl);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRAS_OFFSET, t_ras);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRC_OFFSET, t_rc);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRCD_OFFSET, t_rcd);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRTP_OFFSET, t_rtp);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TWR_OFFSET, t_wr);
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
+-			     PCTL_DFIPHYWRLAT_OFFSET, (t_cwl - 1));
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
+-			     PCTL_DFITRDDATEN_OFFSET, (t_cl - 2));
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TREFI_OFFSET,
++                             TREFI_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TMRD_OFFSET,
++                             TMRD_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRFC_OFFSET,
++                             TRFC_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRP_OFFSET,
++                             TRP_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCL_OFFSET,
++                             TCL_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCWL_OFFSET,
++                             TCWL_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRAS_OFFSET,
++                             TRAS_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRC_OFFSET,
++                             TRC_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRCD_OFFSET,
++                             TRCD_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRTP_OFFSET,
++                             TRTP_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TWR_OFFSET,
++                             TWR_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_DFIPHYWRLAT_OFFSET,
++                             (TCWL_VALUE - 1));
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_DFITRDDATEN_OFFSET,
++                             (TCL_VALUE - 2));
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TAL_OFFSET,
++                             TAL_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCKE_OFFSET,
++                             TCKE_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCKESR_OFFSET,
++                             TCKESR_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCKSRE_OFFSET,
++                             TCKSRE_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TCKSRX_OFFSET,
++                             TCKSRX_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TDPD_OFFSET,
++                             TDPD_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TDQS_OFFSET,
++                             TDQS_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TEXSR_OFFSET,
++                             TEXSR_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TMOD_OFFSET,
++                             TMOD_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TMRR_OFFSET,
++                             TMRR_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRRD_OFFSET,
++                             TRRD_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRSTL_OFFSET,
++                             TRSTL_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TRTW_OFFSET,
++                             TRTW_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TWTR_OFFSET,
++                             TWTR_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TXP_OFFSET,
++                             TXP_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_TXPDLL_OFFSET,
++                             TXPDLL_VALUE);
++
+ 
+ 	/* 8. DRAM initialisation via PUBL */
+ 	/* DRAM configuration register */
+-	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE,
+-			     PUBL_DCR_OFFSET, (ddrmd << 0) | (ddr8bnk << 3));
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_ACIOCCR_OFFSET,
++                             ACIOCCR_VALUE);
+ 
+-	/* DRAM mode register 0 (DDR3) */
+-	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR0_OFFSET, (mrd_ddr3_cl << 4) |	/* burst length */
+-			     (mrd_ddr3_wr << 9));	/* write recover */
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_DXCCR_OFFSET,
++                             DXCCR_VALUE);
++
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_DCR_OFFSET,
++                             DCR_VALUE);
++
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_DTPR0_OFFSET,
++                             DTPR0_VALUE);
++
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_DTPR1_OFFSET,
++                             DTPR1_VALUE);
+ 
+-	/* DRAM mode register 1 */
+-	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR1_OFFSET, 0x0000);
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_DTPR2_OFFSET,
++                             DTPR2_VALUE);
+ 
+-	/* DRAM mode register 2 */
+-	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR2_OFFSET,
+-			     (mr2_ddr3_cwl << 3));
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR2_OFFSET, MR2_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR3_OFFSET, MR3_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR1_OFFSET, MR1_VALUE);
++        memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_MR0_OFFSET, MR0_VALUE);
+ 
+ 	/* PHY timing register */
+ 	memif_arm_apb_write (MEMIF_ARM_PUBL_BASE, PUBL_PIR_OFFSET,
+@@ -609,26 +644,28 @@ void pc30xx_memif_arm_init (void)
+ 			      PUBL_PIR_DRAMRST |
+ 			      PUBL_PIR_DRAMINIT | PUBL_PIR_QSTRN));
+ 
+-	memif_arm_apb_poll (MEMIF_ARM_PUBL_BASE, PUBL_PGSR_OFFSET, 0x0001,
+-			    0x0001);
++	memif_arm_apb_poll (MEMIF_ARM_PUBL_BASE, PUBL_PGSR_OFFSET, 
++                            0x0001, 0x0001);
+ 
+ 	/* 9. Move uPCTL to Config state */
+ 	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_SCTL_OFFSET, 0x0001);
+-	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
+-			    PCTL_STAT_OFFSET, 0x0007, 0x0001);
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE, PCTL_STAT_OFFSET, 
++                            0x0007, 0x0001);
+ 
+ 	/* 10. Further uPCTL configuration */
+ 
+ 	/* 11. Wait for uPCTL initialisation to complete */
+-	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE,
+-			     PCTL_CMDSTATEN_OFFSET, 0x0001);
+-	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
+-			    PCTL_CMDSTAT_OFFSET, 0x0001, 0x0001);
++	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_CMDSTATEN_OFFSET, 
++                             0x0001);
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE, PCTL_CMDSTAT_OFFSET, 
++                            0x0001, 0x0001);
+ 
+ 	/* 12. PUBL training */
+ 
+ 	/* 13. Move uPCTL to Access state */
+ 	memif_arm_apb_write (MEMIF_ARM_PCTL_BASE, PCTL_SCTL_OFFSET, 0x0002);
+-	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE,
+-			    PCTL_STAT_OFFSET, 0x0007, 0x0003);
++	memif_arm_apb_poll (MEMIF_ARM_PCTL_BASE, PCTL_STAT_OFFSET, 
++                            0x0007, 0x0003);
+ }
++
++
+-- 
+1.7.0.4
+

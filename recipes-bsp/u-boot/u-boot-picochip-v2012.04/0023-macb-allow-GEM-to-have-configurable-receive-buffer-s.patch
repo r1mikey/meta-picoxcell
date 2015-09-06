@@ -1,0 +1,75 @@
+From 464d9a1f49e5351c58031f998b38b9b7b985cbad Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Mon, 8 Aug 2011 14:00:27 +0100
+Subject: [PATCH 23/70] macb: allow GEM to have configurable receive buffer size
+
+GEM has configurable receive buffer sizes so requires this to be
+programmed up.
+---
+ drivers/net/macb.c |   19 +++++++++++++++++++
+ drivers/net/macb.h |    5 +++++
+ 2 files changed, 24 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index 41f1dce..4d21f14 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -436,6 +436,23 @@ static int macb_phy_init(struct macb_device *macb)
+ 	}
+ }
+ 
++/*
++ * Configure the receive DMA engine to use the correct receive buffer size.
++ * This is a configurable parameter for GEM.
++ */
++static void macb_configure_dma(struct macb_device *macb)
++{
++	u32 dmacfg;
++	u32 rx_ring_buf_size = CONFIG_SYS_MACB_RX_BUFFER_SIZE /
++			       CONFIG_SYS_MACB_RX_RING_SIZE;
++
++	if (macb->is_gem) {
++		dmacfg = gem_readl(macb, DMACFG) & ~GEM_BF(RXBS, -1L);
++		dmacfg |= GEM_BF(RXBS, rx_ring_buf_size / 64);
++		gem_writel(macb, DMACFG, dmacfg);
++	}
++}
++
+ static int macb_init(struct eth_device *netdev, bd_t *bd)
+ {
+ 	struct macb_device *macb = to_macb(netdev);
+@@ -465,6 +482,8 @@ static int macb_init(struct eth_device *netdev, bd_t *bd)
+ 	}
+ 	macb->rx_tail = macb->tx_head = macb->tx_tail = 0;
+ 
++	macb_configure_dma(macb);
++
+ 	macb_writel(macb, RBQP, macb->rx_ring_dma);
+ 	macb_writel(macb, TBQP, macb->tx_ring_dma);
+ 
+diff --git a/drivers/net/macb.h b/drivers/net/macb.h
+index c0759cf..e0fbd46 100644
+--- a/drivers/net/macb.h
++++ b/drivers/net/macb.h
+@@ -76,6 +76,7 @@
+ /* GEM register offsets. */
+ #define GEM_NCFGR				0x0004
+ #define GEM_USRIO				0x000c
++#define GEM_DMACFG				0x0010
+ #define GEM_HRB					0x0080
+ #define GEM_HRT					0x0084
+ #define GEM_SA1B				0x0088
+@@ -165,6 +166,10 @@
+ #define GEM_DBW64				1
+ #define GEM_DBW128				2
+ 
++/* Bitfields in DMACFG. */
++#define GEM_RXBS_OFFSET				16
++#define GEM_RXBS_SIZE				8
++
+ /* Bitfields in NSR */
+ #define MACB_NSR_LINK_OFFSET			0
+ #define MACB_NSR_LINK_SIZE			1
+-- 
+1.7.0.4
+

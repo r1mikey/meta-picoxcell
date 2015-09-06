@@ -1,0 +1,44 @@
+From dcac7f94d1df35bb0f4603059039c5010d78e683 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Tue, 19 Jun 2012 09:25:59 +0100
+Subject: [PATCH 40/70] Revert "arm, arm926ejs: Flush the data cache before disabling it"
+
+This reverts commit da104e04ecc30b90fdc121737f220f0d9c252196.
+
+Picoxcell devices contain an ARM1176 core, however for historical
+reasons we specify an ARM926 core in the U-Boot build.
+The change that was introduced in commit da104e... introduced a
+co-processor instruction that is an underfind instruction in an ARM1176.
+The easiest fix to to just revert the change.
+
+This commit forms part of the resolution of Mantis #10482
+---
+ arch/arm/cpu/arm926ejs/start.S |   10 +++-------
+ 1 files changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/start.S b/arch/arm/cpu/arm926ejs/start.S
+index 6f05f1a..9cb2a93 100644
+--- a/arch/arm/cpu/arm926ejs/start.S
++++ b/arch/arm/cpu/arm926ejs/start.S
+@@ -358,15 +358,11 @@ _dynsym_start_ofs:
+ #ifndef CONFIG_SKIP_LOWLEVEL_INIT
+ cpu_init_crit:
+ 	/*
+-	 * flush D cache before disabling it
++	 * flush v4 I/D caches
+ 	 */
+ 	mov	r0, #0
+-flush_dcache:
+-	mrc	p15, 0, r15, c7, c10, 3
+-	bne	flush_dcache
+-
+-	mcr	p15, 0, r0, c8, c7, 0	/* invalidate TLB */
+-	mcr	p15, 0, r0, c7, c5, 0	/* invalidate I Cache */
++	mcr	p15, 0, r0, c7, c7, 0	/* flush v3/v4 cache */
++	mcr	p15, 0, r0, c8, c7, 0	/* flush v4 TLB */
+ 
+ 	/*
+ 	 * disable MMU and D cache
+-- 
+1.7.0.4
+

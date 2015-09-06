@@ -1,0 +1,34 @@
+From a118d8dc6a08e09ca5882953bb27a5fa8a462f04 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Tue, 30 Oct 2012 16:55:27 +0000
+Subject: [PATCH 63/70] nand: declare the denali_read_buf () as static
+
+This commit forms part of the resoultion of Mantis Issue #10680
+---
+ drivers/mtd/nand/denali.c |    3 +--
+ 1 files changed, 1 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index 3cd83a1..d495c32 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -25,7 +25,6 @@
+ #include <linux/compiler.h>
+ #include <asm/processor.h>
+ #include <asm/arch/picoxcell.h>
+-#include <linux/mtd/nand.h>
+ 
+ #include "denali.h"
+ 
+@@ -1170,7 +1169,7 @@ static uint8_t denali_read_byte (struct mtd_info *mtd)
+ 	return result;
+ }
+ 
+-void denali_read_buf (struct mtd_info *mtd, uint8_t * buf, int len)
++static void denali_read_buf (struct mtd_info *mtd, uint8_t * buf, int len)
+ {
+ 	struct nand_chip *nand = mtd->priv;
+ 	struct denali_nand_info *denali = nand->priv;
+-- 
+1.7.0.4
+

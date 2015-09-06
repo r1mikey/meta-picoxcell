@@ -1,0 +1,62 @@
+From cd0455953aa6add25efb1de610e9167004aa50a6 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 19 Oct 2012 18:01:28 +0100
+Subject: [PATCH 52/70] cfi: fix cfi detection on Micron M29WE devices
+
+This patch came from txema lopez, see the link below for more details
+
+http://thread.gmane.org/gmane.comp.boot-loaders.u-boot/72598/focus=72602
+
+Note: We only needed the bits of the patch that applied to
+cmdset_amd_read_jedec_ids() to make thing work ok.
+---
+ drivers/mtd/cfi_flash.c |   14 +++++++++++---
+ 1 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/mtd/cfi_flash.c b/drivers/mtd/cfi_flash.c
+index 35294bc..1da1d44 100644
+--- a/drivers/mtd/cfi_flash.c
++++ b/drivers/mtd/cfi_flash.c
+@@ -1581,6 +1581,11 @@ static void cmdset_amd_read_jedec_ids(flash_info_t *info)
+ {
+ 	ushort bankId = 0;
+ 	uchar  manuId;
++	uchar portwidth;
++
++	portwidth = info->portwidth;
++	if(info->chipwidth == FLASH_CFI_8BIT)
++		info->portwidth = FLASH_CFI_8BIT;
+ 
+ 	flash_write_cmd(info, 0, 0, AMD_CMD_RESET);
+ 	flash_unlock_seq(info, 0);
+@@ -1599,14 +1604,14 @@ static void cmdset_amd_read_jedec_ids(flash_info_t *info)
+ 	switch (info->chipwidth){
+ 	case FLASH_CFI_8BIT:
+ 		info->device_id = flash_read_uchar (info,
+-						FLASH_OFFSET_DEVICE_ID);
++						FLASH_OFFSET_DEVICE_ID * portwidth);
+ 		if (info->device_id == 0x7E) {
+ 			/* AMD 3-byte (expanded) device ids */
+ 			info->device_id2 = flash_read_uchar (info,
+-						FLASH_OFFSET_DEVICE_ID2);
++						FLASH_OFFSET_DEVICE_ID2 * portwidth);
+ 			info->device_id2 <<= 8;
+ 			info->device_id2 |= flash_read_uchar (info,
+-						FLASH_OFFSET_DEVICE_ID3);
++						FLASH_OFFSET_DEVICE_ID3 * portwidth);
+ 		}
+ 		break;
+ 	case FLASH_CFI_16BIT:
+@@ -1625,6 +1630,9 @@ static void cmdset_amd_read_jedec_ids(flash_info_t *info)
+ 		break;
+ 	}
+ 	flash_write_cmd(info, 0, 0, AMD_CMD_RESET);
++
++	info->portwidth = portwidth;
++
+ 	udelay(1);
+ }
+ 
+-- 
+1.7.0.4
+

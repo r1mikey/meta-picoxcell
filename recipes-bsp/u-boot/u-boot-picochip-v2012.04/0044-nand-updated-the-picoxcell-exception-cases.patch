@@ -1,0 +1,84 @@
+From cbb30b7694228dc35370b4c3ccdd80e1825112f1 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 7 Sep 2012 15:58:33 +0100
+Subject: [PATCH 44/70] nand: updated the picoxcell exception cases
+
+---
+ drivers/mtd/nand/denali.c    |    7 ++++---
+ drivers/mtd/nand/denali.h    |    2 +-
+ drivers/mtd/nand/nand_base.c |   10 +++++-----
+ 3 files changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index 9252fe0..f873671 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -944,7 +944,7 @@ static void denali_setup_dma (struct denali_nand_info *denali, int op)
+ 
+ 	mode = MODE_10 | BANK (denali->flash_bank);
+ 
+-        if (denali->platform == PICOCHIP_PC3008) {
++        if (denali->platform == PICOCHIP_PC30XX) {
+ 
+                 /* DMA is a three step process on Picochip Hoyle3 devices */
+ 
+@@ -1489,8 +1489,9 @@ int board_nand_init (struct nand_chip *nand)
+ 	nand->ecc.write_oob = denali_write_oob;
+ 	nand->erase_cmd = denali_erase;
+ 
+-#ifdef CONFIG_PICOCHIP_PC3008
+-	denali->platform = PICOCHIP_PC3008;
++#if defined(CONFIG_PICOCHIP_PC3008) || defined(CONFIG_PICOCHIP_PC3032)
++	denali->platform = PICOCHIP_PC30XX;
+ #endif
++
+ 	return 0;
+ }
+diff --git a/drivers/mtd/nand/denali.h b/drivers/mtd/nand/denali.h
+index 1cb3c12..b451ce2 100644
+--- a/drivers/mtd/nand/denali.h
++++ b/drivers/mtd/nand/denali.h
+@@ -476,7 +476,7 @@ __attribute__ ((aligned(64)))   /* required for 8 byte burst from dma */
+ #define INTEL_CE4100	1
+ #define INTEL_MRST	2
+ #define MMIO		3
+-#define PICOCHIP_PC3008 4
++#define PICOCHIP_PC30XX 4
+ 
+ #define bool int
+ 
+diff --git a/drivers/mtd/nand/nand_base.c b/drivers/mtd/nand/nand_base.c
+index 8831aab..cd0feda 100644
+--- a/drivers/mtd/nand/nand_base.c
++++ b/drivers/mtd/nand/nand_base.c
+@@ -2413,7 +2413,7 @@ static void nand_sync(struct mtd_info *mtd)
+  * @offs:	offset relative to mtd start
+  */
+ static int nand_block_isbad(struct mtd_info *mtd, loff_t offs)
+-{        
++{
+         /* Check for invalid offset */
+ 	if (offs > mtd->size)
+ 		return -EINVAL;
+@@ -2570,14 +2570,14 @@ static int nand_flash_detect_onfi(struct mtd_info *mtd, struct nand_chip *chip,
+ 	if (!mtd->name)
+ 		mtd->name = p->model;
+ 	mtd->writesize = le32_to_cpu(p->byte_per_page);
+-#ifdef CONFIG_PICOCHIP_PC3008
++#ifdef CONFIG_PICOCHIP_PC30XX
+ 	mtd->writesize = 2048;
+-#endif        
++#endif
+         mtd->erasesize = le32_to_cpu(p->pages_per_block) * mtd->writesize;
+ 	mtd->oobsize = le16_to_cpu(p->spare_bytes_per_page);
+-#ifdef CONFIG_PICOCHIP_PC3008
++#ifdef CONFIG_PICOCHIP_PC30XX
+ 	mtd->oobsize = 64;
+-#endif        
++#endif
+         chip->chipsize = (uint64_t)le32_to_cpu(p->blocks_per_lun) * mtd->erasesize;
+ 	*busw = 0;
+ 	if (le16_to_cpu(p->features) & 1)
+-- 
+1.7.0.4
+

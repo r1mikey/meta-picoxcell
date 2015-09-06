@@ -1,0 +1,38 @@
+From bb6741ba8d43977a388b26a48a846c57e0096d24 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 22 Jun 2012 15:17:29 +0100
+Subject: [PATCH 41/70] picoxcell: compile with -march=armv5
+
+This commit changes the architecture defined when building u-boot
+for ARM926 targets. Originally this was defined as armv5te. Using
+armv5te allows the compiler to use ldrd and strd instructions.
+This causes problems (at best data aborts, at worst incorrect data
+is used) with non aligned data (specifically some variables used in
+the picoxcell timer implementation that are contained in the
+global_data structure).
+
+The other fix is to align the pointer used for the global_data
+struct. Go check out the board_init_f() in arch/arm/lib/board.c
+
+This commit forms the resoultion of Mantis Issue #10482 and
+Mantis Issue #10530
+---
+ arch/arm/cpu/arm926ejs/config.mk |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/config.mk b/arch/arm/cpu/arm926ejs/config.mk
+index ffb2e6c..4635bda 100644
+--- a/arch/arm/cpu/arm926ejs/config.mk
++++ b/arch/arm/cpu/arm926ejs/config.mk
+@@ -23,7 +23,7 @@
+ 
+ PLATFORM_RELFLAGS += -fno-common -ffixed-r8 -msoft-float
+ 
+-PLATFORM_CPPFLAGS += -march=armv5te
++PLATFORM_CPPFLAGS += -march=armv5
+ # =========================================================================
+ #
+ # Supply options according to compiler version
+-- 
+1.7.0.4
+

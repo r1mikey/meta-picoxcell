@@ -1,0 +1,25 @@
+From 754d0325a156057109bb94e59c02b1b164ef90a8 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 20 Jan 2012 17:18:50 +0000
+Subject: [PATCH 33/70] pc7308: change the partition for the root filesystem
+
+---
+ include/configs/picochippc7308.h |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index 55c3149..9629588 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -407,7 +407,7 @@
+ #define OTHERBOOTARGS
+ 
+ /* Define the UBIFS root filesystem partition for NAND Flash */
+-#define NAND_UBIFS_ROOT         5
++#define NAND_UBIFS_ROOT         9
+ 
+ /* Define CONFIG_BOOTCOMMAND as */
+ #define CONFIG_BOOTCOMMAND  "run nand_ubifs"
+-- 
+1.7.0.4
+

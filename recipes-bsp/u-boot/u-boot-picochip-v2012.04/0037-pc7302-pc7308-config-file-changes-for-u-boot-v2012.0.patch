@@ -1,0 +1,61 @@
+From 00e6635c0cd0e426a079ff1e2bd10bfbd148143a Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Tue, 8 May 2012 13:33:42 +0100
+Subject: [PATCH 37/70] pc7302/pc7308: config file changes for u-boot v2012.04
+
+---
+ include/configs/picochippc7302-common.h |    6 +++---
+ include/configs/picochippc7308.h        |    6 +++---
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/include/configs/picochippc7302-common.h b/include/configs/picochippc7302-common.h
+index 437cc9b..6c1f5aa 100644
+--- a/include/configs/picochippc7302-common.h
++++ b/include/configs/picochippc7302-common.h
+@@ -6,7 +6,7 @@
+ * \file picochippc7302.h
+ * \brief Configuration file for U-Boot on the PC7302 platform.
+ *
+-* Copyright (c) 2006-2011 Picochip Ltd
++* Copyright (c) 2006-2012 Picochip Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -294,8 +294,8 @@
+ #define CONFIG_IPADDR           172.17.13.248
+ 
+ #define CONFIG_HOSTNAME	        picopc7302
+-#define CONFIG_ROOTPATH	        /var/nfspc7302
+-#define CONFIG_BOOTFILE	        uImage-pc7302
++#define CONFIG_ROOTPATH	        "/var/nfspc7302"
++#define CONFIG_BOOTFILE	        "uImage-pc7302"
+ 
+ #define CONFIG_SERVERIP         172.17.7.100
+ #define CONFIG_GATEWAYIP        172.17.0.1
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index 0611d79..d4e7f9c 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -6,7 +6,7 @@
+ * \file picochippc7308.h
+ * \brief Configuration file for U-Boot on the PC7308 platform.
+ *
+-* Copyright (c) 2006-2011 Picochip Ltd
++* Copyright (c) 2006-2012 Picochip Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -377,8 +377,8 @@
+ #define CONFIG_IPADDR           172.29.16.248
+ 
+ #define CONFIG_HOSTNAME	        picopc7308
+-#define CONFIG_ROOTPATH	        /var/nfspc7308
+-#define CONFIG_BOOTFILE	        uImage-pc7308
++#define CONFIG_ROOTPATH	        "/var/nfspc7308"
++#define CONFIG_BOOTFILE	        "uImage-pc7308"
+ 
+ #define CONFIG_SERVERIP         172.17.7.100
+ #define CONFIG_GATEWAYIP        172.29.0.1
+-- 
+1.7.0.4
+

@@ -1,0 +1,111 @@
+From 658442eb3f1235830ef044591059ecf50a4cbc9a Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Thu, 26 May 2011 16:01:30 +0100
+Subject: [PATCH 15/70] picoxcell: add clock control for picoxcell devices
+
+---
+ arch/arm/cpu/arm926ejs/picoxcell/utilities.c    |   14 ++++++++++++++
+ arch/arm/include/asm/arch-picoxcell/axi2cfg.h   |   18 ++++++++++++++++++
+ arch/arm/include/asm/arch-picoxcell/utilities.h |    9 ++++++++-
+ board/picochip/pc7308/pc7308.c                  |    5 +++++
+ 4 files changed, 45 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+index 7b22c30..bc46ee6 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+@@ -167,3 +167,17 @@ void picoxcell_timer_start (int timer)
+ 				   TIMERNCONTROLREGOFFSET (timer)));
+ 
+ }
++
++void picoxcell_clk_enable (unsigned long clock)
++{
++    unsigned long clk_gate;
++
++    if (picoxcell_is_pc30xx ())
++    {
++        clk_gate = axi2cfg_readl (AXI2CFG_CLK_GATING_REG_OFFSET);
++
++        /* Block clocks are enabled by disabling the clock gating */
++        clk_gate &= ~(clock);
++        axi2cfg_writel (clk_gate, AXI2CFG_CLK_GATING_REG_OFFSET);
++    }
++}
+diff --git a/arch/arm/include/asm/arch-picoxcell/axi2cfg.h b/arch/arm/include/asm/arch-picoxcell/axi2cfg.h
+index 5d33ac4..ced57be 100644
+--- a/arch/arm/include/asm/arch-picoxcell/axi2cfg.h
++++ b/arch/arm/include/asm/arch-picoxcell/axi2cfg.h
+@@ -158,4 +158,22 @@
+ #define AXI2CFG_DMA_CHAN_7_MUX              (1 << AXI2CFG_DMA_CHAN_7_MUX_IDX)
+ #define AXI2CFG_BOOT_MODE                   (1 << AXI2CFG_BOOT_MODE_IDX)
+ 
++/* Clock Control Stuff */
++#define PICOXCELL_TZ_PROT_CTRL_CLOCK        (1 << 0)
++#define PICOXCELL_SSI_CLOCK                 (1 << 1)
++#define PICOXCELL_DMAC_1_CLOCK              (1 << 2)
++#define PICOXCELL_DMAC_2_CLOCK              (1 << 3)
++#define PICOXCELL_EBI_CLOCK                 (1 << 4)
++#define PICOXCELL_SPACC_1_CLOCK             (1 << 5)
++#define PICOXCELL_SPACC_3_CLOCK             (1 << 6)
++#define PICOXCELL_TRNG_CLOCK                (1 << 7)
++#define PICOXCELL_AXI_FUSE_CLOCK            (1 << 8)
++#define PICOXCELL_AXI_ROM_CLOCK             (1 << 9)
++#define PICOXCELL_CASCADE_CLOCK             (1 << 10)
++#define PICOXCELL_NAND_CLOCK                (1 << 11)
++#define PICOXCELL_MEMIF_ARM_CLOCK           (1 << 12)
++#define PICOXCELL_MEMIF_SHD_SRAM_CLOCK      (1 << 13)
++#define PICOXCELL_MEMIF_SHD_SDRAM_CLOCK     (1 << 14)
++#define PICOXCELL_AXI2PICO_CLOCK            (1 << 15)
++
+ #endif /* __PICOXCELL_AXI2CFG_H__ */
+diff --git a/arch/arm/include/asm/arch-picoxcell/utilities.h b/arch/arm/include/asm/arch-picoxcell/utilities.h
+index a39c095..a48e3ac 100644
+--- a/arch/arm/include/asm/arch-picoxcell/utilities.h
++++ b/arch/arm/include/asm/arch-picoxcell/utilities.h
+@@ -137,11 +137,18 @@ int picoxcell_is_pc3x3(void);
+ int picoxcell_is_pc30xx(void);
+ 
+ /*!
+- * Start a timer in free running mode
++ * \brief Start a timer in free running mode
+  *
+  * \param timer, the timer to start
+  */
+ void picoxcell_timer_start (int timer);
+ 
++/*!
++ * \brief Enable a block clock
++ *
++ * \param clock, the block clock to enable
++ */
++void picoxcell_clk_enable (unsigned long clock);
++
+ 
+ #endif /* __PICOXCELL_UTILS_H__ */
+diff --git a/board/picochip/pc7308/pc7308.c b/board/picochip/pc7308/pc7308.c
+index c65bf75..6026714 100644
+--- a/board/picochip/pc7308/pc7308.c
++++ b/board/picochip/pc7308/pc7308.c
+@@ -19,6 +19,7 @@
+ #include <common.h>
+ #include <asm/arch/mux.h>
+ #include <asm/arch/utilities.h>
++#include <asm/arch/axi2cfg.h>
+ #include <asm/arch/picoxcell_gpio.h>
+ 
+ /* Macros ------------------------------------------------------------------ */
+@@ -118,6 +119,10 @@ int board_init (void)
+ 	/* Enable the Instruction Cache */
+ 	icache_enable ();
+ 
++        /* Turn on some picoxcell block clocks */
++        picoxcell_clk_enable (PICOXCELL_SSI_CLOCK);
++        picoxcell_clk_enable (PICOXCELL_NAND_CLOCK);
++
+ 	/* Start timer #0 */
+ 	picoxcell_timer_start (0);
+ 
+-- 
+1.7.0.4
+

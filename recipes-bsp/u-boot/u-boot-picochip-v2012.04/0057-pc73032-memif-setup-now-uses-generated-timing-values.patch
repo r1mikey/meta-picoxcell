@@ -1,0 +1,609 @@
+From cf0bb6d5f0e7faa74c2c6c3b227208b25b9f0107 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Mon, 29 Oct 2012 14:08:56 +0000
+Subject: [PATCH 57/70] pc73032: memif setup now uses generated timing values
+
+We now obtain the memif-Shared timing parameters from
+spreadsheet MS-111258-RP.
+
+This commit forms part of the resolution of Mantis Issue #10757
+---
+ .../include/asm/arch-picoxcell/pc30xx_mem_common.h |  211 ++++++++-------
+ board/picochip/pc73032/pc30xx_memif_init.c         |  283 ++++++++++++--------
+ 2 files changed, 281 insertions(+), 213 deletions(-)
+
+diff --git a/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h
+index faf2cda..09ff0e3 100644
+--- a/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h
++++ b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h
+@@ -2,7 +2,7 @@
+ * \file pc30xx_mem_common.h
+ * \brief Definitions for the pc30xx memif_arm and memif-shared block.
+ *
+-* Copyright (c) 2010-2011 Picochip Ltd
++* Copyright (c) 2010-2012 Picochip Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -17,119 +17,130 @@
+ /*****************************************************************************/
+ /* PCTL Registers                                                            */
+ /*****************************************************************************/
+-#define PCTL_SCFG_OFFSET        0x0000
+-#define PCTL_SCTL_OFFSET        0x0004
+-#define PCTL_STAT_OFFSET        0x0008
+-#define PCTL_POWCTL_OFFSET      0x0044
+-#define PCTL_POWSTAT_OFFSET     0x0048
+-#define PCTL_CMDSTAT_OFFSET     0x004C
+-#define PCTL_CMDSTATEN_OFFSET   0x0050
+-#define PCTL_MCFG_OFFSET        0x0080
+-#define PCTL_DTUAWDT_OFFSET     0x00B0
+-#define PCTL_TOGCNT1U_OFFSET    0x00C0
+-#define PCTL_TINIT_OFFSET       0x00C4
+-#define PCTL_TRSTH_OFFSET       0x00C8
+-#define PCTL_TOGCNT100N_OFFSET  0x00CC
++#define PCTL_SCFG_OFFSET        (0x0000)
++#define PCTL_SCTL_OFFSET        (0x0004)
++#define PCTL_STAT_OFFSET        (0x0008)
++#define PCTL_POWCTL_OFFSET      (0x0044)
++#define PCTL_POWSTAT_OFFSET     (0x0048)
++#define PCTL_CMDSTAT_OFFSET     (0x004C)
++#define PCTL_CMDSTATEN_OFFSET   (0x0050)
++#define PCTL_MCFG_OFFSET        (0x0080)
++#define PCTL_DTUAWDT_OFFSET     (0x00B0)
++#define PCTL_TOGCNT1U_OFFSET    (0x00C0)
++#define PCTL_TINIT_OFFSET       (0x00C4)
++#define PCTL_TRSTH_OFFSET       (0x00C8)
++#define PCTL_TOGCNT100N_OFFSET  (0x00CC)
+ 
+-#define PCTL_TREFI_OFFSET       0x00D0
+-#define PCTL_TMRD_OFFSET        0x00D4
+-#define PCTL_TRFC_OFFSET        0x00D8
+-#define PCTL_TRP_OFFSET         0x00DC
+-#define PCTL_TRTW_OFFSET        0x00E0
+-#define PCTL_TAL_OFFSET         0x00E4
+-#define PCTL_TCL_OFFSET         0x00E8
+-#define PCTL_TCWL_OFFSET        0x00EC
+-#define PCTL_TRAS_OFFSET        0x00F0
+-#define PCTL_TRC_OFFSET         0x00F4
+-#define PCTL_TRCD_OFFSET        0x00F8
+-#define PCTL_TRRD_OFFSET        0x00FC
+-#define PCTL_TRTP_OFFSET        0x0100
+-#define PCTL_TWR_OFFSET         0x0104
+-#define PCTL_TWTR_OFFSET        0x0108
+-#define PCTL_TEXSR_OFFSET       0x010C
+-#define PCTL_TCKSRE_OFFSET      0x0124
+-#define PCTL_TCKSRE_OFFSET      0x0124
+-#define PCTL_TCKSRX_OFFSET      0x0128
++#define PCTL_TREFI_OFFSET       (0x00D0)
++#define PCTL_TMRD_OFFSET        (0x00D4)
++#define PCTL_TRFC_OFFSET        (0x00D8)
++#define PCTL_TRP_OFFSET         (0x00DC)
++#define PCTL_TRTW_OFFSET        (0x00E0)
++#define PCTL_TAL_OFFSET         (0x00E4)
++#define PCTL_TCL_OFFSET         (0x00E8)
++#define PCTL_TCWL_OFFSET        (0x00EC)
++#define PCTL_TRAS_OFFSET        (0x00F0)
++#define PCTL_TRC_OFFSET         (0x00F4)
++#define PCTL_TRCD_OFFSET        (0x00F8)
++#define PCTL_TRRD_OFFSET        (0x00FC)
++#define PCTL_TRTP_OFFSET        (0x0100)
++#define PCTL_TWR_OFFSET         (0x0104)
++#define PCTL_TWTR_OFFSET        (0x0108)
++#define PCTL_TEXSR_OFFSET       (0x010C)
++#define PCTL_TXP_OFFSET         (0x0110)
++#define PCTL_TXPDLL_OFFSET      (0x0114)
++#define PCTL_TZQCS_OFFSET       (0x0118)
++#define PCTL_TZQCSI_OFFSET      (0x011C)
++#define PCTL_TDQS_OFFSET        (0x0120)
++#define PCTL_TCKSRE_OFFSET      (0x0124)
++#define PCTL_TCKSRX_OFFSET      (0x0128)
++#define PCTL_TCKE_OFFSET        (0x012C)
++#define PCTL_TMOD_OFFSET        (0x0130)
++#define PCTL_TRSTL_OFFSET       (0x0134)
++#define PCTL_TZQCL_OFFSET       (0x0138)
++#define PCTL_TMRR_OFFSET        (0x013C)
++#define PCTL_TCKESR_OFFSET      (0x0140)
++#define PCTL_TDPD_OFFSET        (0x0144)
+ 
+-#define PCTL_DFIPHYWRLAT_OFFSET 0x0254
+-#define PCTL_DFITRDDATEN_OFFSET 0x0260
+-#define PCTL_DFIPHYRDLAT_OFFSET 0x0264
+-#define PCTL_DFISTSTAT0_OFFSET  0x02C0
+-#define PCTL_DFISTCFG0_OFFSET   0x02C4
+-#define PCTL_DFIUPDCFG_OFFSET   0x0290
++#define PCTL_DFIPHYWRLAT_OFFSET (0x0254)
++#define PCTL_DFITRDDATEN_OFFSET (0x0260)
++#define PCTL_DFIPHYRDLAT_OFFSET (0x0264)
++#define PCTL_DFISTSTAT0_OFFSET  (0x02C0)
++#define PCTL_DFISTCFG0_OFFSET   (0x02C4)
++#define PCTL_DFIUPDCFG_OFFSET   (0x0290)
+ 
+-#define PCTL_IPVR_OFFSET   0x03F8
+-#define PCTL_IPTR_OFFSET   0x03FC
++#define PCTL_IPVR_OFFSET        (0x03F8)
++#define PCTL_IPTR_OFFSET        (0x03FC)
+ 
+ 
+ /*****************************************************************************/
+ /* PUBL Registers                                                            */
+ /*****************************************************************************/
+-#define PUBL_RIDR_OFFSET        0x0000
+-#define PUBL_PIR_OFFSET         0x0004
+-#define PUBL_PGCR_OFFSET        0x0008
+-#define PUBL_PGSR_OFFSET        0x000C
+-#define PUBL_DLLGCR_OFFSET      0x0010
+-#define PUBL_ACDLLCR_OFFSET     0x0014
+-#define PUBL_PTR0_OFFSET        0x0018
+-#define PUBL_PTR1_OFFSET        0x001C
+-#define PUBL_ACIOCR_OFFSET      0x0024
+-#define PUBL_DCR_OFFSET         0x0030
+-#define PUBL_DTPR0_OFFSET       0x0034
+-#define PUBL_DTPR1_OFFSET       0x0038
+-#define PUBL_DTPR2_OFFSET       0x003C
+-#define PUBL_MR0_OFFSET         0x0040
+-#define PUBL_MR1_OFFSET         0x0044
+-#define PUBL_MR2_OFFSET         0x0048
+-
+-#define PUBL_BISTRR_OFFSET       0x0100
+-#define PUBL_BISTMSKR0_OFFSET    0x0104
+-#define PUBL_BISTMSKR1_OFFSET    0x0108
+-#define PUBL_BISTWCR_OFFSET      0x010C
+-#define PUBL_BISTLSR_OFFSET      0x0110
+-#define PUBL_BISTAR0_OFFSET      0x0114
+-#define PUBL_BISTAR1_OFFSET      0x0118
+-#define PUBL_BISTAR2_OFFSET      0x011C
+-#define PUBL_BISTUDPR_OFFSET     0x0120
+-#define PUBL_BISTGSR_OFFSET      0x0124
+-#define PUBL_BISTWER_OFFSET      0x0128
+-#define PUBL_BISTBER0_OFFSET     0x012C
+-#define PUBL_BISTBER1_OFFSET     0x0130
+-#define PUBL_BISTBER2_OFFSET     0x0134
+-#define PUBL_BISTWCSR_OFFSET     0x0138
+-#define PUBL_BISTFWR0_OFFSET     0x013C
+-#define PUBL_BISTFWR1_OFFSET     0x0140
+-#define PUBL_GPR0_OFFSET         0x0178
+-#define PUBL_GPR1_OFFSET         0x017C
+-#define PUBL_DX1DQTR_OFFSET     0x0210
+-#define PUBL_DX1DQSTR_OFFSET    0x0214
+-
++#define PUBL_RIDR_OFFSET        (0x0000)
++#define PUBL_PIR_OFFSET         (0x0004)
++#define PUBL_PGCR_OFFSET        (0x0008)
++#define PUBL_PGSR_OFFSET        (0x000C)
++#define PUBL_DLLGCR_OFFSET      (0x0010)
++#define PUBL_ACDLLCR_OFFSET     (0x0014)
++#define PUBL_PTR0_OFFSET        (0x0018)
++#define PUBL_PTR1_OFFSET        (0x001C)
++#define PUBL_PTR2_OFFSET        (0x0020)
++#define PUBL_ACIOCR_OFFSET      (0x0024)
++#define PUBL_DCR_OFFSET         (0x0030)
++#define PUBL_DTPR0_OFFSET       (0x0034)
++#define PUBL_DTPR1_OFFSET       (0x0038)
++#define PUBL_DTPR2_OFFSET       (0x003C)
++#define PUBL_MR0_OFFSET         (0x0040)
++#define PUBL_MR1_OFFSET         (0x0044)
++#define PUBL_MR2_OFFSET         (0x0048)
++#define PUBL_MR3_OFFSET         (0x004C)
+ 
++#define PUBL_BISTRR_OFFSET      (0x0100)
++#define PUBL_BISTMSKR0_OFFSET   (0x0104)
++#define PUBL_BISTMSKR1_OFFSET   (0x0108)
++#define PUBL_BISTWCR_OFFSET     (0x010C)
++#define PUBL_BISTLSR_OFFSET     (0x0110)
++#define PUBL_BISTAR0_OFFSET     (0x0114)
++#define PUBL_BISTAR1_OFFSET     (0x0118)
++#define PUBL_BISTAR2_OFFSET     (0x011C)
++#define PUBL_BISTUDPR_OFFSET    (0x0120)
++#define PUBL_BISTGSR_OFFSET     (0x0124)
++#define PUBL_BISTWER_OFFSET     (0x0128)
++#define PUBL_BISTBER0_OFFSET    (0x012C)
++#define PUBL_BISTBER1_OFFSET    (0x0130)
++#define PUBL_BISTBER2_OFFSET    (0x0134)
++#define PUBL_BISTWCSR_OFFSET    (0x0138)
++#define PUBL_BISTFWR0_OFFSET    (0x013C)
++#define PUBL_BISTFWR1_OFFSET    (0x0140)
++#define PUBL_GPR0_OFFSET        (0x0178)
++#define PUBL_GPR1_OFFSET        (0x017C)
++#define PUBL_DX1DQTR_OFFSET     (0x0210)
++#define PUBL_DX1DQSTR_OFFSET    (0x0214)
+ 
+ /*****************************************************************************/
+ /* MCTL Registers                                                            */
+ /*****************************************************************************/
+-#define MCTL_PCFG_0_OFFSET 0x0400
+-#define MCTL_PCFG_1_OFFSET 0x0404
+-#define MCTL_PCFG_2_OFFSET 0x0408
+-#define MCTL_PCFG_3_OFFSET 0x040C
+-#define MCTL_CCFG_OFFSET   0x0480
+-#define MCTL_DCFG_OFFSET   0x0484
+-#define MCTL_CSTAT_OFFSET  0x048C
++#define MCTL_PCFG_0_OFFSET      (0x0400)
++#define MCTL_PCFG_1_OFFSET      (0x0404)
++#define MCTL_PCFG_2_OFFSET      (0x0408)
++#define MCTL_PCFG_3_OFFSET      (0x040C)
++#define MCTL_CCFG_OFFSET        (0x0480)
++#define MCTL_DCFG_OFFSET        (0x0484)
++#define MCTL_CSTAT_OFFSET       (0x048C)
+ 
+-#define MCTL_DCFG_IO_WIDTH_16BIT    2
+-#define MCTL_DCFG_IO_WIDTH_IDX      0
+-#define MCTL_DCFG_DRAM_DENSITY_2Gb  5
+-#define MCTL_DCFG_DRAM_DENSITY_1Gb  4
+-#define MCTL_DCFG_DRAM_DENSITY_IDX  2
+-#define MCTL_DCFG_DRAM_TYPE_14x9    0
+-#define MCTL_DCFG_DRAM_TYPE_13x10   1
+-#define MCTL_DCFG_DRAM_TYPE_IDX     6
+-#define MCTL_DCFG_ADDR_MAP_BRC      0
+-#define MCTL_DCFG_ADDR_MAP_RBC      1
+-#define MCTL_DCFG_ADDR_MAP_IDX      8
+-#define MCTL_PCFG_BP_RD_EN_IDX      5
+-#define MCTL_PCFG_BP_WR_EN_IDX      4
++#define MCTL_DCFG_IO_WIDTH_16BIT    (2)
++#define MCTL_DCFG_IO_WIDTH_IDX      (0)
++#define MCTL_DCFG_DRAM_DENSITY_2Gb  (5)
++#define MCTL_DCFG_DRAM_DENSITY_1Gb  (4)
++#define MCTL_DCFG_DRAM_DENSITY_IDX  (2)
++#define MCTL_DCFG_DRAM_TYPE_14x9    (0)
++#define MCTL_DCFG_DRAM_TYPE_13x10   (1)
++#define MCTL_DCFG_DRAM_TYPE_IDX     (6)
++#define MCTL_DCFG_ADDR_MAP_BRC      (0)
++#define MCTL_DCFG_ADDR_MAP_RBC      (1)
++#define MCTL_DCFG_ADDR_MAP_IDX      (8)
++#define MCTL_PCFG_BP_RD_EN_IDX      (5)
++#define MCTL_PCFG_BP_WR_EN_IDX      (4)
+ 
+ /* PIR Register bit fields */
+ #define PUBL_PIR_INIT           (1 << 0)
+diff --git a/board/picochip/pc73032/pc30xx_memif_init.c b/board/picochip/pc73032/pc30xx_memif_init.c
+index 9e6e821..f384fcd 100644
+--- a/board/picochip/pc73032/pc30xx_memif_init.c
++++ b/board/picochip/pc73032/pc30xx_memif_init.c
+@@ -20,7 +20,64 @@
+ #include <asm/arch/pc30xx_mem_shd.h>
+ 
+ /* Macros ------------------------------------------------------------------ */
+-#define MEMIF_SHD_AEID             0x0068
++#define MEMIF_SHD_AEID      (0x0068)
++/*
++ * Timing Parameters from Spreadsheet MS-111258-RP
++ *
++ * These #define values have been obtained via a cut 'n' paste from
++ * the spreadsheet
++ */
++#define DTUAWDT_VALUE (0x0000000B)
++#define MCFG_VALUE (0x00040021)
++#define TAL_VALUE (0x00000000)
++#define TCKE_VALUE (0x00000003)
++#define TCKESR_VALUE (0x00000004)
++#define TCKSRE_VALUE (0x00000005)
++#define TCKSRX_VALUE (0x00000005)
++#define TCL_VALUE (0x00000006)
++#define TCWL_VALUE (0x00000005)
++#define TDPD_VALUE (0x00000000)
++#define TDQS_VALUE (0x00000001)
++#define TEXSR_VALUE (0x00000200)
++#define TINIT_VALUE (0x000000C8)
++#define TMOD_VALUE (0x0000000C)
++#define TMRD_VALUE (0x00000004)
++#define TMRR_VALUE (0x00000001)
++#define TOGCNT100N_VALUE (0x00000028)
++#define TOGCNT1U_VALUE (0x00000190)
++#define TRAS_VALUE (0x0000000F)
++#define TRC_VALUE (0x00000014)
++#define TRCD_VALUE (0x00000006)
++#define TREFI_VALUE (0x0000004E)
++#define TRFC_VALUE (0x0000002C)
++#define TRP_VALUE (0x00000006)
++#define TRRD_VALUE (0x00000004)
++#define TRSTH_VALUE (0x00000000)
++#define TRSTL_VALUE (0x00000028)
++#define TRTP_VALUE (0x00000004)
++#define TRTW_VALUE (0x00000002)
++#define TWR_VALUE (0x00000006)
++#define TWTR_VALUE (0x00000004)
++#define TXP_VALUE (0x00000003)
++#define TXPDLL_VALUE (0x0000000A)
++#define TZQCL_VALUE (0x00000200)
++#define TZQCS_VALUE (0x00000040)
++#define TZQCSI_VALUE (0x00000064)
++
++#define DCR_VALUE (0x0000000B)
++#define DTPR0_VALUE (0x288F6690)
++#define DTPR1_VALUE (0x092C0090)
++#define DTPR2_VALUE (0x1001AA00)
++#define MR0_VALUE (0x00000420)
++#define MR1_VALUE (0x00000000)
++#define MR2_VALUE (0x00000000)
++#define MR3_VALUE (0x00000000)
++#define PTR0_VALUE (0x00220014)
++#define PTR1_VALUE (0x04830D40)
++#define PTR2_VALUE (0x042DA072)
++
++#define SDRAM_AXI_CONFIG_VALUE (0x0000000A)
++#define SDRAM_SETUP_VALUE (0x00000005)
+ 
+ /* Constants --------------------------------------------------------------- */
+ 
+@@ -137,46 +194,8 @@ static void memif_shd_apb_write (unsigned int base, unsigned short addr,
+ 
+ void pc30xx_memif_shared_init (void)
+ {
+-
+-	unsigned int data;
+-
+ 	unsigned short value;
+ 
+-	/* PCTL MCFG Register */
+-	unsigned int tfaw_cfg = 2;
+-	unsigned int ddr3_en = 1;	/* 0=DDR2, 1=DDR3 */
+-	unsigned int mem_bl = 1;	/* 0=BL4, 1=BL8 */
+-
+-	/* PUBL DCR Register */
+-	unsigned int ddrmd = 3;
+-	unsigned int ddr8bnk = 1;
+-
+-	/* PCTL TIMING Registers */
+-	unsigned int togcnt1u = 534;
+-	unsigned int t_init = 200;
+-	unsigned int t_rsth = 500;
+-	unsigned int togcnt100n = 53;
+-	unsigned int t_refi = 70;
+-	unsigned int t_mrd = 4;
+-	unsigned int t_rfc = 105;
+-	unsigned int t_rp = 9;
+-	unsigned int prea_extra = 2;
+-	unsigned int t_cl = 8;
+-	unsigned int t_cwl = 6;
+-	unsigned int t_ras = 20;
+-	unsigned int t_rc = 29;
+-	unsigned int t_rcd = t_cl;
+-	unsigned int t_rtp = 4;
+-	unsigned int t_wr = 8;
+-
+-	/* cas latency */
+-	unsigned int mrd_ddr3_cl = 4;
+-
+-	/* write recovery */
+-	unsigned int mrd_ddr3_wr = 4;
+-	unsigned int mr2_ddr3_cwl = 1;
+-
+-	/* Make sure the memory interface is being clocked */
+ 	picoxcell_clk_enable (PICOXCELL_MEMIF_SHD_SDRAM_CLOCK);
+ 
+ 	/* Arbitration algorithm setup */
+@@ -188,40 +207,34 @@ void pc30xx_memif_shared_init (void)
+ 	/* configure the sdram arbitration for all banks */
+ 	value = SDRAM_ARB_DATA;
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+-			      MEMIF_SHD_REGS_SDRAM_ARB_G0_S0_S1_OFFSET, &value,
+-			      1);
++			      MEMIF_SHD_REGS_SDRAM_ARB_G0_S0_S1_OFFSET,
++			      &value, 1);
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+-			      MEMIF_SHD_REGS_SDRAM_ARB_G0_S2_S3_OFFSET, &value,
+-			      1);
++			      MEMIF_SHD_REGS_SDRAM_ARB_G0_S2_S3_OFFSET,
++			      &value, 1);
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+-			      MEMIF_SHD_REGS_SDRAM_ARB_G1_S0_S1_OFFSET, &value,
+-			      1);
++			      MEMIF_SHD_REGS_SDRAM_ARB_G1_S0_S1_OFFSET,
++			      &value, 1);
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+-			      MEMIF_SHD_REGS_SDRAM_ARB_G1_S2_S3_OFFSET, &value,
+-			      1);
++			      MEMIF_SHD_REGS_SDRAM_ARB_G1_S2_S3_OFFSET,
++			      &value, 1);
+ 
+ 	value = SDRAM_ARB_2_VALID_GRPS;
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+-			      MEMIF_SHD_REGS_SDRAM_VALID_GROUPS_OFFSET, &value,
+-			      1);
++			      MEMIF_SHD_REGS_SDRAM_VALID_GROUPS_OFFSET,
++			      &value, 1);
+ 
+-	/* configure the sdram_setup and sdram_axi_config registers
+-	 * for the type of ddr sdram
+-	 */
+-	value = (DDR2_ROW_13_COL_10 << SDRAM_SETUP_SIZE_IDX) |
+-	    (DDR2_8_BANKS << SDRAM_SETUP_BANK_IDX) |
+-	    (~mem_bl << SDRAM_SETUP_BL_IDX);
++	/* configure the sdram_setup and sdram_axi_config registers */
++	value = SDRAM_SETUP_VALUE;
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+ 			      MEMIF_SHD_REGS_SDRAM_SETUP_OFFSET, &value, 1);
+-
+-	value = (DDR2_ROW_13_COL_10 << SDRAM_AXI_SETUP_SIZE_IDX) |
+-	    (DDR2_BRC_ADDR << SDRAM_AXI_SETUP_RBC_IDX) |
+-	    (DDR2_8_BANKS << SDRAM_AXI_SETUP_BANK_IDX);
++	value = SDRAM_AXI_CONFIG_VALUE;
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+-			      MEMIF_SHD_REGS_SDRAM_AXI_CONFIG_OFFSET, &value,
+-			      1);
++			      MEMIF_SHD_REGS_SDRAM_AXI_CONFIG_OFFSET, &value, 1);
+ 
+-	/* Bank opportunistic mode disabled, Bank row pre-charge mode enabled */
++	/* Bank opportunistic mode disabled,
++	 * Bank row pre-charge mode enabled
++	 */
+ 	value = 0x2;
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+ 			      MEMIF_SHD_REGS_SDRAM_ARB_CFG_OFFSET, &value, 1);
+@@ -232,28 +245,39 @@ void pc30xx_memif_shared_init (void)
+ 			      MEMIF_SHD_REGS_SDRAM_CFG_DONE_OFFSET, &value, 1);
+ 
+ 	/* PCTL and PUBL setup */
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_DTUAWDT_OFFSET,
++                             DTUAWDT_VALUE);
+ 
+-	/* 1. uPCTL timer reg configuration */
++	/* 1. uPCTL Memory Timing Registers configuration */
+ 	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TOGCNT1U_OFFSET,
+-			     togcnt1u);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TINIT_OFFSET, t_init);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRSTH_OFFSET, t_rsth);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE,
+-			     PCTL_TOGCNT100N_OFFSET, togcnt100n);
+-
+-	/* 2. PHY initialisation start
+-	 * - not required, PUBL initiates automatically following reset
+-	 */
++			     TOGCNT1U_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TINIT_OFFSET,
++			     TINIT_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRSTH_OFFSET,
++			     TRSTH_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TOGCNT100N_OFFSET,
++			     TOGCNT100N_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TZQCL_OFFSET,
++                             TZQCL_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TZQCS_OFFSET,
++                             TZQCS_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TZQCSI_OFFSET,
++                             TZQCSI_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PTR0_OFFSET,
++                             PTR0_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PTR1_OFFSET,
++                             PTR1_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PTR2_OFFSET,
++                             PTR2_VALUE);
++
++        /* 2. PHY initialisation start */
+ 	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PIR_OFFSET,
+ 			     PUBL_PIR_CLRSR);
+-
+ 	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PIR_OFFSET,
+ 			     (PUBL_PIR_INIT | PUBL_PIR_DLLSRST |
+ 			      PUBL_PIR_DLLLOCK));
+ 
+-	/* 3. Wait for PHY initialisation following reset
+-	 * (DLL lock and Zo calibration)
+-	 */
++	/* 3. Wait for PHY initialisation following reset */
+ 	memif_shd_apb_poll (MEMIF_SHD_PUBL_BASE, PUBL_PGSR_OFFSET,
+ 			    0x0001, 0x0001);
+ 
+@@ -262,49 +286,82 @@ void pc30xx_memif_shared_init (void)
+ 			    0x0001, 0x0001);
+ 
+ 	/* 5. uPTCL MCFG register configuration */
+-	data = (tfaw_cfg << 18) | (ddr3_en << 5) | (mem_bl << 0);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_MCFG_OFFSET, data);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_MCFG_OFFSET,
++			     MCFG_VALUE);
+ 
+-	/* 6. uPCTL Power-up sequence */
++        /* 6. uPCTL Power-up sequence */
+ 	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_POWCTL_OFFSET, 0x0001);
+ 	memif_shd_apb_poll (MEMIF_SHD_PCTL_BASE, PCTL_POWSTAT_OFFSET,
+ 			    0x0001, 0x0001);
+ 
+ 	/* 7. uPCTL timing register setup */
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TREFI_OFFSET, t_refi);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TMRD_OFFSET, t_mrd);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRFC_OFFSET, t_rfc);
+-
+-	data = (t_rp << 0) | (prea_extra << 16);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRP_OFFSET, data);
+-
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCL_OFFSET, t_cl);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCWL_OFFSET, t_cwl);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRAS_OFFSET, t_ras);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRC_OFFSET, t_rc);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRCD_OFFSET, t_rcd);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRTP_OFFSET, t_rtp);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TWR_OFFSET, t_wr);
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE,
+-			     PCTL_DFIPHYWRLAT_OFFSET, (t_cwl - 1));
+-	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE,
+-			     PCTL_DFITRDDATEN_OFFSET, (t_cl - 2));
+-
+-	/* 8. DRAM initialisation via PUBL */
+-	/* DRAM configuration register */
+-	data = (ddrmd << 0) | (ddr8bnk << 3);
+-	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_DCR_OFFSET, data);
+-
+-	/* DRAM mode register 0 (DDRS3) */
+-	data = (mrd_ddr3_cl << 4) | (mrd_ddr3_wr << 9);
+-	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR0_OFFSET, data);
+-
+-	/* DRAM mode register 1 */
+-	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR1_OFFSET, 0x0000);
+-
+-	/* DRAM mode register 2 */
+-	data = (mr2_ddr3_cwl << 3);
+-	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR2_OFFSET, data);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TREFI_OFFSET,
++			     TREFI_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TMRD_OFFSET,
++			     TMRD_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRFC_OFFSET,
++			     TRFC_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRP_OFFSET, TRP_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCL_OFFSET, TCL_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCWL_OFFSET,
++			     TCWL_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRAS_OFFSET,
++			     TRAS_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRC_OFFSET, TRC_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRCD_OFFSET,
++			     TRCD_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRTP_OFFSET,
++			     TRTP_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TWR_OFFSET, TWR_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE,
++			     PCTL_DFIPHYWRLAT_OFFSET, (TCWL_VALUE - 1));
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE,
++			     PCTL_DFITRDDATEN_OFFSET, (TCL_VALUE - 2));
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TAL_OFFSET, TAL_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCKE_OFFSET,
++                             TCKE_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCKESR_OFFSET,
++                             TCKESR_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCKSRE_OFFSET,
++                             TCKSRE_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TCKSRX_OFFSET,
++                             TCKSRX_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TDPD_OFFSET,
++                             TDPD_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TDQS_OFFSET,
++                             TDQS_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TEXSR_OFFSET,
++                             TEXSR_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TMOD_OFFSET,
++                             TMOD_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TMRR_OFFSET,
++                             TMRR_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRRD_OFFSET,
++                             TRRD_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRSTL_OFFSET,
++                             TRSTL_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TRTW_OFFSET,
++                             TRTW_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TWTR_OFFSET,
++                             TWTR_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TXP_OFFSET, TXP_VALUE);
++	memif_shd_apb_write (MEMIF_SHD_PCTL_BASE, PCTL_TXPDLL_OFFSET,
++                             TXPDLL_VALUE);
++
++        /* 8. DRAM initialisation via PUBL */
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_DCR_OFFSET, DCR_VALUE);
++
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_DTPR0_OFFSET,
++                             DTPR0_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_DTPR1_OFFSET,
++                             DTPR1_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_DTPR2_OFFSET,
++                             DTPR2_VALUE);
++
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR2_OFFSET, MR2_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR3_OFFSET, MR3_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR1_OFFSET, MR1_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_MR0_OFFSET, MR0_VALUE);
+ 
+ 	/* PHY timing register */
+ 	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PIR_OFFSET,
+-- 
+1.7.0.4
+

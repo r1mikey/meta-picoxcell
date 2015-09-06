@@ -1,0 +1,76 @@
+From 5ff5f4fb296f0fb1045100859c0543d23567203c Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 19 Oct 2012 11:58:46 +0100
+Subject: [PATCH 51/70] pc73032: add environment variables to support nor booting
+
+This commit forms part of the resolution of Mantis Issue #10785
+---
+ include/configs/picochippc73032-common.h |   28 +++++++++++++++++++++++++---
+ 1 files changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/include/configs/picochippc73032-common.h b/include/configs/picochippc73032-common.h
+index 047de1d..7a8d322 100644
+--- a/include/configs/picochippc73032-common.h
++++ b/include/configs/picochippc73032-common.h
+@@ -317,6 +317,11 @@
+ 
+ #endif /* CONFIG_MACB */
+ 
++/* This is the address in NOR Flash where the Linux kernel
++ * can be found.
++ */
++#define CONFIG_FLASH_KERNEL_BASE   0x40060000
++
+ /* This is the offset from the start of NAND Flash
+  * to where the Linux kernel can be found.
+  */
+@@ -334,21 +339,27 @@
+ /* Unless specified here we'll just rely on the kernel default */
+ #define OTHERBOOTARGS
+ 
++/* Define the JFFS2 root filesystem partition (NOR Flash) */
++#define NOR_JFFS2_ROOT          /dev/mtdblock3
++
+ /* Define the UBIFS root filesystem partition for NAND Flash */
+ #define NAND_UBIFS_ROOT         9
+ 
+-/* Define CONFIG_BOOTCOMMAND as */
+-#define CONFIG_BOOTCOMMAND  "run nand_ubifs"
+-
+ #define	CONFIG_EXTRA_ENV_SETTINGS				            \
+    "othbootargs=" MK_STR (OTHERBOOTARGS) "\0"                               \
+    "netdev=eth0\0"                                                          \
+    "consoledev=ttyS0\0"                                                     \
++   "kernel_flash_addr=" MK_STR(CONFIG_FLASH_KERNEL_BASE) "\0"		    \
+    "kernel_nand_offset=" MK_STR(CONFIG_NAND_KERNEL_OFFSET) "\0"             \
++   "nor_jffs2_root=" MK_STR(NOR_JFFS2_ROOT) "\0"		            \
+    "nand_ubifs_root=" MK_STR(NAND_UBIFS_ROOT) "\0"		            \
++   "flash_jffs2=run jffs2_args; bootm $kernel_flash_addr\0"		    \
+    "nand_ubifs=run nand_ubifs_args; nboot $loadaddr 0 "                     \
+    "$kernel_nand_offset; bootm $loadaddr\0"                                 \
+    "fixed_nfs=run nfs_args; tftp; bootm\0"				    \
++   "jffs2_args=setenv bootargs root=$nor_jffs2_root rw rootfstype=jffs2 "   \
++   "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
++   "console=$consoledev,$baudrate $mtdparts $othbootargs;\0"                \
+    "nand_ubifs_args=setenv bootargs root=ubi0:rootfs rw rootfstype=ubifs "  \
+    "ubi.mtd=$nand_ubifs_root,2048 "                                         \
+    "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+@@ -360,4 +371,15 @@
+    "mtdids=" MTDIDS_DEFAULT "\0"                                            \
+    "mtdparts=" MTDPARTS_DEFAULT "\0"
+ 
++/* Define CONFIG_BOOTCOMMAND as
++ * "run nand_ubifs" for NAND configured platforms (ubifs filesystem)
++ * "run flash_jffs2" for NOR flash platforms (jffs2 filesystem)
++ * "run fixed_nfs" for standard NFS with fixed IP address.
++ */
++#if defined(CONFIG_CMD_NAND)
++    #define CONFIG_BOOTCOMMAND  "run nand_ubifs"
++#else
++    #define CONFIG_BOOTCOMMAND  "run flash_jffs2"
++#endif
++
+ #endif /* __CONFIG_PC73032_H */
+-- 
+1.7.0.4
+

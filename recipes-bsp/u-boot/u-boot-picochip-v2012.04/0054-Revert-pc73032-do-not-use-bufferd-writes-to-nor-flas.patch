@@ -1,0 +1,27 @@
+From 18ffc5c2e89aece54d2f7ebcc8e1ad28b41f4920 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Mon, 22 Oct 2012 09:01:22 +0100
+Subject: [PATCH 54/70] Revert "pc73032: do not use bufferd writes to nor flash"
+
+This reverts commit 202e5110e471b6fd2d7b924e87e67a4dc520cedc.
+---
+ include/configs/picochippc73032nor.h |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/include/configs/picochippc73032nor.h b/include/configs/picochippc73032nor.h
+index 955d721..9c2924d 100644
+--- a/include/configs/picochippc73032nor.h
++++ b/include/configs/picochippc73032nor.h
+@@ -26,6 +26,9 @@
+ /* Define Flash memory sector size */
+ #define FLASH_SECTOR_SIZE	(SZ_128K)
+ 
++/* Use buffered writes to flash memory */
++#define CONFIG_SYS_FLASH_USE_BUFFER_WRITE
++
+ /* Maximum number of memory banks (devices) */
+ #define CONFIG_SYS_MAX_FLASH_BANKS  (1)
+ 
+-- 
+1.7.0.4
+

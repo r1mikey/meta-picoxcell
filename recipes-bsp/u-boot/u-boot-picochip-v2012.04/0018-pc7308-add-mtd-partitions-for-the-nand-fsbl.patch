@@ -1,0 +1,32 @@
+From 945130c2ba8c2044392622c4a57891c262dd7bd2 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 29 Jul 2011 11:14:03 +0100
+Subject: [PATCH 18/70] pc7308: add mtd partitions for the nand fsbl
+
+The pc3008 on chip boot rom expects to find the nand first stage
+boot loader in nand flash blocks 0, 1, 2 or 3.
+---
+ include/configs/picochippc7308.h |    7 ++++++-
+ 1 files changed, 6 insertions(+), 1 deletions(-)
+
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index bcf92fa..3cb9606 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -329,7 +329,12 @@
+ 
+ #define MTDIDS_DEFAULT          "nand0=gpio-nand"
+ 
+-#define MTDPARTS_DEFAULT	"mtdparts=gpio-nand:1M@0x100000(Boot),"\
++#define MTDPARTS_DEFAULT	"mtdparts=gpio-nand:"\
++                                "128K(NandFirstStage0),"\
++                                "128K(NandFirstStage1),"\
++                                "128K(NandFirstStage2),"\
++                                "128K(NandFirstStage3),"\
++                                "1M@1M(Boot),"\
+ 				"1M(RedundantBoot),"\
+ 				"128K(BootEnvironment),"\
+                                 "128K(RedundantBootEnv),"\
+-- 
+1.7.0.4
+

@@ -1,0 +1,26 @@
+From 96e77bfc0aa2913d2b7e56cc675c726708fbf6da Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Tue, 17 Jan 2012 17:24:20 +0000
+Subject: [PATCH 31/70] pc7308: change the ddr sdram size to 64 Mbytes
+
+This commit forms part of the resolution of Mantis Issue #9050
+---
+ include/configs/picochippc7308.h |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index cc10d14..55c3149 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -130,7 +130,7 @@
+ #define CONFIG_SYS_SDRAM_BASE	(0x00000000)
+ #define CONFIG_NR_DRAM_BANKS    (1)
+ #define PHYS_SDRAM_1		(PICOXCELL_DDRBANK_BASE)
+-#define PHYS_SDRAM_1_SIZE	(SZ_128M)
++#define PHYS_SDRAM_1_SIZE	(SZ_64M)
+ 
+ /*-----------------------------------------------------------------------------
+  * SPI Flash Memory Stuff
+-- 
+1.7.0.4
+

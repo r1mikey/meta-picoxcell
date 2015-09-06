@@ -1,0 +1,35 @@
+From 9f5aeb2a64efc49882b83a36649e61724fe63fec Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 19 Oct 2012 18:19:01 +0100
+Subject: [PATCH 53/70] cfi: enable buffer programming for M29EW in x8 mode
+
+This patch came from Micron application note tn1307
+---
+ drivers/mtd/cfi_flash.c |   11 +++++++++++
+ 1 files changed, 11 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/mtd/cfi_flash.c b/drivers/mtd/cfi_flash.c
+index 1da1d44..8b66270 100644
+--- a/drivers/mtd/cfi_flash.c
++++ b/drivers/mtd/cfi_flash.c
+@@ -2082,6 +2082,17 @@ ulong flash_get_size (phys_addr_t base, int banknum)
+ 			info->portwidth >>= 1;
+ 		}
+ 
++                /* M29EW256M: buffer size workaround in x8 mode */
++                if (info->chipwidth == FLASH_CFI_BY8 &&
++                    info->manufacturer_id == 0x89    &&
++                    info->device_id == 0x7E          &&
++                    (info->device_id2 == 0x2201 ||
++                     info->device_id2==0x2301   ||
++                     info->device_id2==0x2801)       &&
++                     info->buffer_size > 256) {
++
++                        info->buffer_size = 256;
++                }
+ 		flash_write_cmd (info, 0, 0, info->cmd_reset);
+ 	}
+ 
+-- 
+1.7.0.4
+

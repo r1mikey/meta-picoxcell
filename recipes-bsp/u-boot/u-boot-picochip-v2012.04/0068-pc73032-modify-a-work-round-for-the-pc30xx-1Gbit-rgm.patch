@@ -1,0 +1,34 @@
+From a3ead94ad7a167ff28f81928995b311dca80d92a Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Thu, 4 Jul 2013 11:27:43 +0100
+Subject: [PATCH 68/70] pc73032: modify a work round for the pc30xx 1Gbit rgmii transmit issue
+ to extend the work round for all PC3032 silicon variants.
+
+This commit forms part of the resolution of Mantis Issue #11106
+---
+ drivers/net/macb.c |    8 ++++----
+ 1 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index 1e6faf5..452783d 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -426,11 +426,11 @@ static void picoxcell_rgmii_fixup(struct macb_device *macb)
+ {
+ 	unsigned int rev = picoxcell_get_revision ();
+ 
+-        /* If we are running on PC3032 Rev A silicon and we are using
+-         * an rgmii interface then we can only transmit at 10/100 mpbs
++        /* If we are running on PC73032 board and we are using an 
++         * rgmii interface then we can only transmit at 10/100 mpbs
+          */
+-        if (picoxcell_is_pc30xx() && (rev == PC30XX_REV_A) &&
+-            picoxcell_is_rgmii_enabled() && is_link_speed_1000mbps(macb)) {
++        if (picoxcell_is_pc30xx() && picoxcell_is_rgmii_enabled() 
++            && is_link_speed_1000mbps(macb)) {
+                 disable_1000mpbs_advertisment(macb);
+                 restart_phy_autoneg(macb);
+ 		wait_for_autonegotiation_complete(macb);
+-- 
+1.7.0.4
+

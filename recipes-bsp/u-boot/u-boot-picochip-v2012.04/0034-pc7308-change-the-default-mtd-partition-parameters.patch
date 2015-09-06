@@ -1,0 +1,29 @@
+From 1d2b4f8691782b05ee5125326bfd55c05ea7136a Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 27 Jan 2012 10:05:38 +0000
+Subject: [PATCH 34/70] pc7308: change the default mtd partition parameters
+
+This commit forms part of the resolution of Mantis Issue #9980
+---
+ include/configs/picochippc7308.h |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index 9629588..de511db 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -328,9 +328,9 @@
+ /* Default command line mtd partitioning */
+ #define MTD_PARTITION_DEFAULT   "nand0,0"
+ 
+-#define MTDIDS_DEFAULT          "nand0=gpio-nand"
++#define MTDIDS_DEFAULT          "nand0=denali-nand"
+ 
+-#define MTDPARTS_DEFAULT	"mtdparts=gpio-nand:"\
++#define MTDPARTS_DEFAULT	"mtdparts=denali-nand:"\
+                                 "128K(NandFirstStage0),"\
+                                 "128K(NandFirstStage1),"\
+                                 "128K(NandFirstStage2),"\
+-- 
+1.7.0.4
+

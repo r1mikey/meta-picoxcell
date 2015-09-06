@@ -1,0 +1,48 @@
+From 60761fc572dba63f9597f05b6a03fa7715244e70 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 7 Sep 2012 15:59:22 +0100
+Subject: [PATCH 45/70] pc7308: fixed up an incorrect nand flash layout description
+
+---
+ include/configs/picochippc7308.h |   18 +++++++-----------
+ 1 files changed, 7 insertions(+), 11 deletions(-)
+
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index d4e7f9c..e67bae8 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -42,12 +42,6 @@
+ /*-----------------------------------------------------------------------------
+  * High Level Configuration Options
+  */
+-/* Running on Picochip PC3X2 Silicon */
+-#define CONFIG_PICOCHIP_PC3X2
+-
+-/* Running on Picochip PC3X3 Silicon */
+-#define CONFIG_PICOCHIP_PC3X3
+-
+ /* Running on Picochip PC3008 Silicon */
+ #define CONFIG_PICOCHIP_PC3008
+ 
+@@ -168,11 +162,13 @@
+ 
+ /* NAND Flash memory map
+  *
+- *  Block 0-7   Reserved
+- *  Block 8-11  U-Boot image
+- *  Block 12-15 Reserved
+- *  Block 16-19 Redundant U-Boot image
+- *  Block 20-23 Reserved
++ *  Block 0     spinand first stage bootloader #0
++ *  Block 1     spinand first stage bootloader #1
++ *  Block 2     spinand first stage bootloader #2
++ *  Block 3     spinand first stage bootloader #3
++ *  Block 4-7   Reserved
++ *  Block 8-15  U-Boot image
++ *  Block 16-23 Redundant U-Boot image
+  *  Block 24    U-Boot env variables
+  *  Block 25    Redundant U-Boot env variables
+  *  Block 26-27 Reserved
+-- 
+1.7.0.4
+

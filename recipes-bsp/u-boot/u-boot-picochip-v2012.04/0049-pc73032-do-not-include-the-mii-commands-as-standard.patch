@@ -1,0 +1,25 @@
+From f994811ea7e61ebc12fde24a0ea6a523f7cf9f5a Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Thu, 18 Oct 2012 10:16:29 +0100
+Subject: [PATCH 49/70] pc73032: do not include the mii commands as standard
+
+---
+ include/configs/picochippc73032-common.h |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/include/configs/picochippc73032-common.h b/include/configs/picochippc73032-common.h
+index a0c07c9..047de1d 100644
+--- a/include/configs/picochippc73032-common.h
++++ b/include/configs/picochippc73032-common.h
+@@ -313,7 +313,7 @@
+ #define CONFIG_NETMASK          255.255.0.0
+ 
+ /* Enable the MII utility commands */
+-#define CONFIG_CMD_MII
++#undef CONFIG_CMD_MII
+ 
+ #endif /* CONFIG_MACB */
+ 
+-- 
+1.7.0.4
+

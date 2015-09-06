@@ -1,0 +1,35 @@
+From a66f43f010e7d1cd36ef3c5e7b2f98dcf02117bb Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Tue, 19 Apr 2011 10:23:14 +0100
+Subject: [PATCH 08/70] mach-types: add machine type definition for pc7308 platform
+
+---
+ arch/arm/include/asm/mach-types.h |   12 ++++++++++++
+ 1 files changed, 12 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/include/asm/mach-types.h b/arch/arm/include/asm/mach-types.h
+index 2d5c3bc..b0639b3 100644
+--- a/arch/arm/include/asm/mach-types.h
++++ b/arch/arm/include/asm/mach-types.h
+@@ -14222,6 +14222,18 @@ extern unsigned int __machine_arch_type;
+ # define machine_is_omap5_sevm()      (0)
+ #endif
+ 
++#ifdef CONFIG_MACH_PC7308
++# ifdef machine_arch_type
++#  undef machine_arch_type
++#  define machine_arch_type	__machine_arch_type
++# else
++#  define machine_arch_type	MACH_TYPE_PC7308
++# endif
++# define machine_is_pc7308()	(machine_arch_type == MACH_TYPE_PC7308)
++#else
++# define machine_is_pc7308()	(0)
++#endif
++
+ /*
+  * These have not yet been registered
+  */
+-- 
+1.7.0.4
+

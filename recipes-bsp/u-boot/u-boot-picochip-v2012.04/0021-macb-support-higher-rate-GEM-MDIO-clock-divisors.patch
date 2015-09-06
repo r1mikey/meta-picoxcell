@@ -1,0 +1,135 @@
+From 98fff74b82d4cd9fca2495be5737280632372b99 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 29 Jul 2011 16:32:59 +0100
+Subject: [PATCH 21/70] macb: support higher rate GEM MDIO clock divisors
+
+GEM devices support larger clock divisors and have a different
+range of divisors.  Program the MDIO clock divisors based on the
+device type.
+---
+ drivers/net/macb.c |   63 ++++++++++++++++++++++++++++++++++++++--------------
+ drivers/net/macb.h |   12 ++++++++++
+ 2 files changed, 58 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index d52dda0..fd99cdb 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -532,11 +532,52 @@ static int macb_write_hwaddr(struct eth_device *dev)
+ 	return 0;
+ }
+ 
++static u32 gem_mdc_clk_div(int id)
++{
++	u32 ncfgr;
++	unsigned long pclk_hz = get_macb_pclk_rate(id);
++
++	if (pclk_hz <= 20000000)
++		ncfgr = GEM_BF(CLK, GEM_CLK_DIV8);
++	else if (pclk_hz <= 40000000)
++		ncfgr = GEM_BF(CLK, GEM_CLK_DIV16);
++	else if (pclk_hz <= 80000000)
++		ncfgr = GEM_BF(CLK, GEM_CLK_DIV32);
++	else if (pclk_hz <= 120000000)
++		ncfgr = GEM_BF(CLK, GEM_CLK_DIV48);
++	else if (pclk_hz <= 160000000)
++		ncfgr = GEM_BF(CLK, GEM_CLK_DIV64);
++	else
++		ncfgr = GEM_BF(CLK, GEM_CLK_DIV96);
++
++	return ncfgr;
++}
++
++static u32 macb_mdc_clk_div(struct macb_device *macb, int id)
++{
++	u32 ncfgr;
++	unsigned long pclk_hz;
++
++	if (macb->is_gem)
++		return gem_mdc_clk_div(id);
++
++	pclk_hz = get_macb_pclk_rate(id);
++	if (pclk_hz <= 20000000)
++		ncfgr = MACB_BF(CLK, MACB_CLK_DIV8);
++	else if (pclk_hz <= 40000000)
++		ncfgr = MACB_BF(CLK, MACB_CLK_DIV16);
++	else if (pclk_hz <= 80000000)
++		ncfgr = MACB_BF(CLK, MACB_CLK_DIV32);
++	else
++		ncfgr = MACB_BF(CLK, MACB_CLK_DIV64);
++
++	return ncfgr;
++}
++
+ int macb_eth_initialize(int id, void *regs, unsigned int phy_addr)
+ {
+ 	struct macb_device *macb;
+ 	struct eth_device *netdev;
+-	unsigned long macb_hz;
+ 	u32 ncfgr;
+ 
+ 	macb = malloc(sizeof(struct macb_device));
+@@ -567,26 +608,14 @@ int macb_eth_initialize(int id, void *regs, unsigned int phy_addr)
+ 	netdev->recv = macb_recv;
+ 	netdev->write_hwaddr = macb_write_hwaddr;
+ 
+-	/*
+-	 * Do some basic initialization so that we at least can talk
+-	 * to the PHY
+-	 */
+-	macb_hz = get_macb_pclk_rate(id);
+-	if (macb_hz < 20000000)
+-		ncfgr = MACB_BF(CLK, MACB_CLK_DIV8);
+-	else if (macb_hz < 40000000)
+-		ncfgr = MACB_BF(CLK, MACB_CLK_DIV16);
+-	else if (macb_hz < 80000000)
+-		ncfgr = MACB_BF(CLK, MACB_CLK_DIV32);
+-	else
+-		ncfgr = MACB_BF(CLK, MACB_CLK_DIV64);
+-
+-	macb_writel(macb, NCFGR, ncfgr);
+-
+ 	/* Cadence GEM has a module ID of 2. */
+ 	if (MACB_BFEXT(IDNUM, macb_readl(macb, MID)) == 0x2)
+ 		macb->is_gem = 1;
+ 
++	/* Set MII management clock divider */
++	ncfgr = macb_mdc_clk_div(macb, id);
++	macb_writel(macb, NCFGR, ncfgr);
++
+ 	eth_register(netdev);
+ 
+ #if defined(CONFIG_CMD_MII)
+diff --git a/drivers/net/macb.h b/drivers/net/macb.h
+index a2913f2..b08a057 100644
+--- a/drivers/net/macb.h
++++ b/drivers/net/macb.h
+@@ -147,6 +147,10 @@
+ #define MACB_IRXFCS_OFFSET			19
+ #define MACB_IRXFCS_SIZE			1
+ 
++/* GEM specific NCFGR bitfields. */
++#define GEM_CLK_OFFSET				18
++#define GEM_CLK_SIZE				3
++
+ /* Bitfields in NSR */
+ #define MACB_NSR_LINK_OFFSET			0
+ #define MACB_NSR_LINK_SIZE			1
+@@ -261,6 +265,14 @@
+ #define MACB_CLK_DIV32				2
+ #define MACB_CLK_DIV64				3
+ 
++/* GEM specific constants for CLK. */
++#define GEM_CLK_DIV8				0
++#define GEM_CLK_DIV16				1
++#define GEM_CLK_DIV32				2
++#define GEM_CLK_DIV48				3
++#define GEM_CLK_DIV64				4
++#define GEM_CLK_DIV96				5
++
+ /* Constants for MAN register */
+ #define MACB_MAN_SOF				1
+ #define MACB_MAN_WRITE				1
+-- 
+1.7.0.4
+

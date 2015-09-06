@@ -1,0 +1,133 @@
+From 4f536f37b14599adf59a1b908fa69309e2ccaced Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Wed, 15 Jun 2011 14:34:15 +0100
+Subject: [PATCH 17/70] pc7308: Add support for factory reset request detection
+
+If the reset button is held down for a specified timeout
+then a factory reset request is generated.
+---
+ board/picochip/pc7308/pc7308.c   |   61 +++++++++++++++++++++++++++++++++++++-
+ include/configs/picochippc7308.h |   14 +++++++++
+ 2 files changed, 74 insertions(+), 1 deletions(-)
+
+diff --git a/board/picochip/pc7308/pc7308.c b/board/picochip/pc7308/pc7308.c
+index 6026714..e7a6809 100644
+--- a/board/picochip/pc7308/pc7308.c
++++ b/board/picochip/pc7308/pc7308.c
+@@ -78,6 +78,21 @@ static struct mux_def pc30xx_hnb_mux[] = {
+ DECLARE_GLOBAL_DATA_PTR;
+ 
+ /* Prototypes--------------------------------------------------------------- */
++/*!
++ * \brief Return the state of the reset switch
++ *
++ * \return 1 is the reset switch is pressed
++ *         0 if the reset switch is not pressed
++ */
++static int is_reset_pressed (void);
++
++/*!
++ * \brief Perform factory reset action
++ *
++ * \return 0 if success
++ *         not 0 for failure
++ */
++static int factory_reset_action (void);
+ 
+ /* Functions --------------------------------------------------------------- */
+ 
+@@ -151,6 +166,28 @@ int checkboard (void)
+ 	return 0;
+ }
+ 
++static int is_reset_pressed (void)
++{
++	unsigned int reset = 0;
++
++	reset =
++	    picoxcell_read_register (PICOXCELL_GPIO_BASE +
++				     GPIO_EXT_PORT_A_REG_OFFSET);
++	reset &= CONFIG_SYS_RESET_PIN;
++
++	return !reset;
++}
++
++static int factory_reset_action (void)
++{
++        /* This function needs to implement some as yet
++         * undefined action
++         */
++        printf ("Factory reset requested...\n");
++
++        return 0;
++}
++
+ /*****************************************************************************
+  *
+  * misc_init_r()
+@@ -162,7 +199,29 @@ int checkboard (void)
+  *****************************************************************************/
+ int misc_init_r (void)
+ {
+-	/* Not used right now, function template left here as a place holder */
++	unsigned int timebase = 0;
++	int reset_held = 1;
++
++	/* Check to see if the reset push button is being held down.
++	 * If it is held down long enough we will be looking at a
++	 * factory reset situation...
++	 */
++	if (is_reset_pressed ()) {
++
++		timebase = get_timer (0);
++		do {
++			if (!is_reset_pressed ()) {
++				reset_held = 0;
++				break;
++			}
++		}
++		while (get_timer (timebase) < CONFIG_SYS_RESET_DELAY);
++
++		if (reset_held) {
++			/* Factory reset requested */
++                        factory_reset_action ();
++                }
++	}
+ 	return 0;
+ }
+ 
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index 4a17459..bcf92fa 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -20,6 +20,7 @@
+ 
+ #include <asm/arch/picoxcell.h>
+ #include <asm/arch/uart.h>
++#include <asm/arch/gpio.h>
+ #include <asm/sizes.h>
+ 
+ /*-----------------------------------------------------------------------------
+@@ -338,6 +339,19 @@
+                                 "8M(KernelB),"\
+                                 "80M(FileSystemB)"
+ 
++/* Timeout delay (mS) used for checking for the reset button
++ * being held down at boot time.
++ */
++#define CONFIG_SYS_RESET_DELAY (10000)
++
++/* Which arm gpio pin the reset button is wired to */
++#define CONFIG_SYS_RESET_PIN   (GPIO_BIT_6)
++
++/* The check for factory reset request is contained in the
++ * misc_init_r function
++ */
++#define CONFIG_MISC_INIT_R
++
+ /*-----------------------------------------------------------------------
+  * Environment Configuration
+  */
+-- 
+1.7.0.4
+

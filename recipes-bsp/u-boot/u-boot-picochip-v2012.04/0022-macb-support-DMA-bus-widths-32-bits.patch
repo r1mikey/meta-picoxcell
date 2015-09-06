@@ -1,0 +1,102 @@
+From 573e06a9186e29c18f8875b437590115b0bb55ab Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 29 Jul 2011 16:48:52 +0100
+Subject: [PATCH 22/70] macb: support DMA bus widths > 32 bits
+
+Some GEM implementations may support DMA bus widths up to 128 bits.
+We can get the maximum supported DMA bus width from the design
+configuration register so use that to program the device up.
+---
+ drivers/net/macb.c |   25 +++++++++++++++++++++++++
+ drivers/net/macb.h |   18 ++++++++++++++++++
+ 2 files changed, 43 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index fd99cdb..41f1dce 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -574,6 +574,27 @@ static u32 macb_mdc_clk_div(struct macb_device *macb, int id)
+ 	return ncfgr;
+ }
+ 
++/*
++ * Get the DMA bus width field of the network configuration register that we
++ * should program.  We find the width from decoding the design configuration
++ * register to find the maximum supported data bus width.
++ */
++static u32 macb_dbw(struct macb_device *macb)
++{
++	if (!macb->is_gem)
++		return 0;
++
++	switch (GEM_BFEXT(DBWDEF, gem_readl(macb, DCFG1))) {
++	case 4:
++		return GEM_BF(DBW, GEM_DBW128);
++	case 2:
++		return GEM_BF(DBW, GEM_DBW64);
++	case 1:
++	default:
++		return GEM_BF(DBW, GEM_DBW32);
++	}
++}
++
+ int macb_eth_initialize(int id, void *regs, unsigned int phy_addr)
+ {
+ 	struct macb_device *macb;
+@@ -614,6 +635,10 @@ int macb_eth_initialize(int id, void *regs, unsigned int phy_addr)
+ 
+ 	/* Set MII management clock divider */
+ 	ncfgr = macb_mdc_clk_div(macb, id);
++
++	/* Set up the DMA bus width */
++	ncfgr |= macb_dbw(macb);
++
+ 	macb_writel(macb, NCFGR, ncfgr);
+ 
+ 	eth_register(netdev);
+diff --git a/drivers/net/macb.h b/drivers/net/macb.h
+index b08a057..c0759cf 100644
+--- a/drivers/net/macb.h
++++ b/drivers/net/macb.h
+@@ -80,6 +80,13 @@
+ #define GEM_HRT					0x0084
+ #define GEM_SA1B				0x0088
+ #define GEM_SA1T				0x008C
++#define GEM_DCFG1				0x0280
++#define GEM_DCFG2				0x0284
++#define GEM_DCFG3				0x0288
++#define GEM_DCFG4				0x028c
++#define GEM_DCFG5				0x0290
++#define GEM_DCFG6				0x0294
++#define GEM_DCFG7				0x0298
+ 
+ /* Bitfields in NCR */
+ #define MACB_LB_OFFSET				0
+@@ -150,6 +157,13 @@
+ /* GEM specific NCFGR bitfields. */
+ #define GEM_CLK_OFFSET				18
+ #define GEM_CLK_SIZE				3
++#define GEM_DBW_OFFSET				21
++#define GEM_DBW_SIZE				2
++
++/* Constants for data bus width. */
++#define GEM_DBW32				0
++#define GEM_DBW64				1
++#define GEM_DBW128				2
+ 
+ /* Bitfields in NSR */
+ #define MACB_NSR_LINK_OFFSET			0
+@@ -259,6 +273,10 @@
+ #define MACB_REV_OFFSET				0
+ #define MACB_REV_SIZE				16
+ 
++/* Bitfields in DCFG1. */
++#define GEM_DBWDEF_OFFSET			25
++#define GEM_DBWDEF_SIZE				3
++
+ /* Constants for CLK */
+ #define MACB_CLK_DIV8				0
+ #define MACB_CLK_DIV16				1
+-- 
+1.7.0.4
+

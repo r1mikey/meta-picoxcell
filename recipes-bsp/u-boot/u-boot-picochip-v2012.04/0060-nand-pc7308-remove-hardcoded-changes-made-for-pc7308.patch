@@ -1,0 +1,38 @@
+From 71fa5b7a3c6e56d0eb6275a74d3c4bc45b0503d5 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Tue, 30 Oct 2012 15:44:35 +0000
+Subject: [PATCH 60/70] nand/pc7308: remove hardcoded changes made for pc7308 platform
+
+This commit effectively reverts changes made in this file in the
+following commits:
+
+cbb30b7694228dc35370b4c3ccdd80e1825112f1
+52924bb879da65b985f8b1721764375f6ac44838
+
+This commit forms part of the resolution of Mantis Issue #10680
+---
+ drivers/mtd/nand/nand_base.c |    6 ------
+ 1 files changed, 0 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/mtd/nand/nand_base.c b/drivers/mtd/nand/nand_base.c
+index cd0feda..8172063 100644
+--- a/drivers/mtd/nand/nand_base.c
++++ b/drivers/mtd/nand/nand_base.c
+@@ -2570,14 +2570,8 @@ static int nand_flash_detect_onfi(struct mtd_info *mtd, struct nand_chip *chip,
+ 	if (!mtd->name)
+ 		mtd->name = p->model;
+ 	mtd->writesize = le32_to_cpu(p->byte_per_page);
+-#ifdef CONFIG_PICOCHIP_PC30XX
+-	mtd->writesize = 2048;
+-#endif
+         mtd->erasesize = le32_to_cpu(p->pages_per_block) * mtd->writesize;
+ 	mtd->oobsize = le16_to_cpu(p->spare_bytes_per_page);
+-#ifdef CONFIG_PICOCHIP_PC30XX
+-	mtd->oobsize = 64;
+-#endif
+         chip->chipsize = (uint64_t)le32_to_cpu(p->blocks_per_lun) * mtd->erasesize;
+ 	*busw = 0;
+ 	if (le16_to_cpu(p->features) & 1)
+-- 
+1.7.0.4
+

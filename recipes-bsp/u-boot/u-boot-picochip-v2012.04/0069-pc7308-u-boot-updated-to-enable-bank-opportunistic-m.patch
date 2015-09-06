@@ -1,0 +1,30 @@
+From fbe9260254bdf5441c536702ed3b6f04c395b569 Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Wed, 2 Oct 2013 17:41:37 +0100
+Subject: [PATCH 69/70] pc7308: u-boot updated to enable bank opportunistic mode
+
+This issue forms part of the resolution to Mantis Issue #11219
+---
+ board/picochip/pc73032/pc30xx_memif_init.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/board/picochip/pc73032/pc30xx_memif_init.c b/board/picochip/pc73032/pc30xx_memif_init.c
+index c7af80b..c4cd6ce 100644
+--- a/board/picochip/pc73032/pc30xx_memif_init.c
++++ b/board/picochip/pc73032/pc30xx_memif_init.c
+@@ -240,10 +240,10 @@ void pc30xx_memif_shared_init (void)
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+ 			      MEMIF_SHD_REGS_SDRAM_AXI_CONFIG_OFFSET, &value, 1);
+ 
+-	/* Bank opportunistic mode disabled,
++	/* Bank opportunistic mode enabled,
+ 	 * Bank row pre-charge mode enabled
+ 	 */
+-	value = 0x2;
++	value = 0x3;
+ 	axi2cfg_config_write (MEMIF_SHD_AEID,
+ 			      MEMIF_SHD_REGS_SDRAM_ARB_CFG_OFFSET, &value, 1);
+ 
+-- 
+1.7.0.4
+

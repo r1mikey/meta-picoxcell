@@ -1,0 +1,989 @@
+From 35d22de28fd555a3b5304fa42ed66ca1078270e5 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Tue, 19 Apr 2011 10:25:00 +0100
+Subject: [PATCH 09/70] pc7308: add support for the pc7308 platform
+
+---
+ MAKEALL                                         |    1 +
+ Makefile                                        |    3 +
+ arch/arm/include/asm/arch-picoxcell/picoxcell.h |    1 +
+ board/picochip/pc7308/Makefile                  |   47 +++
+ board/picochip/pc7308/config.mk                 |   18 +
+ board/picochip/pc7308/lowlevel_init.S           |  101 ++++++
+ board/picochip/pc7308/mt29f2g08aadwp.c          |  183 +++++++++++
+ board/picochip/pc7308/pc7308.c                  |  144 +++++++++
+ boards.cfg                                      |    1 +
+ include/configs/picochippc7308.h                |  384 +++++++++++++++++++++++
+ 10 files changed, 883 insertions(+), 0 deletions(-)
+ create mode 100644 board/picochip/pc7308/Makefile
+ create mode 100644 board/picochip/pc7308/config.mk
+ create mode 100644 board/picochip/pc7308/lowlevel_init.S
+ create mode 100644 board/picochip/pc7308/mt29f2g08aadwp.c
+ create mode 100644 board/picochip/pc7308/pc7308.c
+ create mode 100644 include/configs/picochippc7308.h
+
+diff --git a/MAKEALL b/MAKEALL
+index 5efb424..77e91a3 100755
+--- a/MAKEALL
++++ b/MAKEALL
+@@ -322,6 +322,7 @@ LIST_ARM9="$(boards_by_cpu arm920t)	\
+ 	$(boards_by_cpu arm926ejs)	\
+ 	$(boards_by_cpu arm925t)	\
+ 	picochippc7302          \
++        picochippc7308          \
+ "
+ 
+ #########################################################################
+diff --git a/Makefile b/Makefile
+index b7a3ccf..075d8aa 100644
+--- a/Makefile
++++ b/Makefile
+@@ -691,6 +691,9 @@ picochippc7302nand_config :	unconfig
+ picochippc7302nor_config :	unconfig
+ 	@$(MKCONFIG) $(@:_config=) arm arm926ejs pc7302 picochip picoxcell
+ 
++picochippc7308_config :	unconfig
++	@$(MKCONFIG) $(@:_config=) arm arm926ejs pc7308 picochip picoxcell
++
+ #########################################################################
+ ## ARM1176 Systems
+ #########################################################################
+diff --git a/arch/arm/include/asm/arch-picoxcell/picoxcell.h b/arch/arm/include/asm/arch-picoxcell/picoxcell.h
+index bba63e6..685ef2c 100644
+--- a/arch/arm/include/asm/arch-picoxcell/picoxcell.h
++++ b/arch/arm/include/asm/arch-picoxcell/picoxcell.h
+@@ -85,5 +85,6 @@
+ #define PC313_DEVICE_ID             (0x20)
+ #define PC323_DEVICE_ID             (0x21)
+ #define PC333_DEVICE_ID             (0x22)
++#define PC3008_DEVICE_ID            (0x30)
+ 
+ #endif /* __PICOXCELL_H__ */
+diff --git a/board/picochip/pc7308/Makefile b/board/picochip/pc7308/Makefile
+new file mode 100644
+index 0000000..f33e902
+--- /dev/null
++++ b/board/picochip/pc7308/Makefile
+@@ -0,0 +1,47 @@
++#/*****************************************************************************
++# * $picoChipHeaderSubst$
++# *****************************************************************************/
++
++#/*!
++#* \file Makefile
++#* \brief Used during the build process.
++#*
++#* Copyright (c) 2006-2011 Picochip Ltd
++#*
++#* This program is free software; you can redistribute it and/or modify
++#* it under the terms of the GNU General Public License version 2 as
++#* published by the Free Software Foundation.
++#*
++#* All enquiries to support@picochip.com
++#*/
++
++include $(TOPDIR)/config.mk
++
++LIB	= $(obj)lib$(BOARD).o
++
++SOBJS-y := lowlevel_init.o
++
++COBJS-y	:= pc7308.o
++COBJS-y += mt29f2g08aadwp.o
++
++SRCS    := $(SOBJS:.o=.S) $(COBJS-y:.o=.c)
++OBJS    := $(addprefix $(obj),$(COBJS-y))
++SOBJS	:= $(addprefix $(obj),$(SOBJS-y))
++
++$(LIB):	$(obj).depend $(OBJS) $(SOBJS)
++	$(call cmd_link_o_target, $(OBJS) $(SOBJS))
++
++clean:
++	rm -f $(SOBJS) $(OBJS)
++
++distclean:	clean
++	rm -f $(LIB) core *.bak $(obj).depend
++
++#########################################################################
++
++# defines $(obj).depend target
++include $(SRCTREE)/rules.mk
++
++sinclude $(obj).depend
++
++#########################################################################
+diff --git a/board/picochip/pc7308/config.mk b/board/picochip/pc7308/config.mk
+new file mode 100644
+index 0000000..b5703b6
+--- /dev/null
++++ b/board/picochip/pc7308/config.mk
+@@ -0,0 +1,18 @@
++#/*****************************************************************************
++# * $picoChipHeaderSubst$
++# *****************************************************************************/
++
++#/*!
++#* \file config.mk
++#* \brief Used during the build process.
++#*
++#* Copyright (c) 2006-2011 Picochip Ltd
++#*
++#* This program is free software; you can redistribute it and/or modify
++#* it under the terms of the GNU General Public License version 2 as
++#* published by the Free Software Foundation.
++#*
++#* All enquiries to support@picochip.com
++#*/
++
++PLATFORM_CPPFLAGS += -DPICOCHIP_PLATFORM_VERSION=\"$(DISTRO_VERSION)\"
+diff --git a/board/picochip/pc7308/lowlevel_init.S b/board/picochip/pc7308/lowlevel_init.S
+new file mode 100644
+index 0000000..a3dc7f6
+--- /dev/null
++++ b/board/picochip/pc7308/lowlevel_init.S
+@@ -0,0 +1,101 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file lowlevel_init.S
++* \brief Various low level setup functions.
++*
++* Copyright (c) 2006-2011 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++/* Includes ---------------------------------------------------------------- */
++#include <config.h>
++#include <asm/arch/picoxcell.h>
++#include <asm/arch/gpio.h>
++#include <asm/arch/axi2cfg.h>
++
++/* Macros ------------------------------------------------------------------ */
++/* This gives us a peripheral bus base address of 0x80000000
++   and a memory region size of 4Mbytes */
++#define PERIPHERAL_BUS_SETUP        0x8000000D
++
++#define ASSERT_BOOT_ERROR_PIN       0
++#define NEGATE_BOOT_ERROR_PIN       1
++#define BOOT_ERROR_PIN_IS_OUTPUT    1
++
++/* Prototypes--------------------------------------------------------------- */
++
++/* Macros ------------------------------------------------------------------ */
++
++/* Functions --------------------------------------------------------------- */
++
++/*****************************************************************************
++ *
++ * lowlevel_init
++ *
++ * Description: Perform some low level PC3008 initialisation
++ *
++ *****************************************************************************/
++ .global lowlevel_init
++
++ lowlevel_init:
++
++        /* U-Boot will have been loaded by a first stage bootloader,
++         * so any low level initialisation will have happened in there
++         */
++        mov	pc, lr
++
++/*****************************************************************************
++ *
++ * initialiseBootErrorPin
++ *
++ * Initialise the GPIO that is used as the Boot Error pin
++ *
++ *****************************************************************************/
++ initialiseBootErrorPin:
++
++        /* Get base address of the arm gpio block */
++        ldr     r0,=PICOXCELL_GPIO_BASE
++
++        /* Negate the Boot error pin (in the data register) */
++        ldr     r1,[r0, #GPIO_SW_PORT_D_DR_REG_OFFSET]
++        orr     r1,r1,#NEGATE_BOOT_ERROR_PIN
++        str     r1,[r0, #GPIO_SW_PORT_D_DR_REG_OFFSET]
++
++        /* Set up Boot Error pin to be an output */
++        ldr     r1,[r0, #GPIO_SW_PORT_D_DDR_REG_OFFSET]
++        orr     r1,r1,#BOOT_ERROR_PIN_IS_OUTPUT
++        str     r1,[r0, #GPIO_SW_PORT_D_DDR_REG_OFFSET]
++
++        /* Return to my caller */
++        mov	pc, lr
++
++/*****************************************************************************
++ *
++ * assertBootError
++ *
++ * Assert the Boot Error pin.
++ *
++ * Note: On the PC7308 platform this is used to illuminate an led.
++ *
++ *****************************************************************************/
++ .global assertBootError
++
++ assertBootError:
++
++        /* Get base address of the arm gpio block */
++        ldr     r0,=PICOXCELL_GPIO_BASE
++
++        /* Assert the Boot Error pin */
++        mov     r1, #ASSERT_BOOT_ERROR_PIN
++        str     r1,[r0, #GPIO_SW_PORT_D_DR_REG_OFFSET]
++
++        /* Return to my caller */
++        mov	pc, lr
+diff --git a/board/picochip/pc7308/mt29f2g08aadwp.c b/board/picochip/pc7308/mt29f2g08aadwp.c
+new file mode 100644
+index 0000000..9c1408c
+--- /dev/null
++++ b/board/picochip/pc7308/mt29f2g08aadwp.c
+@@ -0,0 +1,183 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file .mt29f2g08aadwp.c
++* \brief Support for the NAND Flash device fitted on PC7302 platform.
++*
++* Copyright (c) 2009-2011 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++/*
++ * (C) Copyright 2009 SAGEM Communications
++ * (C) Copyright 2006 DENX Software Engineering
++ *
++ * See file CREDITS for list of people who contributed to this
++ * project.
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation; either version 2 of
++ * the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
++ * MA 02111-1307 USA
++ */
++
++/* Includes ---------------------------------------------------------------- */
++#include <common.h>
++
++#ifdef CONFIG_CMD_NAND
++
++#include <asm/arch/picoxcell.h>
++#include <nand.h>
++#include <asm/arch/utilities.h>
++#include <asm/arch/picoxcell_gpio.h>
++#include <asm/arch/mux.h>
++#include <asm/arch/axi2cfg.h>
++
++/* Constants --------------------------------------------------------------- */
++static unsigned int cle;
++static unsigned int ale;
++static unsigned int nce;
++static unsigned int rdy;
++
++/* Functions --------------------------------------------------------------- */
++/*!
++ * \brief Hardware specific access to control-lines
++ * \param mtd, pointer to the mtd_info structure
++ * \param dat, data to write to the device
++ * \param ctrl, control data to set up the transaction
++ *
++ */
++static void mt29f2g08aadwp_cmd_ctrl (struct mtd_info *mtd,
++				     int dat, unsigned int ctrl)
++{
++	struct nand_chip *this = mtd->priv;
++
++	if (ctrl & NAND_CTRL_CHANGE) {
++		if (ctrl & NAND_NCE) {
++			/* Assert the chip select */
++			picoxcell_gpio_set_value (nce, 0);
++
++			if (ctrl & NAND_CLE) {
++				/* Assert CLE */
++				picoxcell_gpio_set_value (cle, 1);
++			} else {
++				/* Negate CLE */
++				picoxcell_gpio_set_value (cle, 0);
++			}
++
++			if (ctrl & NAND_ALE) {
++				/* Assert ALE */
++				picoxcell_gpio_set_value (ale, 1);
++			} else {
++				/* Negate ALE */
++				picoxcell_gpio_set_value (ale, 0);
++			}
++		} else {
++			/* Negate the chip select */
++			picoxcell_gpio_set_value (nce, 1);
++		}
++	}
++
++	/* If we have data to write, write it */
++	if (dat != NAND_CMD_NONE) {
++		*(volatile unsigned char *)(this->IO_ADDR_W) =
++		    (unsigned char)dat;
++	}
++}
++
++/*!
++ * \brief Return the state of the NAND busy output
++ * \param mtd, pointer to the mtd_info structure
++ * \return 0 - nand busy
++ *         1 - nand ready
++ *
++ */
++static int mt29f2g08aadwp_dev_ready (struct mtd_info *mtd)
++{
++	return picoxcell_gpio_get_value (rdy);
++}
++
++/*
++ * Board-specific NAND initialization. The following members of the
++ * argument are board-specific (per include/linux/mtd/nand.h):
++ * - IO_ADDR_R?: address to read the 8 I/O lines of the flash device
++ * - IO_ADDR_W?: address to write the 8 I/O lines of the flash device
++ * - hwcontrol: hardwarespecific function for accesing control-lines
++ * - dev_ready: hardwarespecific function for  accesing device ready/busy line
++ * - enable_hwecc?: function to enable (reset)  hardware ecc generator. Must
++ *   only be provided if a hardware ECC is available
++ * - eccmode: mode of ecc, see defines
++ * - chip_delay: chip dependent delay for transfering data from array to
++ *   read regs (tR)
++ * - options: various chip options. They can partly be set to inform
++ *   nand_scan about special functionality. See the defines for further
++ *   explanation
++ * Members with a "?" were not set in the merged testing-NAND branch,
++ * so they are not set here either.
++ */
++int board_nand_init (struct nand_chip *nand)
++{
++	/* Define which gpio bits are used to control the NAND Flash
++	 *
++	 * Note: These pin definitions mean that we can only use NAND
++	 *       Flash if we are running U-Boot from RAM and have NOT booted
++	 *       the device from parallel NOR Flash.
++	 */
++	if (is_pc3x3 ()) {
++		cle = PC3X3_GPIO_PIN_ARM_4;
++		ale = PC3X3_GPIO_PIN_ARM_3;
++		nce = PC3X3_GPIO_PIN_ARM_2;
++		rdy = PC3X3_GPIO_PIN_ARM_1;
++
++		/* Setup some pin muxing */
++		picoxcell_group_set_mux ("pai_tx_data[3:0]", MUX_PERIPHERAL);
++		picoxcell_pin_set_mux (PC3X3_GPIO_PIN_ARM_4, MUX_ARM);
++	} else {
++		cle = PC302_GPIO_PIN_ARM_4;
++		ale = PC302_GPIO_PIN_ARM_3;
++		nce = PC302_GPIO_PIN_ARM_2;
++		rdy = PC302_GPIO_PIN_ARM_1;
++
++		/* Setup some pin muxing */
++		picoxcell_pin_set_mux (PC302_GPIO_PIN_ARM_4, MUX_ARM);
++	}
++
++	/* Request the required gpio pins */
++	(void)picoxcell_gpio_request (rdy);
++	(void)picoxcell_gpio_request (nce);
++	(void)picoxcell_gpio_request (ale);
++	(void)picoxcell_gpio_request (cle);
++
++	/* Initialise the pin direction */
++	(void)picoxcell_gpio_direction_input (rdy);
++	(void)picoxcell_gpio_direction_output (nce, 1);
++	(void)picoxcell_gpio_direction_output (ale, 0);
++	(void)picoxcell_gpio_direction_output (cle, 0);
++
++	/* Populate some members of the nand structure */
++	nand->cmd_ctrl = mt29f2g08aadwp_cmd_ctrl;
++	nand->ecc.mode = NAND_ECC_SOFT;
++	nand->dev_ready = mt29f2g08aadwp_dev_ready;
++	nand->IO_ADDR_R = (void __iomem *)CONFIG_SYS_NAND_BASE;
++	nand->IO_ADDR_W = (void __iomem *)CONFIG_SYS_NAND_BASE;
++
++	return 0;
++}
++#endif /* CONFIG_CMD_NAND */
+diff --git a/board/picochip/pc7308/pc7308.c b/board/picochip/pc7308/pc7308.c
+new file mode 100644
+index 0000000..bd4b700
+--- /dev/null
++++ b/board/picochip/pc7308/pc7308.c
+@@ -0,0 +1,144 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file pc7308.c
++* \brief Various useful functions for use on a PC7308 Platform.
++*
++* Copyright (c) 2006-2011 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++/* Includes ---------------------------------------------------------------- */
++#include <common.h>
++#include <asm/arch/mux.h>
++#include <asm/arch/utilities.h>
++#include <asm/arch/picoxcell_gpio.h>
++
++/* Macros ------------------------------------------------------------------ */
++
++/* Constants --------------------------------------------------------------- */
++DECLARE_GLOBAL_DATA_PTR;
++
++/* Prototypes--------------------------------------------------------------- */
++
++/* Functions --------------------------------------------------------------- */
++
++/*****************************************************************************
++ *
++ * show_boot_progress()
++ *
++ * Purpose: Indicate booting progress
++ *
++ * Note: see U-Boot README for a list of 'progress' values.
++ *
++ *****************************************************************************/
++#if defined(CONFIG_SHOW_BOOT_PROGRESS)
++void show_boot_progress (int progress)
++{
++	printf ("Boot reached stage %d\n", progress);
++}
++#endif
++
++/*****************************************************************************
++ *
++ * board_init()
++ *
++ * Purpose: Hardware platform initialisation functions
++ *
++ * Returns: 0 - Success
++ *
++ *****************************************************************************/
++int board_init (void)
++{
++	/* Setup some kernel boot parameters */
++	gd->bd->bi_boot_params = 0x00000100;
++
++	/* Setup the machine type */
++	gd->bd->bi_arch_number = MACH_TYPE_PC7308;
++
++	gd->flags = 0;
++
++	/* Enable the Instruction Cache */
++	icache_enable ();
++
++	/* Start timer #0 */
++	picoxcell_timer_start (0);
++
++	/* Initialise the gpio muxing library */
++	picoxcell_muxing_init ();
++
++	/* Initialise the gpio library */
++	picoxcell_gpio_init ();
++
++	return 0;
++}
++
++/*****************************************************************************
++ *
++ * checkboard()
++ *
++ * Purpose: Display some useful hardware platform information.
++ *
++ * Returns: 0 - Success
++ *
++ *****************************************************************************/
++int checkboard (void)
++{
++	printf ("Board: Picochip " PICOCHIP_PLATFORM " \n");
++
++	return 0;
++}
++
++/*****************************************************************************
++ *
++ * misc_init_r()
++ *
++ * Purpose: Miscellaneous platform dependent initialisations
++ *
++ * Returns: 0 - Success
++ *
++ *****************************************************************************/
++int misc_init_r (void)
++{
++	/* Not used right now, function template left here as a place holder */
++	return 0;
++}
++
++/*****************************************************************************
++ *
++ * dram_init()
++ *
++ * Purpose: Initialize the DDR SDRAM size info.
++ *
++ * Returns: 0 - Success
++ *
++ *****************************************************************************/
++int dram_init (void)
++{
++	gd->ram_size = get_ram_size ((long *)PHYS_SDRAM_1, PHYS_SDRAM_1_SIZE);
++
++	return 0;
++}
++
++/*****************************************************************************
++ *
++ * dram_init_banksize()
++ *
++ * Purpose: Initialize the the bd_t dram bank info.
++ *
++ * Returns: 0 - Success
++ *
++ *****************************************************************************/
++void dram_init_banksize (void)
++{
++	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
++	gd->bd->bi_dram[0].size =
++	    get_ram_size ((long *)PHYS_SDRAM_1, PHYS_SDRAM_1_SIZE);
++}
+diff --git a/boards.cfg b/boards.cfg
+index d903edd..92c57ed 100644
+--- a/boards.cfg
++++ b/boards.cfg
+@@ -181,6 +181,7 @@ integratorap_cm946es         arm         arm946es    integrator          armltd
+ integratorcp_cm946es         arm         arm946es    integrator          armltd         -               integratorcp:CM946ES
+ picochippc7302nor            arm         arm926ejs   pc7302              picochip       picoxcell
+ picochippc7302nand           arm         arm926ejs   pc7302              picochip       picoxcell
++picochippc7308               arm         arm926ejs   pc7308              picochip       picoxcell
+ ca9x4_ct_vxp                 arm         armv7       vexpress            armltd
+ am335x_evm                   arm         armv7       am335x              ti             am33xx
+ highbank                     arm         armv7       highbank            -              highbank
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+new file mode 100644
+index 0000000..3c05745
+--- /dev/null
++++ b/include/configs/picochippc7308.h
+@@ -0,0 +1,384 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file picochippc7308.h
++* \brief Configuration file for U-Boot on the PC7308 platform.
++*
++* Copyright (c) 2006-2011 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++#ifndef __CONFIG_PC7308_H
++#define __CONFIG_PC7308_H
++
++#include <asm/arch/picoxcell.h>
++#include <asm/arch/uart.h>
++#include <asm/sizes.h>
++
++/*-----------------------------------------------------------------------------
++ * Platform Identification Stuff
++ */
++#define PICOCHIP "picochip"
++
++/* Which hardware platform I am destined for */
++#define PICOCHIP_PLATFORM "PC7308"
++
++/* Specific version of this build */
++#ifndef PICOCHIP_PLATFORM_VERSION
++#define PICOCHIP_PLATFORM_VERSION "dummy_release"
++#endif /* PICOCHIP_PLATFORM_VERSION */
++
++#define CONFIG_IDENT_STRING " "PICOCHIP"-"PICOCHIP_PLATFORM_VERSION \
++                            "-"PICOCHIP_PLATFORM
++
++/*-----------------------------------------------------------------------------
++ * High Level Configuration Options
++ */
++/* Running on Picochip PC3X2 Silicon */
++#define CONFIG_PICOCHIP_PC3X2
++
++/* Running on Picochip PC3X3 Silicon */
++#define CONFIG_PICOCHIP_PC3X3
++
++/* Running on Picochip PC3008 Silicon */
++#define CONFIG_PICOCHIP_PC3008
++
++/* Running on a Picochip PC7302 platform */
++#define CONFIG_PICOCHIP_PC7308
++
++/* Base address of the onchip SRAM */
++#define PICOXCELL_ONCHIP_SRAM_BASE      (PICOXCELL_SRAM_BASE)
++#define PICOXCELL_ONCHIP_SRAM_SIZE      (PICOXCELL_SRAM_SIZE)
++
++/* ARM Sub-system peripherals are clocked at 200MHz */
++#define PICOXCELL_AHB_CLOCK_FREQ        (200000000)
++
++/* Don't use Interrupts */
++#undef CONFIG_USE_IRQ
++
++/* A time tick is 1 millisecond (this is NOT CPU tick) */
++#define CONFIG_SYS_HZ               (1000)
++
++/* Display board info */
++#define CONFIG_DISPLAY_BOARDINFO
++
++/* Display cpu info */
++#define CONFIG_DISPLAY_CPUINFO
++
++/* Build U-Boot to run at this address */
++#define CONFIG_SYS_TEXT_BASE        0x06000000
++
++/* Do not reboot the platform on a panic */
++#define CONFIG_PANIC_HANG
++
++/* Do not perform any low level initialisation
++ *
++ * Note: We will be running from ram and U-Boot
++ *       will have been loaded by a first stage bootloader
++ */
++#define CONFIG_SKIP_LOWLEVEL_INIT
++
++/*-----------------------------------------------------------------------
++ * Stack Sizes
++ *
++ * The stack sizes are set up in arch/arm/lib/board.c using the
++ * settings below
++ */
++#define CONFIG_STACKSIZE	(SZ_256K) 	    /* regular stack */
++#ifdef CONFIG_USE_IRQ
++#define CONFIG_STACKSIZE_IRQ	(SZ_4K)             /* IRQ stack */
++#define CONFIG_STACKSIZE_FIQ	(SZ_4K)    	    /* FIQ stack */
++#endif /* CONFIG_USE_IRQ */
++
++/*-----------------------------------------------------------------------
++ * Initial Stack Pointer
++ *
++ * Note: This is only used before U-Boot relocation takes place.
++ *       The global data is stored above this address, whilst the stack
++ *       is below this address. After relocation the stack is automatically
++ *       moved to the top of the available sdram.
++ */
++#define CONFIG_SYS_INIT_SP_ADDR (0x00001000)
++
++/*-----------------------------------------------------------------------------
++ * Size of malloc() pool
++ */
++#define CONFIG_SYS_MALLOC_LEN   (SZ_1M)
++
++/*-----------------------------------------------------------------------------
++ * Linux Kernel Stuff
++ */
++/* Allow passing of command line args (bootargs) to the linux kernel*/
++#define CONFIG_CMDLINE_TAG          1
++#define CONFIG_SETUP_MEMORY_TAGS    1
++
++/*-----------------------------------------------------------------------------
++ * DDR2 RAM Memory Map
++ *
++ * We have 1 linear addressable RAM bank
++ *
++ * Note: CONFIG_SYS_SDRAM_BASE must start at 0
++ */
++#define CONFIG_SYS_SDRAM_BASE	(0x00000000)
++#define CONFIG_NR_DRAM_BANKS    (1)
++#define PHYS_SDRAM_1		(PICOXCELL_DDRBANK_BASE)
++#define PHYS_SDRAM_1_SIZE	(SZ_128M)
++
++/*-----------------------------------------------------------------------------
++ * SPI Flash Memory Stuff
++ */
++#define CONFIG_DW_SPI
++
++/* Include generic support for SPI Flash memory devices */
++#define CONFIG_SPI_FLASH
++
++/* Include support for SPI Flash memory devices from ST Micro/Numonyx */
++#define CONFIG_SPI_FLASH_STMICRO
++
++/*-----------------------------------------------------------------------------
++ * NAND Flash Memory Stuff
++ */
++#define CONFIG_DENALI_NAND
++
++#define CONFIG_SYS_NAND_BASE        (PICOXCELL_EBI_CS2_BASE)
++#define CONFIG_SYS_NAND_MAX_CHIPS   (1)
++#define CONFIG_SYS_MAX_NAND_DEVICE  (1)
++
++/* Define Flash memory sector size */
++#define NAND_FLASH_SECTOR_SIZE      (SZ_128K)
++
++/* Needed for nand_util.c */
++#define CONFIG_SYS_64BIT_VSPRINTF
++
++/* No flash memory in the system */
++#define CONFIG_SYS_NO_FLASH
++
++/*-----------------------------------------------------------------------------
++ * U-Boot Environment Stuff
++ */
++
++/* NAND Flash memory map
++ *
++ *  Block 0-7   Reserved
++ *  Block 8-11  U-Boot image
++ *  Block 12-15 Reserved
++ *  Block 16-19 Redundant U-Boot image
++ *  Block 20-23 Reserved
++ *  Block 24    U-Boot env variables
++ *  Block 25    Redundant U-Boot env variables
++ *  Block 26-27 Reserved
++ *  Block 28    Linux kernel...
++ *
++ */
++#define CONFIG_ENV_IS_IN_NAND
++
++/* Offset address of environment variables */
++#define CONFIG_ENV_OFFSET           (NAND_FLASH_SECTOR_SIZE * 24)
++
++/* Size of environment variables */
++#define CONFIG_ENV_SIZE             (NAND_FLASH_SECTOR_SIZE)
++
++/* Offset address of the redundant envinronment variables */
++#define CONFIG_ENV_OFFSET_REDUND    (NAND_FLASH_SECTOR_SIZE * 25)
++
++/* Turn off wite protection for vendor parameters */
++#define CONFIG_ENV_OVERWRITE
++
++/*-----------------------------------------------------------------------------
++ * Timer Stuff
++ */
++#define CONFIG_SYS_TIMERBASE    (PICOXCELL_TIMER_BASE)
++
++/*-----------------------------------------------------------------------------
++ * Ethernet Stuff
++ */
++#define CONFIG_DW_EMAC
++#define CONFIG_PHY_ADDR         (1)
++#define CONFIG_NET_MULTI
++
++/*-----------------------------------------------------------------------------
++ * Serial Port Stuff
++ */
++#define CONFIG_SYS_NS16550
++#define CONFIG_SYS_NS16550_SERIAL
++#define CONFIG_SYS_NS16550_REG_SIZE (-4)
++#define CONFIG_SYS_NS16550_CLK      (PICOXCELL_AHB_CLOCK_FREQ)
++#define CONFIG_SYS_NS16550_COM1     (PICOXCELL_UART1_BASE)
++
++/* Our uart registers need 32 bit access */
++#define CONFIG_SYS_NS16550_MEM32
++
++/* Console on Uart #0 */
++#define CONFIG_CONS_INDEX	    (1)
++
++/* Table of supported baud rates */
++#define CONFIG_SYS_BAUDRATE_TABLE   { 9600, 19200,  \
++                                      38400, 57600, \
++                                      115200, 230400 }
++
++/*-----------------------------------------------------------------------------
++ * U-Boot Memory Test (mtest command) Stuff
++ */
++/* Default start address for memory test */
++#define CONFIG_SYS_MEMTEST_START    (PICOXCELL_ONCHIP_SRAM_BASE)
++
++/* Default end address for memory test */
++#define CONFIG_SYS_MEMTEST_END  (CONFIG_SYS_MEMTEST_START + \
++                                 PICOXCELL_ONCHIP_SRAM_SIZE - 1)
++
++/* Define this to use the super duper memory test */
++#define CONFIG_SYS_ALT_MEMTEST
++
++/* Use Uart #1 scratch pad reg */
++#define CONFIG_SYS_MEMTEST_SCRATCH  (PICOXCELL_UART1_BASE + \
++                                     UART_SCRATCH_REG_OFFSET)
++
++/*-----------------------------------------------------------------------------
++ * U-Boot Supported Commands
++ */
++#include "config_cmd_default.h"
++
++/* Include 'ping' command */
++#define CONFIG_CMD_PING
++
++/* Include commands for SPI Flash memory */
++#define CONFIG_CMD_SF
++
++/* Include commands for NAND Flash Memory */
++#define CONFIG_CMD_NAND
++
++/* Turn off a bunch of default commands */
++#undef CONFIG_CMD_BOOTD
++#undef CONFIG_CMD_CONSOLE
++#undef CONFIG_CMD_ECHO
++#undef CONFIG_CMD_EDITENV
++#undef CONFIG_CMD_FPGA
++#undef CONFIG_CMD_ITEST
++#undef CONFIG_CMD_IMLS
++#undef CONFIG_CMD_LOADB
++#undef CONFIG_CMD_LOADS
++#undef CONFIG_CMD_NFS
++#undef CONFIG_CMD_SETGETDCR
++#undef CONFIG_CMD_SOURCE
++#undef CONFIG_CMD_XIMG
++
++#ifdef CONFIG_SYS_NO_FLASH
++#undef CONFIG_CMD_FLASH
++#endif /* CONFIG_SYS_NO_FLASH */
++
++/* Use the HUSH parser */
++#define CONFIG_SYS_HUSH_PARSER
++
++#ifdef  CONFIG_SYS_HUSH_PARSER
++/* This defines the secondary prompt string */
++#define CONFIG_SYS_PROMPT_HUSH_PS2 "> "
++#endif /* CONFIG_SYS_HUSH_PARSER */
++
++/* Enable command line editing and history */
++#define CONFIG_CMDLINE_EDITING
++
++/*-----------------------------------------------------------------------------
++ * Miscellaneous Configurable Options...
++ */
++/* Use 'long' help messages */
++#define CONFIG_SYS_LONGHELP
++
++/* Monitor Command Prompt */
++#define CONFIG_SYS_PROMPT   "=> "
++
++/* Console I/O Buffer Size*/
++#define CONFIG_SYS_CBSIZE   (SZ_1K)
++
++/* Print buffer size */
++#define CONFIG_SYS_PBSIZE   (CONFIG_SYS_CBSIZE + \
++                             sizeof(CONFIG_SYS_PROMPT) + 16)
++
++/* Maximum number of command args */
++#define CONFIG_SYS_MAXARGS  (16)
++
++/* Boot Argument Buffer Size */
++#define CONFIG_SYS_BARGSIZE (CONFIG_SYS_CBSIZE)
++
++/* Default load address for tftp, bootm and friends */
++#define CONFIG_SYS_LOAD_ADDR    0x00200000
++#define CONFIG_LOADADDR         CONFIG_SYS_LOAD_ADDR
++
++/*-----------------------------------------------------------------------
++ * Environment Configuration
++ */
++
++#if defined(CONFIG_DW_EMAC)
++
++/* Picochip OUI
++ *
++ * Note: The MAC Address defined by 'CONFIG_ETHADDR' is based on
++ * Picochip's OUI,see http://standards.ieee.org/regauth/oui/index.shtml
++ * for more information. It will need to be modified for each and every
++ * individual hardware platform.
++ */
++#define CONFIG_ETHADDR          00:15:E1:00:00:00
++
++/* Picochip default for testing, will need noodling by users */
++#define CONFIG_IPADDR           172.17.16.248
++
++#define CONFIG_HOSTNAME	        picopc7308
++#define CONFIG_ROOTPATH	        /var/nfspc7308
++#define CONFIG_BOOTFILE	        uImage-pc7308
++
++#define CONFIG_SERVERIP         172.17.7.100
++#define CONFIG_GATEWAYIP        172.17.0.1
++#define CONFIG_NETMASK          255.255.0.0
++
++/* Enable the MII utility commands */
++#undef CONFIG_CMD_MII
++
++#endif /* CONFIG_DW_EMAC */
++
++/* This is the offset from the start of NAND Flash
++ * to where the Linux kernel can be found.
++ */
++#define CONFIG_NAND_KERNEL_OFFSET  0x00380000
++
++/* Time in seconds before autoboot, -1 disables auto-boot */
++#define CONFIG_BOOTDELAY        5
++
++/* The boot command will set bootargs */
++#undef  CONFIG_BOOTARGS
++
++/* Default console baud rate */
++#define CONFIG_BAUDRATE	        115200
++
++/* Unless specified here we'll just rely on the kernel default */
++#define OTHERBOOTARGS
++
++/* Define the UBIFS root filesystem partition for NAND Flash */
++#define NAND_UBIFS_ROOT         5
++
++/* Define CONFIG_BOOTCOMMAND as */
++#define CONFIG_BOOTCOMMAND  "run nand_ubifs"
++
++#define	CONFIG_EXTRA_ENV_SETTINGS				            \
++   "othbootargs=" MK_STR (OTHERBOOTARGS) "\0"                               \
++   "netdev=eth0\0"                                                          \
++   "consoledev=ttyS0\0"                                                     \
++   "kernel_nand_offset=" MK_STR(CONFIG_NAND_KERNEL_OFFSET) "\0"             \
++   "nand_ubifs_root=" MK_STR(NAND_UBIFS_ROOT) "\0"		            \
++   "nand_ubifs=run nand_ubifs_args; nboot $loadaddr 0 "                     \
++   "$kernel_nand_offset; bootm $loadaddr\0"                                 \
++   "fixed_nfs=run nfs_args; tftp; bootm\0"				    \
++   "nand_ubifs_args=setenv bootargs root=ubi0:rootfs rw rootfstype=ubifs "  \
++   "ubi.mtd=$nand_ubifs_root,2048 "                                         \
++   "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
++   "console=$consoledev,$baudrate $othbootargs;\0"                          \
++   "nfs_args=setenv bootargs root=/dev/nfs rw nfsroot=$serverip:$rootpath " \
++   "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
++   "console=$consoledev,$baudrate $othbootargs;\0"                          \
++
++#endif /* __CONFIG_PC7308_H */
+-- 
+1.7.0.4
+

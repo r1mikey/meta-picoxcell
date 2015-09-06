@@ -1,0 +1,41 @@
+From c93e90dcca0e61c5c24ed6ed9bd76ee7edd92577 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Tue, 8 May 2012 13:35:34 +0100
+Subject: [PATCH 38/70] picoxcell: implement get_tbclk()
+
+---
+ arch/arm/cpu/arm926ejs/picoxcell/timer.c |   14 +++++++++++++-
+ 1 files changed, 13 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/timer.c b/arch/arm/cpu/arm926ejs/picoxcell/timer.c
+index 9254063..fadf02e 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/timer.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/timer.c
+@@ -6,7 +6,7 @@
+  * \file timer.c
+  * \brief Useful functions for timer implementation.
+  *
+- * Copyright (c) 2006-2011 Picochip Ltd
++ * Copyright (c) 2006-2012 Picochip Ltd
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -146,3 +146,15 @@ void __udelay (unsigned long usec)
+ 
+ 	while (get_ticks () < tmp) ;
+ }
++
++/*
++ * This function is derived from PowerPC code (timebase clock frequency).
++ * On ARM it returns the number of timer ticks per second.
++ */
++ulong get_tbclk (void)
++{
++	ulong tbclk;
++
++	tbclk = CONFIG_SYS_HZ;
++	return tbclk;
++}
+-- 
+1.7.0.4
+

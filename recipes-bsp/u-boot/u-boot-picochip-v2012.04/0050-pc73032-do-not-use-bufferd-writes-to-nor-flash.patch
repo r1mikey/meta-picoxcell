@@ -1,0 +1,30 @@
+From 202e5110e471b6fd2d7b924e87e67a4dc520cedc Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 19 Oct 2012 09:49:09 +0100
+Subject: [PATCH 50/70] pc73032: do not use bufferd writes to nor flash
+
+Using buffered write fails when trying to write to the nor flash
+(Samsung K9F2G08UOC) on the pc73032 platform.
+
+This commit forms part of the resolution of Mantis Issue #10715
+---
+ include/configs/picochippc73032nor.h |    3 ---
+ 1 files changed, 0 insertions(+), 3 deletions(-)
+
+diff --git a/include/configs/picochippc73032nor.h b/include/configs/picochippc73032nor.h
+index 9c2924d..955d721 100644
+--- a/include/configs/picochippc73032nor.h
++++ b/include/configs/picochippc73032nor.h
+@@ -26,9 +26,6 @@
+ /* Define Flash memory sector size */
+ #define FLASH_SECTOR_SIZE	(SZ_128K)
+ 
+-/* Use buffered writes to flash memory */
+-#define CONFIG_SYS_FLASH_USE_BUFFER_WRITE
+-
+ /* Maximum number of memory banks (devices) */
+ #define CONFIG_SYS_MAX_FLASH_BANKS  (1)
+ 
+-- 
+1.7.0.4
+

@@ -1,0 +1,109 @@
+From 8ad48574542052b7e89839dc84ac0639f2ecdc04 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Wed, 11 May 2011 11:57:11 +0100
+Subject: [PATCH 13/70] picoxcell: change the way picoxcell part names are reported
+
+---
+ arch/arm/cpu/arm926ejs/picoxcell/cpu.c          |   31 ++--------------------
+ arch/arm/cpu/arm926ejs/picoxcell/utilities.c    |   24 ++++++++++++-----
+ arch/arm/include/asm/arch-picoxcell/utilities.h |    4 +-
+ 3 files changed, 22 insertions(+), 37 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/cpu.c b/arch/arm/cpu/arm926ejs/picoxcell/cpu.c
+index 27f9c7f..f67b701 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/cpu.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/cpu.c
+@@ -41,35 +41,10 @@
+  *****************************************************************************/
+ int print_cpuinfo (void)
+ {
+-	unsigned int device_id, device_rev;
++	const char *part = picoxcell_get_partname ();
++	unsigned int revision = picoxcell_get_revision ();
+ 
+-	printf ("CPU:   ");
+-
+-	device_id = picoxcell_get_device_id ();	/* Read the device id */
+-	device_rev = picoxcell_get_revision ();	/* Read the revision code */
+-
+-	switch (device_id) {
+-	case PC302_DEVICE_ID:
+-		printf ("PC302 Rev %01d\n", device_rev);
+-		break;
+-	case PC312_DEVICE_ID:
+-		printf ("PC312 Rev %01d\n", device_rev);
+-		break;
+-	case PC313_DEVICE_ID:
+-		printf ("PC313 Rev %01d\n", device_rev);
+-		break;
+-	case PC323_DEVICE_ID:
+-		printf ("PC323 Rev %01d\n", device_rev);
+-		break;
+-	case PC333_DEVICE_ID:
+-		printf ("PC333 Rev %01d\n", device_rev);
+-		break;
+-	case PC3008_DEVICE_ID:
+-		printf ("PC3008 Rev %01d\n", device_rev);
+-		break;
+-	default:
+-		panic ("Unknown device type !\n");
+-	}
++	printf ("CPU:   %s revision %u\n", part, revision);
+ 
+ 	return 0;
+ }
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+index e249fc3..7b22c30 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+@@ -56,14 +56,24 @@ picoxcell_write_register (const unsigned int value, const unsigned int address)
+ 	*(volatile unsigned int *)address = value;
+ }
+ 
+-unsigned int picoxcell_get_device_id (void)
++const char *picoxcell_get_partname (void)
+ {
+-	unsigned int device_id;
+-
+-	device_id = axi2cfg_readl (AXI2CFG_DEVICE_ID_REG_OFFSET);
+-	device_id &= DEVICE_ID_MASK;
+-
+-	return device_id;
++	unsigned long dev_id = axi2cfg_readl (AXI2CFG_DEVICE_ID_REG_OFFSET);
++	const char *part = "<unknown>";
++
++	if (dev_id == 0x8003)
++		part = "pc302";
++	else if (dev_id == 0x8007)
++		part = "pc312";
++	else if (dev_id == 0x20)
++		part = "pc313";
++	else if (dev_id == 0x21)
++		part = "pc323";
++	else if (dev_id == 0x22)
++		part = "pc333";
++	else if (dev_id == 0x30)
++		part = "pc3008";
++	return part;
+ }
+ 
+ unsigned int picoxcell_get_revision (void)
+diff --git a/arch/arm/include/asm/arch-picoxcell/utilities.h b/arch/arm/include/asm/arch-picoxcell/utilities.h
+index a065a78..a39c095 100644
+--- a/arch/arm/include/asm/arch-picoxcell/utilities.h
++++ b/arch/arm/include/asm/arch-picoxcell/utilities.h
+@@ -41,9 +41,9 @@ picoxcell_write_register (const unsigned int value, const unsigned int address);
+ /*!
+  * \brief Read the device identification code from the axi2cfg block
+  *
+- * \return The value read
++ * \return The device partname
+  */
+-unsigned int picoxcell_get_device_id (void);
++const char *picoxcell_get_partname(void);
+ 
+ /*!
+  * \brief Read the device revision from the axi2cfg block
+-- 
+1.7.0.4
+

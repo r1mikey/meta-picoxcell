@@ -1,0 +1,35 @@
+From 7176e4f2046adcef799fcc0f8bc395fa061b73d7 Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Thu, 4 Apr 2013 19:22:19 +0100
+Subject: [PATCH 65/70] pc73032: updated memif setting to match latest version (2A) of MS-111-258-RP
+ Mantis Issue #11020
+
+---
+ board/picochip/pc73032/pc30xx_memif_init.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/board/picochip/pc73032/pc30xx_memif_init.c b/board/picochip/pc73032/pc30xx_memif_init.c
+index f384fcd..01c2a85 100644
+--- a/board/picochip/pc73032/pc30xx_memif_init.c
++++ b/board/picochip/pc73032/pc30xx_memif_init.c
+@@ -46,7 +46,7 @@
+ #define TOGCNT100N_VALUE (0x00000028)
+ #define TOGCNT1U_VALUE (0x00000190)
+ #define TRAS_VALUE (0x0000000F)
+-#define TRC_VALUE (0x00000014)
++#define TRC_VALUE (0x00000015)
+ #define TRCD_VALUE (0x00000006)
+ #define TREFI_VALUE (0x0000004E)
+ #define TRFC_VALUE (0x0000002C)
+@@ -65,7 +65,7 @@
+ #define TZQCSI_VALUE (0x00000064)
+ 
+ #define DCR_VALUE (0x0000000B)
+-#define DTPR0_VALUE (0x288F6690)
++#define DTPR0_VALUE (0x2A8F6690)
+ #define DTPR1_VALUE (0x092C0090)
+ #define DTPR2_VALUE (0x1001AA00)
+ #define MR0_VALUE (0x00000420)
+-- 
+1.7.0.4
+

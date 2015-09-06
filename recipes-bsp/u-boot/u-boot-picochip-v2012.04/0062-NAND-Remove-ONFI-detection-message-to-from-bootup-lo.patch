@@ -1,0 +1,54 @@
+From 0640d56e2a44917efa9351dcf84fe0f5821c88fd Mon Sep 17 00:00:00 2001
+From: Stefan Roese <sr@denx.de>
+Date: Mon, 7 May 2012 21:29:30 +0000
+Subject: [PATCH 62/70] NAND: Remove ONFI detection message to from bootup log
+
+Without this patch, boot shows this messages upon NAND detection:
+
+NAND:  ONFI flash detected
+ONFI param page 0 valid
+ONFI flash detected
+ONFI param page 0 valid
+128 MiB
+
+With this patch, its back to the U-Boot "standard":
+
+NAND:  128 MiB
+
+Tested on x600 (SPEAr600).
+
+Signed-off-by: Stefan Roese <sr@denx.de>
+Cc: Amit Virdi <amit.virdi@st.com>
+Cc: Vipin Kumar <vipin.kumar@st.com>
+Cc: Scott Wood <scottwood@freescale.com>
+Acked-by: Amit Virdi <amit.virdi@st.com>
+Signed-off-by: Scott Wood <scott@tyr.buserror.net>
+(cherry picked from commit e52fee9b04157c3f5bd73bb122e95d0c6ebb2270)
+---
+ drivers/mtd/nand/nand_base.c |    5 +++--
+ 1 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/mtd/nand/nand_base.c b/drivers/mtd/nand/nand_base.c
+index 8172063..8f56423 100644
+--- a/drivers/mtd/nand/nand_base.c
++++ b/drivers/mtd/nand/nand_base.c
+@@ -2530,13 +2530,14 @@ static int nand_flash_detect_onfi(struct mtd_info *mtd, struct nand_chip *chip,
+ 		chip->read_byte(mtd) != 'F' || chip->read_byte(mtd) != 'I')
+ 		return 0;
+ 
+-	printk(KERN_INFO "ONFI flash detected\n");
++	MTDDEBUG(MTD_DEBUG_LEVEL0, "ONFI flash detected\n");
+ 	chip->cmdfunc(mtd, NAND_CMD_PARAM, 0, -1);
+ 	for (i = 0; i < 3; i++) {
+ 		chip->read_buf(mtd, (uint8_t *)p, sizeof(*p));
+ 		if (onfi_crc16(ONFI_CRC_BASE, (uint8_t *)p, 254) ==
+ 				le16_to_cpu(p->crc)) {
+-			printk(KERN_INFO "ONFI param page %d valid\n", i);
++			MTDDEBUG(MTD_DEBUG_LEVEL0,
++				 "ONFI param page %d valid\n", i);
+ 			break;
+ 		}
+ 	}
+-- 
+1.7.0.4
+

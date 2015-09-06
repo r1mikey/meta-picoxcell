@@ -1,0 +1,29 @@
+From 30412808ff9869e631415bc705097769ecc924fc Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <fovsoft@gmail.com>
+Date: Fri, 27 Jan 2012 10:43:09 +0000
+Subject: [PATCH 35/70] pc7308: remove the mii commands from the build
+
+We do not need these commands anymore as the Ethernet Phy on the MB700000
+Ethernet plug in module for the PC7308 platform is now fully functional.
+
+It also saves approx 10 kBytes code size.
+---
+ include/configs/picochippc7308.h |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index de511db..0611d79 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -385,7 +385,7 @@
+ #define CONFIG_NETMASK          255.255.0.0
+ 
+ /* Enable the MII utility commands */
+-#define CONFIG_CMD_MII
++#undef CONFIG_CMD_MII
+ 
+ #endif /* CONFIG_MACB */
+ 
+-- 
+1.7.0.4
+

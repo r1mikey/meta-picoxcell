@@ -1,0 +1,335 @@
+From 112cfa185d04640032e4450618ffc199aba70a85 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 15 Apr 2011 20:05:40 +0100
+Subject: [PATCH 03/70] picoxcell: use the common serial driver
+
+---
+ arch/arm/cpu/arm926ejs/pc3xx/Makefile   |    1 -
+ arch/arm/cpu/arm926ejs/pc3xx/serial.c   |  279 -------------------------------
+ include/configs/picochippc7302-common.h |   12 +-
+ 3 files changed, 8 insertions(+), 284 deletions(-)
+ delete mode 100644 arch/arm/cpu/arm926ejs/pc3xx/serial.c
+
+diff --git a/arch/arm/cpu/arm926ejs/pc3xx/Makefile b/arch/arm/cpu/arm926ejs/pc3xx/Makefile
+index 3d5d755..91d9792 100644
+--- a/arch/arm/cpu/arm926ejs/pc3xx/Makefile
++++ b/arch/arm/cpu/arm926ejs/pc3xx/Makefile
+@@ -45,7 +45,6 @@ LIB	= $(obj)lib$(SOC).o
+ SOBJS-y := reset.o
+ 
+ COBJS-y += emac.o
+-COBJS-y += serial.o
+ COBJS-y += timer.o
+ COBJS-y += spi.o
+ COBJS-y += utilities.o
+diff --git a/arch/arm/cpu/arm926ejs/pc3xx/serial.c b/arch/arm/cpu/arm926ejs/pc3xx/serial.c
+deleted file mode 100644
+index a51b657..0000000
+--- a/arch/arm/cpu/arm926ejs/pc3xx/serial.c
++++ /dev/null
+@@ -1,279 +0,0 @@
+-/*****************************************************************************
+- * $picoChipHeaderSubst$
+- *****************************************************************************/
+-
+-/*!
+-* \file serial.c
+-* \brief Functions for providing serial i/o via a UART.
+-*
+-* Copyright (c) 2006-2011 Picochip Ltd
+-*
+-* This program is free software; you can redistribute it and/or modify
+-* it under the terms of the GNU General Public License version 2 as
+-* published by the Free Software Foundation.
+-*
+-* All enquiries to support@picochip.com
+-*/
+-
+-#include <common.h>
+-
+-#ifdef CONFIG_DW_APB_UART
+-
+-/* Includes ----------------------------------------------------------------- */
+-#include <asm/arch/pc302.h>
+-#include <asm/arch/uart.h>
+-
+-/* Macros ------------------------------------------------------------------- */
+-#if !defined(CONFIG_CONS_INDEX)
+-#error	"No console index specified."
+-#elif (CONFIG_CONS_INDEX < 1) || (CONFIG_CONS_INDEX > 2)
+-#error	"Invalid console index value specified."
+-#endif
+-
+-#define IO_WRITE(addr, val) (*(volatile unsigned int *)(addr) = (val))
+-#define IO_READ(addr) (*(volatile unsigned int *)(addr))
+-
+-/* uart[] array is zero based whilst CONFIG_CONS_INDEX is '1' based */
+-#define CONSOLE_PORT (CONFIG_CONS_INDEX - 1)
+-
+-/* Constants ---------------------------------------------------------------- */
+-DECLARE_GLOBAL_DATA_PTR;
+-
+-static volatile unsigned char *const uart[] =
+-{
+-    (void *)PC302_UART1_BASE,
+-    (void *)PC302_UART2_BASE
+-};
+-
+-/* Prototypes---------------------------------------------------------------- */
+-/*!
+- *
+- * Write a character to the uart
+- *
+- * Note: This function will block if the Tx FIFO is full
+- *
+- * \param uartNumb Which uart to use
+- * \param c The character to output
+- *
+- */
+-static void dwApbUart_putc (int uartNum, char c);
+-
+-/*!
+- *
+- * Read a character from the uart
+- *
+- * Note: This function will block if the Rx FIFO is empty
+- *
+- * \param uartNumb Which uart to use
+- */
+-static int dwApbUart_getc (int uartNum);
+-
+-/*!
+- *
+- * Test if there is a character available to be read from the uart
+- *
+- * \param uartNumb Which uart to use
+- *
+- * \return 0 no character availbale to be read
+- *         1 character available to be read
+- *
+- */
+-static int dwApbUart_tstc (int uartNum);
+-
+-/* Functions ---------------------------------------------------------------- */
+-
+-/*****************************************************************************
+- *
+- * serial_init()
+- *
+- * Purpose: Initialise the console uart
+- *
+- * Args:
+- *
+- * Returns:
+- *
+- *****************************************************************************/
+-int serial_init (void)
+-{
+-    unsigned int lcr_register;
+-    unsigned int uart_num = CONSOLE_PORT;
+-
+-    /* Wait while the UART is busy... */
+-    while ( ( IO_READ ( uart[uart_num] + UART_UART_STATUS_REG_OFFSET ) &
+-             UART_UART_STATUS_BUSY_MASK ) );
+-
+-    /* Setup the UART for...
+-     *  8 data bit word length
+-     *  1 stop bit
+-     *  parity disabled
+-     */
+-    lcr_register = IO_READ ( uart[uart_num] + UART_LINE_CTRL_REG_OFFSET );
+-    lcr_register = lcr_register | UART_LINE_CTRL_DLS_8BITS;
+-    lcr_register = lcr_register & UART_LINE_CTRL_1STOP_BIT;
+-    lcr_register = lcr_register & UART_LINE_CTRL_PARITY_DISABLE;
+-    IO_WRITE ( ( uart[uart_num] + UART_LINE_CTRL_REG_OFFSET ), lcr_register );
+-
+-    /* Enable the Rx & Tx fifos */
+-    IO_WRITE ( ( uart[uart_num] + UART_FIFO_CTRL_REG_OFFSET ),
+-                UART_FIFO_CTRL_ENABLE );
+-
+-    /* Set up the baudrate */
+-    serial_setbrg ();
+-
+-    return (0);
+-}
+-
+-/*****************************************************************************
+- *
+- * serial_setbtg()
+- *
+- * Purpose: set the uart baud rate.
+- *
+- * Args:
+- *
+- * Returns:
+- *
+- *****************************************************************************/
+-void serial_setbrg (void)
+-{
+-    unsigned int lcr_register;
+-    unsigned int uart_num = CONSOLE_PORT;
+-    unsigned int baudrate = gd->baudrate;
+-    unsigned int divisor;
+-
+-    /* Wait while the UART is busy... */
+-    while ( ( IO_READ ( uart[uart_num] + UART_UART_STATUS_REG_OFFSET ) &
+-              UART_UART_STATUS_BUSY_MASK ) );
+-
+-    /* Set the Divisor Latch Access Bit in the Line Control Register */
+-    lcr_register = IO_READ ( uart[uart_num] + UART_LINE_CTRL_REG_OFFSET );
+-    lcr_register = lcr_register | UART_LINE_CTRL_DLAB_MASK;
+-    IO_WRITE ( ( uart[uart_num] + UART_LINE_CTRL_REG_OFFSET ), lcr_register );
+-
+-    /* Baud Rate = Baud Rate Gen Clock / (16 * divisor) */
+-    divisor = DIV_ROUND_UP(CONFIG_DW_APB_UART_CLOCK, (16 * baudrate));
+-
+-    IO_WRITE ( ( uart[uart_num] + UART_DIVISOR_LOW_REG_OFFSET ),
+-               ( divisor & UART_DIVISOR_MASK ) );
+-    IO_WRITE ( ( uart[uart_num] + UART_DIVISOR_HIGH_REG_OFFSET ),
+-               ( ( divisor >> 8 ) & UART_DIVISOR_MASK ) );
+-
+-    /* Clear the Divisor Latch Access Bit in the Line Control Register */
+-    lcr_register = IO_READ ( uart[uart_num] + UART_LINE_CTRL_REG_OFFSET );
+-    lcr_register = lcr_register  & ~(UART_LINE_CTRL_DLAB_MASK);
+-    IO_WRITE ( ( uart[uart_num] + UART_LINE_CTRL_REG_OFFSET ), lcr_register );
+-}
+-
+-/*****************************************************************************
+- *
+- * serial_putc()
+- *
+- * Purpose: Write a character to the console uart
+- *
+- * Args:
+- *
+- * Returns:
+- *
+- *****************************************************************************/
+-void serial_putc (const char c)
+-{
+-    if (c == '\n')
+-    {
+-        dwApbUart_putc (CONSOLE_PORT, '\r');
+-    }
+-
+-    dwApbUart_putc (CONSOLE_PORT, c);
+-}
+-
+-/*****************************************************************************
+- *
+- * serial_puts()
+- *
+- * Purpose: Write a string to the console uart
+- *
+- * Args:
+- *
+- * Returns:
+- *
+- *****************************************************************************/
+-
+-void serial_puts (const char *s)
+-{
+-
+-    while (*s)
+-    {
+-        serial_putc(*s++);
+-    }
+-
+-}
+-
+-/*****************************************************************************
+- *
+- * serial_getc()
+- *
+- * Purpose: Read a character from the console uart
+- *
+- * Args:
+- *
+- * Returns:
+- *
+- *****************************************************************************/
+-
+-int serial_getc (void)
+-{
+-
+-    return dwApbUart_getc(CONSOLE_PORT);
+-
+-}
+-
+-/*****************************************************************************
+- *
+- * serial_tstc()
+- *
+- * Purpose: Test to see if there are any characters availale to be read
+- *          from the console uart
+- *
+- * Args:
+- *
+- * Returns: 0 - no character availbale in the Rx FIFO
+- *          1 - character available in the Rx FIFO
+- *
+- *****************************************************************************/
+-int serial_tstc (void)
+-{
+-
+-    return dwApbUart_tstc(CONSOLE_PORT);
+-
+-}
+-
+-static void dwApbUart_putc (int uartNum, char c)
+-{
+-
+-    /* Wait until there is space in the Tx FIFO... */
+-    while ( !( IO_READ ( uart[uartNum] + UART_LINE_STATUS_REG_OFFSET ) &
+-               UART_LINE_STATUS_THRE_MASK ) );
+-
+-    /* Send the character */
+-    IO_WRITE ( ( uart[uartNum] + UART_TX_HOLDING_REG_OFFSET ), c);
+-}
+-
+-static int dwApbUart_getc (int uartNum)
+-{
+-
+-    /* Wait until there is a character in the Rx FIFO... */
+-    while (!dwApbUart_tstc(CONSOLE_PORT));
+-
+-    /* Go and read a character... */
+-    return ( IO_READ ( uart[uartNum] + UART_RX_BUFFER_REG_OFFSET ) );
+-
+-}
+-
+-static int dwApbUart_tstc (int uartNum)
+-{
+-
+-    return ( IO_READ ( uart[uartNum] + UART_LINE_STATUS_REG_OFFSET ) &
+-             UART_LINE_STATUS_DATA_READY_MASK );
+-
+-}
+-
+-#endif /* CONFIG_DW_APB_UART */
+diff --git a/include/configs/picochippc7302-common.h b/include/configs/picochippc7302-common.h
+index bac3309..fabb66b 100644
+--- a/include/configs/picochippc7302-common.h
++++ b/include/configs/picochippc7302-common.h
+@@ -162,10 +162,14 @@
+ /*-----------------------------------------------------------------------------
+  * Serial Port Stuff
+  */
+-#define CONFIG_DW_APB_UART
+-
+-/* Baud rate generators clock with a 3.6864 MHz clock */
+-#define CONFIG_DW_APB_UART_CLOCK    (3686400)
++#define CONFIG_SYS_NS16550
++#define CONFIG_SYS_NS16550_SERIAL
++#define CONFIG_SYS_NS16550_REG_SIZE (-4)
++#define CONFIG_SYS_NS16550_CLK      (3686400)
++#define CONFIG_SYS_NS16550_COM1     (PC302_UART1_BASE)
++
++/* Our uart registers need 32 bit access */ 
++#define CONFIG_SYS_NS16550_MEM32
+ 
+ /* Console on Uart #0 */
+ #define CONFIG_CONS_INDEX	    (1)
+-- 
+1.7.0.4
+

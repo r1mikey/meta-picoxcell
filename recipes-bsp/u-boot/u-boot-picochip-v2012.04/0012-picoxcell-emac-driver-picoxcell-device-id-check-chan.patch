@@ -1,0 +1,144 @@
+From cbabb35c4793ff61d1dcbdc9f074feba3ec2ab61 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Wed, 11 May 2011 11:16:26 +0100
+Subject: [PATCH 12/70] picoxcell: emac driver picoxcell device id check changed
+
+---
+ arch/arm/cpu/arm926ejs/picoxcell/emac.c         |    8 +--
+ arch/arm/cpu/arm926ejs/picoxcell/utilities.c    |   60 +++++++++++-----------
+ arch/arm/include/asm/arch-picoxcell/utilities.h |    4 +-
+ 3 files changed, 35 insertions(+), 37 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/emac.c b/arch/arm/cpu/arm926ejs/picoxcell/emac.c
+index 7b38b52..e4aba1a 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/emac.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/emac.c
+@@ -357,8 +357,7 @@ static int emac_init_phy (struct eth_device *dev)
+ {
+ 	struct emac_priv *priv = dev->priv;
+ 
+-	unsigned int device_id = picoxcell_get_device_id ();
+-	unsigned int device_rev = picoxcell_get_revision ();
++	unsigned int rev = picoxcell_get_revision ();
+ 
+ 	/* Setup the MDIO bus for Phy communications */
+ 	emac_init_mdio ();
+@@ -367,9 +366,8 @@ static int emac_init_phy (struct eth_device *dev)
+ 	 * Reduced MII (RMII) connected Ethernet Phy then we need the
+ 	 * link speed to be 100 mbps.
+ 	 */
+-	if (((device_id == PC302_DEVICE_ID)
+-	     || (device_id == PC312_DEVICE_ID))
+-	    && (device_rev == PC3X2_REV_D) && picoxcell_get_rmii_enabled ()) {
++	if (picoxcell_is_pc3x2 () && (rev == PC3X2_REV_D)
++	    && picoxcell_is_rmii_enabled ()) {
+ 		/* Are we already set for 100 mpbs ? */
+ 		emac_phy_get_link_status (dev);
+ 		if (priv->speed == EMAC_PHY_SPEED_100) {
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+index f50124d..e249fc3 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/utilities.c
+@@ -76,7 +76,7 @@ unsigned int picoxcell_get_revision (void)
+ 	return revision_code;
+ }
+ 
+-unsigned int picoxcell_get_rmii_enabled (void)
++unsigned int picoxcell_is_rmii_enabled (void)
+ {
+ 	unsigned int rmii_enabled;
+ 
+@@ -99,42 +99,42 @@ void syscfg_update (u32 mask, u32 val)
+ 	axi2cfg_writel (tmp, AXI2CFG_SYS_CONFIG_REG_OFFSET);
+ }
+ 
+-int picoxcell_is_pc3x2(void)
++int picoxcell_is_pc3x2 (void)
+ {
+-        unsigned long device_id = axi2cfg_readl (AXI2CFG_DEVICE_ID_REG_OFFSET);
+-
+-        switch (device_id) {
+-        case 0x8003:
+-        case 0x8007:
+-                return 1;
+-        default:
+-                return 0;
+-        }
++	unsigned long device_id = axi2cfg_readl (AXI2CFG_DEVICE_ID_REG_OFFSET);
++
++	switch (device_id) {
++	case 0x8003:
++	case 0x8007:
++		return 1;
++	default:
++		return 0;
++	}
+ }
+ 
+-int picoxcell_is_pc3x3(void)
++int picoxcell_is_pc3x3 (void)
+ {
+-        unsigned long device_id = axi2cfg_readl (AXI2CFG_DEVICE_ID_REG_OFFSET);
+-
+-        switch (device_id) {
+-        case 0x20:
+-        case 0x21:
+-        case 0x22:
+-                return 1;
+-        default:
+-                return 0;
+-        }
++	unsigned long device_id = axi2cfg_readl (AXI2CFG_DEVICE_ID_REG_OFFSET);
++
++	switch (device_id) {
++	case 0x20:
++	case 0x21:
++	case 0x22:
++		return 1;
++	default:
++		return 0;
++	}
+ }
+ 
+-int picoxcell_is_pc30xx(void)
++int picoxcell_is_pc30xx (void)
+ {
+-        unsigned long device_id = axi2cfg_readl (AXI2CFG_DEVICE_ID_REG_OFFSET);
+-        switch (device_id) {
+-        case 0x30 ... 0x3F:
+-                return 1;
+-        default:
+-                return 0;
+-        }
++	unsigned long device_id = axi2cfg_readl (AXI2CFG_DEVICE_ID_REG_OFFSET);
++	switch (device_id) {
++	case 0x30 ... 0x3F:
++		return 1;
++	default:
++		return 0;
++	}
+ }
+ 
+ void picoxcell_timer_start (int timer)
+diff --git a/arch/arm/include/asm/arch-picoxcell/utilities.h b/arch/arm/include/asm/arch-picoxcell/utilities.h
+index 599a5bf..a065a78 100644
+--- a/arch/arm/include/asm/arch-picoxcell/utilities.h
++++ b/arch/arm/include/asm/arch-picoxcell/utilities.h
+@@ -53,12 +53,12 @@ unsigned int picoxcell_get_device_id (void);
+ unsigned int picoxcell_get_revision (void);
+ 
+ /*!
+- * \brief Return the state of the Reduced MII enabled bit.
++ * \brief Are we setup for Reduced MII ?
+  *
+  * \return 0 - RMII not enabled
+  *         1 - RMII enabled
+  */
+-unsigned int picoxcell_get_rmii_enabled (void);
++unsigned int picoxcell_is_rmii_enabled (void);
+ 
+ /*!
+  * \brief Read a 32 bit value from an axi2cfg register.
+-- 
+1.7.0.4
+

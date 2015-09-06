@@ -1,0 +1,78 @@
+From f302864c388a04c7556b70074d1ef9a87e1e8bfa Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Thu, 9 Jan 2014 22:25:16 +0000
+Subject: [PATCH 70/70] pc7308: u-boot supports multiple DDR3 devices
+ This makes use of the shell variable DDR3_DEVICE so that
+ When 0 the 1Gbit DDR3 is used u-boot is configured to 64MB
+ When 1 the 2Gbit DDR3 is used u-boot is configured to 128MB
+
+Mantis Issue #11348
+---
+ config.mk                        |   21 +++++++++++++++++++++
+ include/configs/picochippc7308.h |   18 +++++++++++++++++-
+ 2 files changed, 38 insertions(+), 1 deletions(-)
+
+diff --git a/config.mk b/config.mk
+index fa33e62..8522eca 100644
+--- a/config.mk
++++ b/config.mk
+@@ -187,6 +187,27 @@ gccincdir := $(shell $(CC) -print-file-name=include)
+ CPPFLAGS := $(DBGFLAGS) $(OPTFLAGS) $(RELFLAGS)		\
+ 	-D__KERNEL__
+ 
++
++# Determine DDR3 device to use when building.
++# Examine DDR3_DEVICE environment variable or DDR3_OE_DEVICE OE recipe
++# variable in order to specify DDR3_IDEVICE to the compiler as:
++# 0 = default (ie PC7308 with 1Gbit DDR3 device, therefore 64MB memory)
++# non-zero = customer defined device (currently set to 2Gbit, therefore 128MB)
++#
++# Note: DDR3 device code is defined in picochippc7308.h
++# 
++ifdef DDR3_OE_DEVICE
++    CPPFLAGS+=-DDDR3_IDEVICE=$(DDR3_OE_DEVICE)
++else
++    ifdef DDR3_DEVICE
++        CPPFLAGS+=-DDDR3_IDEVICE=$(DDR3_DEVICE)
++    else
++        CPPFLAGS+=-DDDR3_IDEVICE=0
++    endif
++endif
++
++
++
+ # Enable garbage collection of un-used sections for SPL
+ ifeq ($(CONFIG_SPL_BUILD),y)
+ CPPFLAGS += -ffunction-sections -fdata-sections
+diff --git a/include/configs/picochippc7308.h b/include/configs/picochippc7308.h
+index e67bae8..4cff213 100644
+--- a/include/configs/picochippc7308.h
++++ b/include/configs/picochippc7308.h
+@@ -124,7 +124,23 @@
+ #define CONFIG_SYS_SDRAM_BASE	(0x00000000)
+ #define CONFIG_NR_DRAM_BANKS    (1)
+ #define PHYS_SDRAM_1		(PICOXCELL_DDRBANK_BASE)
+-#define PHYS_SDRAM_1_SIZE	(SZ_64M)
++
++#ifndef DDR3_IDEVICE
++#define DDR3_IDEVICE 0
++#endif
++
++/* Determine the U-Boot and hence kernel memory size by examining the
++ * compiler flag DDR3_IDEVICE. 
++ * If DDR3_IDEVICE is 0 or not defined then the default 1Gbit (128MB) DDR3
++ * is being used hence the kernel memory size is 64MB.
++ * If DDR3_DEVICE is 1 then the customer defined DDR3 is being used (currently
++ * set to 2Gbit, 256MB), hence the kernel memory size is 128MB.
++ */
++#if DDR3_IDEVICE==0
++    #define PHYS_SDRAM_1_SIZE	(SZ_64M)
++#else
++    #define PHYS_SDRAM_1_SIZE	(SZ_128M)
++#endif  //DDR3_DEVICE
+ 
+ /*-----------------------------------------------------------------------------
+  * SPI Flash Memory Stuff
+-- 
+1.7.0.4
+

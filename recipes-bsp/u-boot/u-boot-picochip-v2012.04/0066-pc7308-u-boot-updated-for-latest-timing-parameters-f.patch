@@ -1,0 +1,133 @@
+From 247f1b7163a63358f69eed8dd47c6ab12d823aa3 Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Fri, 28 Jun 2013 12:34:02 +0100
+Subject: [PATCH 66/70] pc7308: u-boot updated for latest timing parameters from MS-111258-RP-2B
+ Mantis Issue #10757
+
+---
+ .../include/asm/arch-picoxcell/pc30xx_mem_common.h |    3 +-
+ board/picochip/pc73032/pc30xx_memif_init.c         |   55 ++++++++++++-------
+ 2 files changed, 37 insertions(+), 21 deletions(-)
+
+diff --git a/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h
+index 09ff0e3..626ed21 100644
+--- a/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h
++++ b/arch/arm/include/asm/arch-picoxcell/pc30xx_mem_common.h
+@@ -85,7 +85,8 @@
+ #define PUBL_PTR0_OFFSET        (0x0018)
+ #define PUBL_PTR1_OFFSET        (0x001C)
+ #define PUBL_PTR2_OFFSET        (0x0020)
+-#define PUBL_ACIOCR_OFFSET      (0x0024)
++#define PUBL_ACIOCCR_OFFSET     (0x0024)
++#define PUBL_DXCCR_OFFSET       (0x0028)
+ #define PUBL_DCR_OFFSET         (0x0030)
+ #define PUBL_DTPR0_OFFSET       (0x0034)
+ #define PUBL_DTPR1_OFFSET       (0x0038)
+diff --git a/board/picochip/pc73032/pc30xx_memif_init.c b/board/picochip/pc73032/pc30xx_memif_init.c
+index 01c2a85..a25c61c 100644
+--- a/board/picochip/pc73032/pc30xx_memif_init.c
++++ b/board/picochip/pc73032/pc30xx_memif_init.c
+@@ -32,8 +32,8 @@
+ #define TAL_VALUE (0x00000000)
+ #define TCKE_VALUE (0x00000003)
+ #define TCKESR_VALUE (0x00000004)
+-#define TCKSRE_VALUE (0x00000005)
+-#define TCKSRX_VALUE (0x00000005)
++#define TCKSRE_VALUE (0x00000006)
++#define TCKSRX_VALUE (0x00000006)
+ #define TCL_VALUE (0x00000006)
+ #define TCWL_VALUE (0x00000005)
+ #define TDPD_VALUE (0x00000000)
+@@ -43,42 +43,50 @@
+ #define TMOD_VALUE (0x0000000C)
+ #define TMRD_VALUE (0x00000004)
+ #define TMRR_VALUE (0x00000001)
+-#define TOGCNT100N_VALUE (0x00000028)
+-#define TOGCNT1U_VALUE (0x00000190)
+-#define TRAS_VALUE (0x0000000F)
+-#define TRC_VALUE (0x00000015)
+-#define TRCD_VALUE (0x00000006)
++#define TOGCNT100N_VALUE (0x00000036)
++#define TOGCNT1U_VALUE (0x00000215)
++#define TRAS_VALUE (0x00000014)
++#define TRC_VALUE (0x0000001C)
++#define TRCD_VALUE (0x00000008)
+ #define TREFI_VALUE (0x0000004E)
+-#define TRFC_VALUE (0x0000002C)
+-#define TRP_VALUE (0x00000006)
++#define TRFC_VALUE (0x0000003B)
++#define TRP_VALUE (0x00000008)
+ #define TRRD_VALUE (0x00000004)
+ #define TRSTH_VALUE (0x00000000)
+-#define TRSTL_VALUE (0x00000028)
++#define TRSTL_VALUE (0x00000036)
+ #define TRTP_VALUE (0x00000004)
+ #define TRTW_VALUE (0x00000002)
+-#define TWR_VALUE (0x00000006)
++#define TWR_VALUE (0x00000008)
+ #define TWTR_VALUE (0x00000004)
+-#define TXP_VALUE (0x00000003)
+-#define TXPDLL_VALUE (0x0000000A)
++#define TXP_VALUE (0x00000004)
++#define TXPDLL_VALUE (0x0000000D)
+ #define TZQCL_VALUE (0x00000200)
+ #define TZQCS_VALUE (0x00000040)
+ #define TZQCSI_VALUE (0x00000064)
+ 
++#define ACIOCCR_VALUE (0xB0400812)
+ #define DCR_VALUE (0x0000000B)
+-#define DTPR0_VALUE (0x2A8F6690)
+-#define DTPR1_VALUE (0x092C0090)
+-#define DTPR2_VALUE (0x1001AA00)
+-#define MR0_VALUE (0x00000420)
+-#define MR1_VALUE (0x00000000)
++#define DTPR0_VALUE (0x38948890)
++#define DTPR1_VALUE (0x093B00C0)
++#define DTPR2_VALUE (0x1001B600)
++#define DXCCR_VALUE (0x00000F71)
++#define MR0_VALUE (0x00000820)
++#define MR1_VALUE (0x00000006)
+ #define MR2_VALUE (0x00000000)
+ #define MR3_VALUE (0x00000000)
+-#define PTR0_VALUE (0x00220014)
+-#define PTR1_VALUE (0x04830D40)
++#define PTR0_VALUE (0x0022AA5B)
++#define PTR1_VALUE (0x06041104)
+ #define PTR2_VALUE (0x042DA072)
+ 
+ #define SDRAM_AXI_CONFIG_VALUE (0x0000000A)
+ #define SDRAM_SETUP_VALUE (0x00000005)
+ 
++
++/* Drift Compensation Disable - not in spreadsheet as not a timing parameter */
++/* but value advised by Mindspeed silicon team */
++#define PGCR_VALUE (0x01842E08)
++
++
+ /* Constants --------------------------------------------------------------- */
+ 
+ /* Types ------------------------------------------------------------------- */
+@@ -271,6 +279,8 @@ void pc30xx_memif_shared_init (void)
+                              PTR2_VALUE);
+ 
+         /* 2. PHY initialisation start */
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PGCR_OFFSET,
++                             PGCR_VALUE);
+ 	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PIR_OFFSET,
+ 			     PUBL_PIR_CLRSR);
+ 	memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_PIR_OFFSET,
+@@ -349,6 +359,11 @@ void pc30xx_memif_shared_init (void)
+                              TXPDLL_VALUE);
+ 
+         /* 8. DRAM initialisation via PUBL */
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_ACIOCCR_OFFSET, 
++                             ACIOCCR_VALUE);
++        memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_DXCCR_OFFSET, 
++                             DXCCR_VALUE);
++
+         memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_DCR_OFFSET, DCR_VALUE);
+ 
+         memif_shd_apb_write (MEMIF_SHD_PUBL_BASE, PUBL_DTPR0_OFFSET,
+-- 
+1.7.0.4
+

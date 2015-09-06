@@ -1,0 +1,34 @@
+From 04620d58bd2e55e0904896d06999ff6229c5d503 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Tue, 19 Apr 2011 12:03:31 +0100
+Subject: [PATCH 05/70] picoxcell: replace bss variables by gd_t members
+
+Reuse the gd->timer_reset_value for timestamp and
+gd->lastinc for lastdec bss values in the pc3xx timers implementation.
+
+The usage of bss values in drivers before initialisation of bss is forbidden.
+In that special case some data in .rel.dyn gets corrupted.
+---
+ arch/arm/cpu/arm926ejs/picoxcell/timer.c |    6 ++++--
+ 1 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/timer.c b/arch/arm/cpu/arm926ejs/picoxcell/timer.c
+index 850d429..9254063 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/timer.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/timer.c
+@@ -65,8 +65,10 @@
+ 
+ #define TIMER_LOAD_VAL 0xFFFFFFFF
+ 
+-static unsigned long long timestamp;
+-static unsigned long lastdec;
++DECLARE_GLOBAL_DATA_PTR;
++
++#define timestamp gd->timer_reset_value
++#define lastdec gd->lastinc
+ 
+ void reset_timer_masked (void)
+ {
+-- 
+1.7.0.4
+

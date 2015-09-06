@@ -1,0 +1,539 @@
+From b336495ee3b4743b0f176d32e5f43e7f25589ed5 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Tue, 19 Apr 2011 10:17:08 +0100
+Subject: [PATCH 06/70] pc7302: change to nand flash support on pc7302 platform
+
+Renamed the files to make them non device specific. On the pc7302, nand flash
+support is via bit bashed gpio, it does not care what the device is.
+Layout to nand flash changed to suite BSP5.
+---
+ board/picochip/pc7302/Makefile          |    2 +-
+ board/picochip/pc7302/mt29f2g08aadwp.c  |  183 -------------------------------
+ board/picochip/pc7302/nand.c            |  160 +++++++++++++++++++++++++++
+ include/configs/picochippc7302-common.h |   21 +---
+ include/configs/picochippc7302nand.h    |   26 +++--
+ include/configs/picochippc7302nor.h     |    2 +-
+ 6 files changed, 179 insertions(+), 215 deletions(-)
+ delete mode 100644 board/picochip/pc7302/mt29f2g08aadwp.c
+ create mode 100644 board/picochip/pc7302/nand.c
+
+diff --git a/board/picochip/pc7302/Makefile b/board/picochip/pc7302/Makefile
+index e8a6f06..a3a6294 100644
+--- a/board/picochip/pc7302/Makefile
++++ b/board/picochip/pc7302/Makefile
+@@ -22,7 +22,7 @@ LIB	= $(obj)lib$(BOARD).o
+ SOBJS-y := lowlevel_init.o
+ 
+ COBJS-y	:= pc7302.o
+-COBJS-y += mt29f2g08aadwp.o
++COBJS-y += nand.o
+ 
+ SRCS    := $(SOBJS:.o=.S) $(COBJS-y:.o=.c)
+ OBJS    := $(addprefix $(obj),$(COBJS-y))
+diff --git a/board/picochip/pc7302/mt29f2g08aadwp.c b/board/picochip/pc7302/mt29f2g08aadwp.c
+deleted file mode 100644
+index 9c1408c..0000000
+--- a/board/picochip/pc7302/mt29f2g08aadwp.c
++++ /dev/null
+@@ -1,183 +0,0 @@
+-/*****************************************************************************
+- * $picoChipHeaderSubst$
+- *****************************************************************************/
+-
+-/*!
+-* \file .mt29f2g08aadwp.c
+-* \brief Support for the NAND Flash device fitted on PC7302 platform.
+-*
+-* Copyright (c) 2009-2011 Picochip Ltd
+-*
+-* This program is free software; you can redistribute it and/or modify
+-* it under the terms of the GNU General Public License version 2 as
+-* published by the Free Software Foundation.
+-*
+-* All enquiries to support@picochip.com
+-*/
+-
+-/*
+- * (C) Copyright 2009 SAGEM Communications
+- * (C) Copyright 2006 DENX Software Engineering
+- *
+- * See file CREDITS for list of people who contributed to this
+- * project.
+- *
+- * This program is free software; you can redistribute it and/or
+- * modify it under the terms of the GNU General Public License as
+- * published by the Free Software Foundation; either version 2 of
+- * the License, or (at your option) any later version.
+- *
+- * This program is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- * GNU General Public License for more details.
+- *
+- * You should have received a copy of the GNU General Public License
+- * along with this program; if not, write to the Free Software
+- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+- * MA 02111-1307 USA
+- */
+-
+-/* Includes ---------------------------------------------------------------- */
+-#include <common.h>
+-
+-#ifdef CONFIG_CMD_NAND
+-
+-#include <asm/arch/picoxcell.h>
+-#include <nand.h>
+-#include <asm/arch/utilities.h>
+-#include <asm/arch/picoxcell_gpio.h>
+-#include <asm/arch/mux.h>
+-#include <asm/arch/axi2cfg.h>
+-
+-/* Constants --------------------------------------------------------------- */
+-static unsigned int cle;
+-static unsigned int ale;
+-static unsigned int nce;
+-static unsigned int rdy;
+-
+-/* Functions --------------------------------------------------------------- */
+-/*!
+- * \brief Hardware specific access to control-lines
+- * \param mtd, pointer to the mtd_info structure
+- * \param dat, data to write to the device
+- * \param ctrl, control data to set up the transaction
+- *
+- */
+-static void mt29f2g08aadwp_cmd_ctrl (struct mtd_info *mtd,
+-				     int dat, unsigned int ctrl)
+-{
+-	struct nand_chip *this = mtd->priv;
+-
+-	if (ctrl & NAND_CTRL_CHANGE) {
+-		if (ctrl & NAND_NCE) {
+-			/* Assert the chip select */
+-			picoxcell_gpio_set_value (nce, 0);
+-
+-			if (ctrl & NAND_CLE) {
+-				/* Assert CLE */
+-				picoxcell_gpio_set_value (cle, 1);
+-			} else {
+-				/* Negate CLE */
+-				picoxcell_gpio_set_value (cle, 0);
+-			}
+-
+-			if (ctrl & NAND_ALE) {
+-				/* Assert ALE */
+-				picoxcell_gpio_set_value (ale, 1);
+-			} else {
+-				/* Negate ALE */
+-				picoxcell_gpio_set_value (ale, 0);
+-			}
+-		} else {
+-			/* Negate the chip select */
+-			picoxcell_gpio_set_value (nce, 1);
+-		}
+-	}
+-
+-	/* If we have data to write, write it */
+-	if (dat != NAND_CMD_NONE) {
+-		*(volatile unsigned char *)(this->IO_ADDR_W) =
+-		    (unsigned char)dat;
+-	}
+-}
+-
+-/*!
+- * \brief Return the state of the NAND busy output
+- * \param mtd, pointer to the mtd_info structure
+- * \return 0 - nand busy
+- *         1 - nand ready
+- *
+- */
+-static int mt29f2g08aadwp_dev_ready (struct mtd_info *mtd)
+-{
+-	return picoxcell_gpio_get_value (rdy);
+-}
+-
+-/*
+- * Board-specific NAND initialization. The following members of the
+- * argument are board-specific (per include/linux/mtd/nand.h):
+- * - IO_ADDR_R?: address to read the 8 I/O lines of the flash device
+- * - IO_ADDR_W?: address to write the 8 I/O lines of the flash device
+- * - hwcontrol: hardwarespecific function for accesing control-lines
+- * - dev_ready: hardwarespecific function for  accesing device ready/busy line
+- * - enable_hwecc?: function to enable (reset)  hardware ecc generator. Must
+- *   only be provided if a hardware ECC is available
+- * - eccmode: mode of ecc, see defines
+- * - chip_delay: chip dependent delay for transfering data from array to
+- *   read regs (tR)
+- * - options: various chip options. They can partly be set to inform
+- *   nand_scan about special functionality. See the defines for further
+- *   explanation
+- * Members with a "?" were not set in the merged testing-NAND branch,
+- * so they are not set here either.
+- */
+-int board_nand_init (struct nand_chip *nand)
+-{
+-	/* Define which gpio bits are used to control the NAND Flash
+-	 *
+-	 * Note: These pin definitions mean that we can only use NAND
+-	 *       Flash if we are running U-Boot from RAM and have NOT booted
+-	 *       the device from parallel NOR Flash.
+-	 */
+-	if (is_pc3x3 ()) {
+-		cle = PC3X3_GPIO_PIN_ARM_4;
+-		ale = PC3X3_GPIO_PIN_ARM_3;
+-		nce = PC3X3_GPIO_PIN_ARM_2;
+-		rdy = PC3X3_GPIO_PIN_ARM_1;
+-
+-		/* Setup some pin muxing */
+-		picoxcell_group_set_mux ("pai_tx_data[3:0]", MUX_PERIPHERAL);
+-		picoxcell_pin_set_mux (PC3X3_GPIO_PIN_ARM_4, MUX_ARM);
+-	} else {
+-		cle = PC302_GPIO_PIN_ARM_4;
+-		ale = PC302_GPIO_PIN_ARM_3;
+-		nce = PC302_GPIO_PIN_ARM_2;
+-		rdy = PC302_GPIO_PIN_ARM_1;
+-
+-		/* Setup some pin muxing */
+-		picoxcell_pin_set_mux (PC302_GPIO_PIN_ARM_4, MUX_ARM);
+-	}
+-
+-	/* Request the required gpio pins */
+-	(void)picoxcell_gpio_request (rdy);
+-	(void)picoxcell_gpio_request (nce);
+-	(void)picoxcell_gpio_request (ale);
+-	(void)picoxcell_gpio_request (cle);
+-
+-	/* Initialise the pin direction */
+-	(void)picoxcell_gpio_direction_input (rdy);
+-	(void)picoxcell_gpio_direction_output (nce, 1);
+-	(void)picoxcell_gpio_direction_output (ale, 0);
+-	(void)picoxcell_gpio_direction_output (cle, 0);
+-
+-	/* Populate some members of the nand structure */
+-	nand->cmd_ctrl = mt29f2g08aadwp_cmd_ctrl;
+-	nand->ecc.mode = NAND_ECC_SOFT;
+-	nand->dev_ready = mt29f2g08aadwp_dev_ready;
+-	nand->IO_ADDR_R = (void __iomem *)CONFIG_SYS_NAND_BASE;
+-	nand->IO_ADDR_W = (void __iomem *)CONFIG_SYS_NAND_BASE;
+-
+-	return 0;
+-}
+-#endif /* CONFIG_CMD_NAND */
+diff --git a/board/picochip/pc7302/nand.c b/board/picochip/pc7302/nand.c
+new file mode 100644
+index 0000000..40f3e2a
+--- /dev/null
++++ b/board/picochip/pc7302/nand.c
+@@ -0,0 +1,160 @@
++/*****************************************************************************
++ * $picoChipHeaderSubst$
++ *****************************************************************************/
++
++/*!
++* \file nand.c
++* \brief Support for nand flash on pc7302 platform.
++*
++* Copyright (c) 2009-2011 Picochip Ltd
++*
++* This program is free software; you can redistribute it and/or modify
++* it under the terms of the GNU General Public License version 2 as
++* published by the Free Software Foundation.
++*
++* All enquiries to support@picochip.com
++*/
++
++/*
++ * (C) Copyright 2009 SAGEM Communications
++ * (C) Copyright 2006 DENX Software Engineering
++ *
++ * See file CREDITS for list of people who contributed to this
++ * project.
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation; either version 2 of
++ * the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
++ * MA 02111-1307 USA
++ */
++
++/* Includes ---------------------------------------------------------------- */
++#include <common.h>
++
++#ifdef CONFIG_CMD_NAND
++
++#include <nand.h>
++#include <asm/arch/utilities.h>
++#include <asm/arch/picoxcell_gpio.h>
++#include <asm/arch/mux.h>
++#include <asm/io.h>
++
++/* Constants --------------------------------------------------------------- */
++static unsigned int cle;
++static unsigned int ale;
++static unsigned int nce;
++static unsigned int rdy;
++
++/* Functions --------------------------------------------------------------- */
++/*!
++ * \brief Hardware specific access to control-lines
++ * \param mtd, pointer to the mtd_info structure
++ * \param dat, data to write to the device
++ * \param ctrl, control data to set up the transaction
++ *
++ */
++static void nand_cmd_ctrl (struct mtd_info *mtd,
++		           int dat, unsigned int ctrl)
++{
++	struct nand_chip *this = mtd->priv;
++
++        if (ctrl & NAND_CTRL_CHANGE) {
++                picoxcell_gpio_set_value(nce, !(ctrl & NAND_NCE));
++                picoxcell_gpio_set_value(cle, !!(ctrl & NAND_CLE));
++                picoxcell_gpio_set_value(ale, !!(ctrl & NAND_ALE));
++        }
++        if (dat == NAND_CMD_NONE)
++                return;
++
++        writeb(dat, this->IO_ADDR_W);
++}
++
++/*!
++ * \brief Return the state of the NAND busy output
++ * \param mtd, pointer to the mtd_info structure
++ * \return 0 - nand busy
++ *         1 - nand ready
++ *
++ */
++static int nand_dev_ready (struct mtd_info *mtd)
++{
++	return picoxcell_gpio_get_value (rdy);
++}
++
++/*
++ * Board-specific NAND initialization. The following members of the
++ * argument are board-specific (per include/linux/mtd/nand.h):
++ * - IO_ADDR_R?: address to read the 8 I/O lines of the flash device
++ * - IO_ADDR_W?: address to write the 8 I/O lines of the flash device
++ * - hwcontrol: hardwarespecific function for accesing control-lines
++ * - dev_ready: hardwarespecific function for  accesing device ready/busy line
++ * - enable_hwecc?: function to enable (reset)  hardware ecc generator. Must
++ *   only be provided if a hardware ECC is available
++ * - eccmode: mode of ecc, see defines
++ * - chip_delay: chip dependent delay for transfering data from array to
++ *   read regs (tR)
++ * - options: various chip options. They can partly be set to inform
++ *   nand_scan about special functionality. See the defines for further
++ *   explanation
++ * Members with a "?" were not set in the merged testing-NAND branch,
++ * so they are not set here either.
++ */
++int board_nand_init (struct nand_chip *nand)
++{
++	/* Define which gpio bits are used to control the nand flash
++	 *
++	 * Note: These pin definitions mean that we can only use nand
++	 *       flash if we are running U-Boot from RAM and have NOT booted
++	 *       the Picoxcell device from parallel nor flash.
++	 */
++	if (is_pc3x3 ()) {
++		cle = PC3X3_GPIO_PIN_ARM_4;
++		ale = PC3X3_GPIO_PIN_ARM_3;
++		nce = PC3X3_GPIO_PIN_ARM_2;
++		rdy = PC3X3_GPIO_PIN_ARM_1;
++
++		/* Setup some pin muxing */
++		picoxcell_group_set_mux ("pai_tx_data[3:0]", MUX_PERIPHERAL);
++		picoxcell_pin_set_mux (PC3X3_GPIO_PIN_ARM_4, MUX_ARM);
++	} else {
++		cle = PC302_GPIO_PIN_ARM_4;
++		ale = PC302_GPIO_PIN_ARM_3;
++		nce = PC302_GPIO_PIN_ARM_2;
++		rdy = PC302_GPIO_PIN_ARM_1;
++
++		/* Setup some pin muxing */
++		picoxcell_pin_set_mux (PC302_GPIO_PIN_ARM_4, MUX_ARM);
++	}
++
++	/* Request the required gpio pins */
++	(void)picoxcell_gpio_request (rdy);
++	(void)picoxcell_gpio_request (nce);
++	(void)picoxcell_gpio_request (ale);
++	(void)picoxcell_gpio_request (cle);
++
++	/* Initialise the pin direction */
++	(void)picoxcell_gpio_direction_input (rdy);
++	(void)picoxcell_gpio_direction_output (nce, 1);
++	(void)picoxcell_gpio_direction_output (ale, 0);
++	(void)picoxcell_gpio_direction_output (cle, 0);
++
++	/* Populate some members of the nand structure */
++	nand->cmd_ctrl = nand_cmd_ctrl;
++	nand->ecc.mode = NAND_ECC_SOFT;
++	nand->dev_ready = nand_dev_ready;
++	nand->IO_ADDR_R = (void __iomem *)CONFIG_SYS_NAND_BASE;
++	nand->IO_ADDR_W = (void __iomem *)CONFIG_SYS_NAND_BASE;
++
++	return 0;
++}
++#endif /* CONFIG_CMD_NAND */
+diff --git a/include/configs/picochippc7302-common.h b/include/configs/picochippc7302-common.h
+index da8384f..bff6b59 100644
+--- a/include/configs/picochippc7302-common.h
++++ b/include/configs/picochippc7302-common.h
+@@ -165,7 +165,7 @@
+ #define CONFIG_SYS_NS16550_CLK      (3686400)
+ #define CONFIG_SYS_NS16550_COM1     (PICOXCELL_UART1_BASE)
+ 
+-/* Our uart registers need 32 bit access */ 
++/* Our uart registers need 32 bit access */
+ #define CONFIG_SYS_NS16550_MEM32
+ 
+ /* Console on Uart #0 */
+@@ -303,7 +303,7 @@
+ /* This is the offset from the start of NAND Flash
+  * to where the Linux kernel can be found.
+  */
+-#define CONFIG_NAND_KERNEL_OFFSET  0x00180000
++#define CONFIG_NAND_KERNEL_OFFSET  0x00380000
+ 
+ /* Time in seconds before autoboot, -1 disables auto-boot */
+ #define CONFIG_BOOTDELAY        5
+@@ -320,9 +320,6 @@
+ /* Define the JFFS2 root filesystem partition (NOR Flash) */
+ #define NOR_JFFS2_ROOT          /dev/mtdblock3
+ 
+-/* Define the JFFS2 root filesystem partition (NAND Flash) */
+-#define NAND_JFFS2_ROOT         /dev/mtdblock5
+-
+ /* Define the UBIFS root filesystem partition (NOR Flash) */
+ #define NOR_UBIFS_ROOT          3
+ 
+@@ -336,13 +333,10 @@
+    "kernel_flash_addr=" MK_STR(CONFIG_FLASH_KERNEL_BASE) "\0"		    \
+    "kernel_nand_offset=" MK_STR(CONFIG_NAND_KERNEL_OFFSET) "\0"             \
+    "nor_jffs2_root=" MK_STR(NOR_JFFS2_ROOT) "\0"		            \
+-   "nand_jffs2_root=" MK_STR(NAND_JFFS2_ROOT) "\0"		            \
+    "nor_ubifs_root=" MK_STR(NOR_UBIFS_ROOT) "\0"		            \
+    "nand_ubifs_root=" MK_STR(NAND_UBIFS_ROOT) "\0"		            \
+    "flash_jffs2=run jffs2_args; bootm $kernel_flash_addr\0"		    \
+    "flash_ubifs=run ubifs_args; bootm $kernel_flash_addr\0"		    \
+-   "nand_jffs2=run nand_jffs2_args; nboot $loadaddr 0 "                     \
+-   "$kernel_nand_offset; bootm $loadaddr\0"                                 \
+    "nand_ubifs=run nand_ubifs_args; nboot $loadaddr 0 "                     \
+    "$kernel_nand_offset; bootm $loadaddr\0"                                 \
+    "fixed_nfs=run nfs_args; tftp; bootm\0"				    \
+@@ -353,10 +347,6 @@
+    "ubi.mtd=$nor_ubifs_root "                                               \
+    "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+    "console=$consoledev,$baudrate $othbootargs;\0"                          \
+-   "nand_jffs2_args=setenv bootargs root=$nand_jffs2_root rw "              \
+-   "rootfstype=jffs2 "                                                      \
+-   "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+-   "console=$consoledev,$baudrate $othbootargs;\0"                          \
+    "nand_ubifs_args=setenv bootargs root=ubi0:rootfs rw rootfstype=ubifs "  \
+    "ubi.mtd=$nand_ubifs_root,2048 "                                         \
+    "ip=$ipaddr:$serverip:$gatewayip:$netmask:$hostname:$netdev:any "        \
+@@ -367,17 +357,12 @@
+ 
+ /* Define CONFIG_BOOTCOMMAND as
+  * "run nand_ubifs" for boot from NAND flash with ubifs filesystem
+- * "run nand_jffs2" for boot from NAND flash with jffs2 filesystem
+  * "run flash_ubifs" for boot from NOR flash with ubifs filesystem
+  * "run flash_jffs2" for boot from NOR flash with jffs2 filesystem
+  * "run fixed_nfs" for standard NFS with fixed IP address.
+  */
+ #if defined(CONFIG_CMD_NAND)
+-    #if defined(CONFIG_USE_UBIFS)
+-        #define CONFIG_BOOTCOMMAND  "run nand_ubifs"
+-    #else
+-        #define CONFIG_BOOTCOMMAND  "run nand_jffs2"
+-    #endif
++    #define CONFIG_BOOTCOMMAND  "run nand_ubifs"
+ #else /* !defined(CONFIG_CMD_NAND) */
+     #if defined(CONFIG_USE_UBIFS)
+         #define CONFIG_BOOTCOMMAND  "run flash_ubifs"
+diff --git a/include/configs/picochippc7302nand.h b/include/configs/picochippc7302nand.h
+index 83d0c30..c9ec9d6 100644
+--- a/include/configs/picochippc7302nand.h
++++ b/include/configs/picochippc7302nand.h
+@@ -34,15 +34,15 @@
+ /* Include support / commands for NAND Flash
+  *
+  * Note: Please read the comments in file
+- *       board/picochip/pc7302/mt29f2g08aadwp.c about gpio pins used
+- *       and PC302 booting modes before defining CONFIG_CMD_NAND
++ *       board/picochip/pc7302/nand.c about gpio pins used
++ *       and Picoxcell booting modes before defining CONFIG_CMD_NAND
+  */
+ 
+ /* Needed for nand_util.c */
+ #define CONFIG_SYS_64BIT_VSPRINTF
+ 
+ /* Do not perform any low level initialisation */
+-#define CONFIG_SKIP_LOWLEVEL_INIT   1
++#define CONFIG_SKIP_LOWLEVEL_INIT
+ 
+ /* No flash memory in the system */
+ #define CONFIG_SYS_NO_FLASH
+@@ -51,25 +51,27 @@
+ 
+ /* NAND Flash memory map
+  *
+- *  Block 0-3 U-Boot image
+- *  Block 4-7 Redundant U-Boot image
+- *  Block 8 U-Boot environment
+- *  Block 9 Redundant U-Boot environment
+- *  Block 10 Not Used
+- *  Block 11 Not Used
+- *  Block 12 Linux kernel
++ *  Block 0-7   Reserved
++ *  Block 8-11  U-Boot image
++ *  Block 12-15 Reserved
++ *  Block 16-19 Redundant U-Boot image
++ *  Block 20-23 Reserved
++ *  Block 24    U-Boot env variables
++ *  Block 25    Redundant U-Boot env variables
++ *  Block 26-27 Reserved
++ *  Block 28    Linux kernel...
+  *
+  */
+ #define CONFIG_ENV_IS_IN_NAND
+ 
+ /* Offset address of environment variables */
+-#define CONFIG_ENV_OFFSET           (NAND_FLASH_SECTOR_SIZE * 8)
++#define CONFIG_ENV_OFFSET           (NAND_FLASH_SECTOR_SIZE * 24)
+ 
+ /* Size of environment variables */
+ #define CONFIG_ENV_SIZE             (NAND_FLASH_SECTOR_SIZE)
+ 
+ /* Offset address of the redundant envinronment variables */
+-#define CONFIG_ENV_OFFSET_REDUND    (NAND_FLASH_SECTOR_SIZE * 9)
++#define CONFIG_ENV_OFFSET_REDUND    (NAND_FLASH_SECTOR_SIZE * 25)
+ 
+ /* Turn off wite protection for vendor parameters */
+ #define CONFIG_ENV_OVERWRITE
+diff --git a/include/configs/picochippc7302nor.h b/include/configs/picochippc7302nor.h
+index 1677206..5e1c0c3 100644
+--- a/include/configs/picochippc7302nor.h
++++ b/include/configs/picochippc7302nor.h
+@@ -69,7 +69,7 @@
+ #define CONFIG_ENV_OVERWRITE
+ 
+ #ifdef CONFIG_RUN_FROM_RAM
+-#define CONFIG_SKIP_LOWLEVEL_INIT   1
++#define CONFIG_SKIP_LOWLEVEL_INIT
+ #define CONFIG_SYS_TEXT_BASE        0x06000000
+ #else
+ #define CONFIG_SYS_TEXT_BASE        0x40000000
+-- 
+1.7.0.4
+
