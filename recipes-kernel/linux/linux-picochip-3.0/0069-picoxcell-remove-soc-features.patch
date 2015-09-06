@@ -1,0 +1,53 @@
+From 6f16f276f45d4099d4039283f02d324cb8ca2888 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 6 Apr 2011 16:45:09 +0100
+Subject: [PATCH 069/228] picoxcell: remove soc features
+
+The picoxcell_soc::features is unused as registration happens in the
+picoxcell_soc::init() callback so remove it.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/soc.h |   14 --------------
+ 1 files changed, 0 insertions(+), 14 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/soc.h b/arch/arm/mach-picoxcell/soc.h
+index 097ce30..871a030 100644
+--- a/arch/arm/mach-picoxcell/soc.h
++++ b/arch/arm/mach-picoxcell/soc.h
+@@ -22,18 +22,11 @@ struct picoxcell_timer {
+ 	int				irq;
+ };
+ 
+-enum picoxcell_features {
+-	PICOXCELL_FEATURE_PM,
+-	PICOXCELL_FEATURE_CPUFREQ,
+-	NR_FEAT_BITS
+-};
+-
+ struct picoxcell_soc {
+ 	void				(*init)(void);
+ 	void				(*init_clocks)(void);
+ 	const struct picoxcell_timer	*timers;
+ 	int				nr_timers;
+-	unsigned long			features[BITS_TO_LONGS(NR_FEAT_BITS)];
+ };
+ 
+ extern const struct picoxcell_soc *picoxcell_get_soc(void);
+@@ -41,13 +34,6 @@ extern const struct picoxcell_soc pc3x2_soc;
+ extern const struct picoxcell_soc pc3x3_soc;
+ extern const struct picoxcell_soc pc30xx_soc;
+ 
+-static inline int picoxcell_has_feature(enum picoxcell_features feat)
+-{
+-	const struct picoxcell_soc *soc = picoxcell_get_soc();
+-
+-	return test_bit(feat, soc->features);
+-}
+-
+ #ifdef CONFIG_CPU_FREQ
+ extern int picoxcell_cpufreq_init(unsigned long min_freq_khz,
+ 				  unsigned long max_freq_khz);
+-- 
+1.7.0.4
+

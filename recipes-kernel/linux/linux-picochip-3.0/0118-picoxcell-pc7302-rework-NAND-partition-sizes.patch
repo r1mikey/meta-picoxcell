@@ -1,0 +1,50 @@
+From ed0cabb1fdb92188af4edbf557018ca747c5a854 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Wed, 11 May 2011 15:26:44 +0100
+Subject: [PATCH 118/228] picoxcell/pc7302: rework NAND partition sizes
+
+Rework the NAND partition sizes so that we can use the same with the
+future PC7308 board.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |    8 ++++----
+ 1 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index 526a0de..dcf24c3 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -122,17 +122,17 @@ static struct mtd_partition pc7302_nand_parts[] = {
+ 	{
+ 		.name	= "Boot",
+ 		.size	= 4 * SZ_128K,
+-		.offset	= 0,
++		.offset	= 8 * SZ_128K,
+ 	},
+ 	{
+ 		.name	= "Redundant Boot",
+ 		.size	= 4 * SZ_128K,
+-		.offset	= MTDPART_OFS_APPEND,
++		.offset	= 16 * SZ_128K,
+ 	},
+ 	{
+ 		.name	= "Boot Environment",
+ 		.size	= SZ_128K,
+-		.offset	= MTDPART_OFS_APPEND,
++		.offset	= 24 * SZ_128K,
+ 	},
+ 	{
+ 		.name	= "Redundant Boot Environment",
+@@ -142,7 +142,7 @@ static struct mtd_partition pc7302_nand_parts[] = {
+ 	{
+ 		.name	= "Kernel",
+ 		.size	= 8 * SZ_1M,
+-		.offset	= (12 * SZ_128K),
++		.offset	= (28 * SZ_128K),
+ 	},
+ 	{
+ 		.name	= "File System",
+-- 
+1.7.0.4
+

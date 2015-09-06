@@ -1,0 +1,26 @@
+From 7057a57a8121b7287ceb027478812894f54af21c Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Wed, 2 Oct 2013 17:18:40 +0100
+Subject: [PATCH 216/228] picoxcell: update defconfig to enable CONFIG_CRYPTO_NULL
+
+This commit forms part of the resolution of Mantis Issue #11222
+---
+ arch/arm/configs/picoxcell_defconfig |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/configs/picoxcell_defconfig b/arch/arm/configs/picoxcell_defconfig
+index 608b936..1955a93 100644
+--- a/arch/arm/configs/picoxcell_defconfig
++++ b/arch/arm/configs/picoxcell_defconfig
+@@ -1350,7 +1350,7 @@ CONFIG_CRYPTO_MANAGER=y
+ CONFIG_CRYPTO_MANAGER2=y
+ # CONFIG_CRYPTO_MANAGER_DISABLE_TESTS is not set
+ # CONFIG_CRYPTO_GF128MUL is not set
+-# CONFIG_CRYPTO_NULL is not set
++CONFIG_CRYPTO_NULL=y
+ CONFIG_CRYPTO_WORKQUEUE=y
+ # CONFIG_CRYPTO_CRYPTD is not set
+ CONFIG_CRYPTO_AUTHENC=y
+-- 
+1.7.0.4
+

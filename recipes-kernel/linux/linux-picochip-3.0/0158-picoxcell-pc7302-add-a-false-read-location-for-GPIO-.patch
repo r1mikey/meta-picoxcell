@@ -1,0 +1,55 @@
+From 55e72409da547f058138a5ce8b3f843b6c991ea0 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 10 Jun 2011 17:32:52 +0100
+Subject: [PATCH 158/228] picoxcell/pc7302: add a false read location for GPIO NAND
+
+The GPIO NAND driver needs to synchronize writes to the GPIO and
+accesses to the NAND.  A memory barrier isn't sufficient as we need the
+GPIO accesses to have taken effect.  Use a spare register in the GPIO
+block as a dummy read location.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |   19 +++++++++++++------
+ 1 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index 6681ffb..8a46096 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -113,10 +113,17 @@ static void pc7302_init_nor(void)
+ 	platform_device_register(&pc7302_nor);
+ }
+ 
+-static struct resource pc7302_nand_resource = {
+-	.start = EBI_CS2_BASE,
+-	.end   = EBI_CS2_BASE + 2 * SZ_1K,
+-	.flags = IORESOURCE_MEM,
++static struct resource pc7302_nand_resource[] = {
++	{
++		.start = EBI_CS2_BASE,
++		.end   = EBI_CS2_BASE + 2 * SZ_1K,
++		.flags = IORESOURCE_MEM,
++	},
++	{
++		.start = PICOXCELL_GPIO_BASE + 0x08,
++		.end   = PICOXCELL_GPIO_BASE + 0x08 + 3,
++		.flags = IORESOURCE_MEM,
++	}
+ };
+ 
+ static struct mtd_partition pc7302_nand_parts[] = {
+@@ -164,8 +171,8 @@ static struct gpio_nand_platdata pc7302_nand_platdata = {
+ 
+ static struct platform_device pc7302_nand = {
+ 	.name		    = "gpio-nand",
+-	.num_resources	    = 1,
+-	.resource	    = &pc7302_nand_resource,
++	.num_resources	    = ARRAY_SIZE(pc7302_nand_resource),
++	.resource	    = pc7302_nand_resource,
+ 	.id		    = -1,
+ 	.dev.platform_data  = &pc7302_nand_platdata,
+ };
+-- 
+1.7.0.4
+

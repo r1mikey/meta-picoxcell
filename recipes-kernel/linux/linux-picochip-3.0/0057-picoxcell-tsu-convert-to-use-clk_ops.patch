@@ -1,0 +1,26 @@
+From 0a54ab31e91279d8ec5580cd3f21bdbca28ad4d7 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 4 Apr 2011 13:56:25 +0100
+Subject: [PATCH 057/228] picoxcell/tsu: convert to use clk_ops
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/tsu.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/tsu.c b/arch/arm/mach-picoxcell/tsu.c
+index 8ba2bd9..c6ab233 100644
+--- a/arch/arm/mach-picoxcell/tsu.c
++++ b/arch/arm/mach-picoxcell/tsu.c
+@@ -14,7 +14,7 @@
+ 
+ #include "picoxcell_core.h"
+ 
+-FIXED_CLK(tsu, 0, -1);
++FIXED_CLK(tsu, 0, -1, NULL);
+ static struct clk_lookup tsu_clk_lookup = CLK_LOOKUP("macb", "tsu", &tsu_clk);
+ module_param_named(rate, tsu_clk.rate, int, 0);
+ 
+-- 
+1.7.0.4
+

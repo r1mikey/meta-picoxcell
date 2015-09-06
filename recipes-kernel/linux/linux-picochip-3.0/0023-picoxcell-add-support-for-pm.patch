@@ -1,0 +1,139 @@
+From c9b275146f8927626cf7699e32162bebe6baa9dc Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 7 Feb 2011 11:57:10 +0000
+Subject: [PATCH 023/228] picoxcell: add support for pm
+
+picoxcell devices support clock gating so provide support for PM on
+these devices. We only support standby modes as we can't gate the ARM
+clock or memory controllers on current devices.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Makefile |    1 +
+ arch/arm/mach-picoxcell/pm.c     |   84 ++++++++++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/soc.h    |   11 +++++
+ 3 files changed, 96 insertions(+), 0 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/pm.c
+
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index 48d8cee..42f7036 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -9,3 +9,4 @@ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+ obj-$(CONFIG_CPU_FREQ)		+= cpufreq.o
++obj-$(CONFIG_PM)		+= pm.o
+diff --git a/arch/arm/mach-picoxcell/pm.c b/arch/arm/mach-picoxcell/pm.c
+new file mode 100644
+index 0000000..b5afe00
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/pm.c
+@@ -0,0 +1,84 @@
++/*
++ * Copyright (c) 2010 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#define pr_fmt(fmt) "picoxcell_pm: " fmt
++#include <linux/init.h>
++#include <linux/suspend.h>
++
++#include <mach/hardware.h>
++
++#include "picoxcell_core.h"
++#include "soc.h"
++
++static void (*picoxcell_platform_pm_enter)(void);
++static void (*picoxcell_platform_pm_exit)(void);
++
++static int picoxcell_pm_valid(suspend_state_t state)
++{
++	/*
++	 * We only support standby mode. There is no point in doing anything
++	 * for PM_SUSPEND_MEM as we can't power down the core or the memory
++	 * interfaces.
++	 *
++	 * When we enter standby, the only thing we can do is power down some
++	 * of the peripherals.
++	 */
++	return (state == PM_SUSPEND_ON || state == PM_SUSPEND_STANDBY);
++}
++
++static void wait_for_event(void)
++{
++	pr_debug("entering sleep - wait for interrupt\n");
++	/* Drain the writebuffer and wait for an interrupt. */
++	dsb();
++	wfi();
++}
++
++static int picoxcell_pm_enter(suspend_state_t state)
++{
++	int err = 0;
++
++	pr_debug("entering suspend state\n");
++
++	switch (state) {
++	case PM_SUSPEND_STANDBY:
++		if (picoxcell_platform_pm_enter)
++			picoxcell_platform_pm_enter();
++		wait_for_event();
++		if (picoxcell_platform_pm_exit)
++			picoxcell_platform_pm_exit();
++		break;
++
++	case PM_SUSPEND_ON:
++		wait_for_event();
++		break;
++
++	default:
++		err = -EOPNOTSUPP;
++	}
++
++	pr_debug("resumed\n");
++
++	return 0;
++}
++
++static struct platform_suspend_ops picoxcell_pm_ops = {
++	.valid	    = picoxcell_pm_valid,
++	.enter	    = picoxcell_pm_enter,
++};
++
++int picoxcell_init_pm(void (*enter_lowpower)(void),
++		      void (*exit_lowpower)(void))
++{
++	picoxcell_platform_pm_enter = enter_lowpower;
++	picoxcell_platform_pm_exit = exit_lowpower;
++	suspend_set_ops(&picoxcell_pm_ops);
++
++	return 0;
++}
+diff --git a/arch/arm/mach-picoxcell/soc.h b/arch/arm/mach-picoxcell/soc.h
+index 152c3cd..a69b612 100644
+--- a/arch/arm/mach-picoxcell/soc.h
++++ b/arch/arm/mach-picoxcell/soc.h
+@@ -58,4 +58,15 @@ static inline int picoxcell_cpufreq_init(unsigned long min_freq_khz,
+ }
+ #endif /* CONFIG_CPU_FREQ */
+ 
++#ifdef CONFIG_PM
++extern int picoxcell_init_pm(void (*enter_lowpower)(void),
++			     void (*exit_lowpower)(void));
++#else /* CONFIG_PM */
++static inline int picoxcell_init_pm(void (*enter_lowpower)(void),
++				    void (*exit_lowpower)(void))
++{
++	return 0;
++}
++#endif /* CONFIG_PM */
++
+ #endif /* __PICOXCELL_SOC_H__ */
+-- 
+1.7.0.4
+

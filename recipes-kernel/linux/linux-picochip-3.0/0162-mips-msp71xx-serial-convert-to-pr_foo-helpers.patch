@@ -1,0 +1,36 @@
+From d0def2ab2acb720722fa1d0650bd6e1054a763ca Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 14 Jun 2011 17:19:02 +0100
+Subject: [PATCH 162/228] mips: msp71xx/serial: convert to pr_foo() helpers
+
+Convert to pr_foo() helpers rather than printk(KERN_.*).
+
+Cc: Ralf Baechle <ralf@linux-mips.org>
+Cc: Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/mips/pmc-sierra/msp71xx/msp_serial.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/mips/pmc-sierra/msp71xx/msp_serial.c b/arch/mips/pmc-sierra/msp71xx/msp_serial.c
+index f726162..c3247b5 100644
+--- a/arch/mips/pmc-sierra/msp71xx/msp_serial.c
++++ b/arch/mips/pmc-sierra/msp71xx/msp_serial.c
+@@ -65,7 +65,7 @@ void __init msp_serial_setup(void)
+ 	up.line         = 0;
+ 	up.private_data		= (void*)UART0_STATUS_REG;
+ 	if (early_serial_setup(&up))
+-		printk(KERN_ERR "Early serial init of port 0 failed\n");
++		pr_err("Early serial init of port 0 failed\n");
+ 
+ 	/* Initialize the second serial port, if one exists */
+ 	switch (mips_machtype) {
+@@ -89,5 +89,5 @@ void __init msp_serial_setup(void)
+ 	up.line         = 1;
+ 	up.private_data		= (void*)UART1_STATUS_REG;
+ 	if (early_serial_setup(&up))
+-		printk(KERN_ERR "Early serial init of port 1 failed\n");
++		pr_err("Early serial init of port 1 failed\n");
+ }
+-- 
+1.7.0.4
+

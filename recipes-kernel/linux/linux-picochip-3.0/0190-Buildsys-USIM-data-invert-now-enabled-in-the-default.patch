@@ -1,0 +1,25 @@
+From 2d4f50cb4ae0191352839a43a4171ba5bc8ca36d Mon Sep 17 00:00:00 2001
+From: Andrew Watkins <Andrew.Watkins@picochip.com>
+Date: Wed, 8 Feb 2012 11:30:59 +0000
+Subject: [PATCH 190/228] Buildsys: USIM data invert now enabled in the default mutliplexing
+
+---
+ arch/arm/mach-picoxcell/device_uicc.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/device_uicc.c b/arch/arm/mach-picoxcell/device_uicc.c
+index 8a6e068..0f640d8 100644
+--- a/arch/arm/mach-picoxcell/device_uicc.c
++++ b/arch/arm/mach-picoxcell/device_uicc.c
+@@ -96,7 +96,7 @@ int __init picoxcell_add_uicc(unsigned long addr, int irq, int id,
+ 
+ 	uicc_cfg = axi2cfg_readl(AXI2CFG_UICC_CFG_REG_OFFSET);
+ 	uicc_cfg |= UICC_DATA_EN_MASK;
+-	uicc_cfg &= ~UICC_DATA_INVERT_MASK;
++	uicc_cfg |= UICC_DATA_INVERT_MASK;
+ 	if (data_invert)
+ 		uicc_cfg |= UICC_DATA_INVERT_MASK;
+ 	axi2cfg_writel(uicc_cfg, AXI2CFG_UICC_CFG_REG_OFFSET);
+-- 
+1.7.0.4
+

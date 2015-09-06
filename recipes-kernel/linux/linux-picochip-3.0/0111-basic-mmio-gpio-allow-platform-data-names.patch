@@ -1,0 +1,52 @@
+From 456b3fb7929b1559c2cc885cc53532f2d500adc4 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 3 May 2011 14:14:48 +0100
+Subject: [PATCH 111/228] basic-mmio-gpio: allow platform data names
+
+Allow platform data to specify the names of the GPIO pins.  This can
+be used by platforms to give symbolic names for the GPIOs where
+appropriate.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/gpio/basic_mmio_gpio.c  |    4 ++++
+ include/linux/basic_mmio_gpio.h |    1 +
+ 2 files changed, 5 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/gpio/basic_mmio_gpio.c b/drivers/gpio/basic_mmio_gpio.c
+index 8152e9f..b7326da 100644
+--- a/drivers/gpio/basic_mmio_gpio.c
++++ b/drivers/gpio/basic_mmio_gpio.c
+@@ -371,6 +371,7 @@ int __devinit bgpio_init(struct bgpio_chip *bgc,
+ 			 void __iomem *dirin,
+ 			 bool big_endian)
+ {
++	struct bgpio_pdata *pdata = dev_get_platdata(dev);
+ 	int ret;
+ 
+ 	if (!is_power_of_2(sz))
+@@ -386,6 +387,9 @@ int __devinit bgpio_init(struct bgpio_chip *bgc,
+ 	bgc->gc.base = -1;
+ 	bgc->gc.ngpio = bgc->bits;
+ 
++	if (pdata)
++		bgc->gc.names = pdata->names;
++
+ 	ret = bgpio_setup_io(bgc, dat, set, clr);
+ 	if (ret)
+ 		return ret;
+diff --git a/include/linux/basic_mmio_gpio.h b/include/linux/basic_mmio_gpio.h
+index 98999cf..0bf0e63 100644
+--- a/include/linux/basic_mmio_gpio.h
++++ b/include/linux/basic_mmio_gpio.h
+@@ -21,6 +21,7 @@
+ struct bgpio_pdata {
+ 	int base;
+ 	int ngpio;
++	const char *const *names;
+ };
+ 
+ struct device;
+-- 
+1.7.0.4
+

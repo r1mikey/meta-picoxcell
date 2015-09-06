@@ -1,0 +1,46 @@
+From 8c759fbb55b8d2183caad3ba3ae0a2b9706e279f Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Tue, 24 May 2011 12:30:31 +0100
+Subject: [PATCH 141/228] nand/gpio: Add MTD command line partitioning to the gpio nand driver
+
+[ Jamie: rebased ontop of CONFIG_MTD_PARTITIONS removal ]
+---
+ drivers/mtd/nand/gpio.c |   15 +++++++++++++--
+ 1 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/mtd/nand/gpio.c b/drivers/mtd/nand/gpio.c
+index 2c2060b..8d3c4f8 100644
+--- a/drivers/mtd/nand/gpio.c
++++ b/drivers/mtd/nand/gpio.c
+@@ -227,6 +227,9 @@ static int __devinit gpio_nand_probe(struct platform_device *dev)
+ 	struct nand_chip *this;
+ 	struct resource *res0, *res1;
+ 	int ret;
++	struct mtd_partition *partitions = NULL;
++	int num_part = 0;
++	const char *part_probes[] = { "cmdlinepart", NULL };
+ 
+ 	if (!dev->dev.platform_data)
+ 		return -EINVAL;
+@@ -316,8 +319,16 @@ static int __devinit gpio_nand_probe(struct platform_device *dev)
+ 		gpiomtd->plat.adjust_parts(&gpiomtd->plat,
+ 					   gpiomtd->mtd_info.size);
+ 
+-	mtd_device_register(&gpiomtd->mtd_info, gpiomtd->plat.parts,
+-			    gpiomtd->plat.num_parts);
++	gpiomtd->mtd_info.name = "gpio-nand";
++	num_part = parse_mtd_partitions(&gpiomtd->mtd_info, part_probes,
++					&partitions, 0);
++
++	if (partitions && num_part > 0)
++		mtd_device_register(&gpiomtd->mtd_info, partitions, num_part);
++	else
++		mtd_device_register(&gpiomtd->mtd_info, gpiomtd->plat.parts,
++				    gpiomtd->plat.num_parts);
++
+ 	platform_set_drvdata(dev, gpiomtd);
+ 
+ 	return 0;
+-- 
+1.7.0.4
+

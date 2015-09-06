@@ -1,0 +1,41 @@
+From a955c14f21b2fcdb21c96c769540aa991e843d0f Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 23 May 2011 11:29:09 +0100
+Subject: [PATCH 128/228] picoxcell/pc30xx: handle the new IPSEC SPAcc location
+
+The IPSEC SPAcc in pc30xx is in a different location to pc3xx devices.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ .../include/mach/picoxcell/picoxcell.h             |    1 +
+ arch/arm/mach-picoxcell/pc30xx.c                   |    2 +-
+ 2 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h b/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
+index 93ac21f..b97e699 100644
+--- a/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
++++ b/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
+@@ -38,6 +38,7 @@
+ #define PICOXCELL_AXI2CFG_BASE		0x800A0000
+ #define PICOXCELL_IPSEC_BASE		0x80100000
+ #define PICOXCELL_SRTP_BASE		0x80140000
++#define PC30XX_IPSEC_BASE		0x80140000
+ #define PICOXCELL_CIPHER_BASE		0x80180000
+ #define PICOXCELL_RTCLK_BASE		0x80200000
+ #define PICOXCELL_TIMER_BASE		0x80210000
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 845138e..d63ee8e 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -445,7 +445,7 @@ static void pc30xx_init_bus_snoopers(void)
+ 
+ static void pc30xx_add_spaccs(void)
+ {
+-	picoxcell_add_spacc("picoxcell-ipsec-v2", PICOXCELL_IPSEC_BASE,
++	picoxcell_add_spacc("picoxcell-ipsec-v2", PC30XX_IPSEC_BASE,
+ 			    IRQ_IPSEC, -1);
+ 	picoxcell_add_spacc("picoxcell-l2-v2", PICOXCELL_CIPHER_BASE,
+ 			    IRQ_AES, -1);
+-- 
+1.7.0.4
+

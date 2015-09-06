@@ -1,0 +1,39 @@
+From b8af2ef9537986e84b24758867fc6281609a4a16 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 19 Jul 2011 17:19:46 +0100
+Subject: [PATCH 169/228] crypto: picoxcell: disable the device at removal
+
+When removing the device we disable it to prevent the runtime pm counts
+from becoming inbalanced.  Additionally, disable the device at the end
+of the probe method so we don't leave the clk enabled.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/crypto/picoxcell_crypto.c |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/crypto/picoxcell_crypto.c b/drivers/crypto/picoxcell_crypto.c
+index db7cb31..234280b 100644
+--- a/drivers/crypto/picoxcell_crypto.c
++++ b/drivers/crypto/picoxcell_crypto.c
+@@ -1884,6 +1884,8 @@ static int __devinit spacc_probe(struct platform_device *pdev)
+ 				engine->algs[i].alg.cra_name);
+ 	}
+ 
++	pm_runtime_suspend(&pdev->dev);
++
+ 	return ret;
+ }
+ 
+@@ -1900,6 +1902,8 @@ static int __devexit spacc_remove(struct platform_device *pdev)
+ 		crypto_unregister_alg(&alg->alg);
+ 	}
+ 
++	pm_runtime_disable(&pdev->dev);
++
+ 	clk_put(engine->clk);
+ 
+ 	return 0;
+-- 
+1.7.0.4
+

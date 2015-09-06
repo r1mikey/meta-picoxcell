@@ -1,0 +1,48 @@
+From 867251bdc1285ec47f809c64c6ac4d10012075b3 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 20 Jun 2011 14:26:47 +0100
+Subject: [PATCH 167/228] picoxcell/pc30xx: allow muxing of the EBI/NAND interface
+
+There are 17 EBI pins that are muxed with the NAND controller.
+Generally these should always be correct from the boot mode, but allow
+them to be muxed for the LABS parts (HNB has no EBI).  Note that one bit
+controls all of these pins - they can't be individually muxed.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc30xx.c |   19 +++++++++++++++++++
+ 1 files changed, 19 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index c9fb3e2..bf7f84d 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -866,6 +866,25 @@ static struct mux_def pc30xx_labs_mux[] __used = {
+ 	MUXGPIOFUNC_RO(mii_crs,		45,	-1,	MII,	mii_get_mux),
+ 	MUXGPIOFUNC_RO(mii_tx_clk,	46,	-1,	MII,	mii_get_mux),
+ 
++	/*	   Name			Periph	PeriphB	Reg	Bit */
++	MUX2PERIPH(pad_ebi_decode0,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_decode1,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_decode2,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_decode3,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_web,		EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_oeb,		EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_addr24,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_addr25,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_addr26,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_data0,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_data1,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_data2,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_data3,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_data4,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_data5,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_data6,	EBI,	NAND,	0x60,	0),
++	MUX2PERIPH(pad_ebi_data7,	EBI,	NAND,	0x60,	0),
++
+ 	/*	    Name,	ARM,	SD,	PERIPH,	get,	set */
+ 	MUXGPIOFUNC(decode2,	27,	-1,	EBI,	pc30xx_decode_get,	pc30xx_decode_set),
+ 	MUXGPIOFUNC(decode3,	28,	-1,	EBI,	pc30xx_decode_get,	pc30xx_decode_set),
+-- 
+1.7.0.4
+

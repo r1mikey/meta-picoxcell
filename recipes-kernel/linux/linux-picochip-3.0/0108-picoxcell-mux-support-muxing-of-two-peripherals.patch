@@ -1,0 +1,102 @@
+From a51c23797a4defd5d4c5608e07e02edc6c889cf4 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 21 Apr 2011 16:56:36 +0100
+Subject: [PATCH 108/228] picoxcell/mux: support muxing of two peripherals
+
+Add a special case for where there are two peripherals and no GPIO pins
+sharing a pad.  We add an extra peripheral ID and rely on there being
+a single bit that is 0 for peripheral A and 1 for peripheral B.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/mux.c |   15 ++++++++++++---
+ arch/arm/mach-picoxcell/mux.h |   15 +++++++++++++++
+ 2 files changed, 27 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/mux.c b/arch/arm/mach-picoxcell/mux.c
+index 5c859e0..db7f4b3 100644
+--- a/arch/arm/mach-picoxcell/mux.c
++++ b/arch/arm/mach-picoxcell/mux.c
+@@ -134,8 +134,13 @@ static enum mux_setting mux_get_setting(struct mux_def *def)
+ 		if (def->flags & MUX_INVERT_PERIPH) {
+ 			if (periph_ctrl & (1 << def->periph_bit))
+ 				return def->periph;
+-		} else if (~periph_ctrl & (1 << def->periph_bit)) {
+-			return def->periph;
++			else if (def->periph_b >= 0)
++				return def->periph_b;
++		} else {
++			if (~periph_ctrl & (1 << def->periph_bit))
++				return def->periph;
++			else if (def->periph_b >= 0)
++				return def->periph_b;
+ 		}
+ 	}
+ 
+@@ -162,7 +167,8 @@ static int mux_configure(struct mux_def *def, enum mux_setting setting)
+ 
+ 	if (!((def->armgpio >= 0 && setting == MUX_ARM) ||
+ 	      (def->sdgpio >= 0 && setting == MUX_SD) ||
+-	      (def->periph >= 0 && setting == def->periph)))
++	      (def->periph >= 0 && setting == def->periph) ||
++	      (def->periph_b >= 0 && setting == def->periph_b)))
+ 		return -EINVAL;
+ 
+ 	if (def->periph > 0) {
+@@ -182,6 +188,9 @@ static int mux_configure(struct mux_def *def, enum mux_setting setting)
+ 				periph_ctrl |= (1 << def->periph_bit);
+ 		}
+ 		axi2cfg_writel(periph_ctrl, def->periph_reg);
++
++		if (def->periph_b >= 0 && setting == def->periph_b)
++			return 0;
+ 	}
+ 
+ 	if (setting != def->periph && def->gpio_reg_offs >= 0) {
+diff --git a/arch/arm/mach-picoxcell/mux.h b/arch/arm/mach-picoxcell/mux.h
+index 383a08c..9ddc0ad 100644
+--- a/arch/arm/mach-picoxcell/mux.h
++++ b/arch/arm/mach-picoxcell/mux.h
+@@ -49,6 +49,7 @@ struct mux_def {
+ 	int			armgpio;
+ 	int			sdgpio;
+ 	int			periph;
++	int			periph_b;
+ 	s16			gpio_reg_offs;
+ 	s16			gpio_reg_bit;
+ 	s16			periph_reg;
+@@ -79,10 +80,23 @@ extern int mux_configure_table(const struct mux_cfg *cfg,
+ 	.gpio_reg_bit	= __gpio_bit, \
+ 	.periph_reg	= __periph_reg, \
+ 	.periph_bit	= __periph_bit, \
++	.periph_b	= -1, \
+ 	.flags		= __flags, \
+ 	.attr		= _SYSDEV_ATTR(__name, 0644, pin_show, pin_store), \
+ }
+ 
++#define MUX2PERIPH(__name, __periph, __periph_b, __periph_reg, \
++		   __periph_bit) { \
++	.name		= #__name, \
++	.armgpio	= -1, \
++	.sdgpio		= -1, \
++	.periph		= MUX_PERIPHERAL_ ## __periph, \
++	.periph_b	= MUX_PERIPHERAL_ ## __periph_b, \
++	.periph_reg	= __periph_reg, \
++	.periph_bit	= __periph_bit, \
++	.attr		= _SYSDEV_ATTR(__name, 0644, pin_show, pin_store), \
++}
++
+ #define MUXCFGBUS(__name, __arm, __sd, __periph, __caeid, __caddr, __mask) { \
+ 	.name		= #__name, \
+ 	.armgpio	= __arm, \
+@@ -93,6 +107,7 @@ extern int mux_configure_table(const struct mux_cfg *cfg,
+ 	.flags		= MUX_CONFIG_BUS, \
+ 	.mask		= __mask, \
+ 	.attr		= _SYSDEV_ATTR(__name, 0644, pin_show, pin_store), \
++	.periph_b	= -1, \
+ }
+ 
+ extern void picoxcell_mux_register(struct mux_def *defs, int nr_defs);
+-- 
+1.7.0.4
+

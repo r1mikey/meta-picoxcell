@@ -1,0 +1,181 @@
+From c7c3d1330eaf7a31d8d68211bffe41a9e00bb6bc Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 21 Apr 2011 14:37:44 +0100
+Subject: [PATCH 107/228] picoxcell/mux: allow multiple mux registrations
+
+For some SoC's such as pc30xx, there are different variants with
+different numbers of pins.  Rather than having one table per variant
+that needs to be registered, allow registering common pins first then
+just a delta.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/mux.c |   71 ++++++++++++++++++++---------------------
+ arch/arm/mach-picoxcell/mux.h |    2 +
+ 2 files changed, 37 insertions(+), 36 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/mux.c b/arch/arm/mach-picoxcell/mux.c
+index d47c51b..5c859e0 100644
+--- a/arch/arm/mach-picoxcell/mux.c
++++ b/arch/arm/mach-picoxcell/mux.c
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 2010 Picochip Ltd., Jamie Iles
++ * Copyright (c) 2010-2011 Picochip Ltd., Jamie Iles
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -24,11 +24,7 @@
+ 
+ static void muxing_sysfs_init(void);
+ static void picoxcell_muxing_debugfs_init(void);
+-
+-static struct {
+-	struct mux_def		*defs;
+-	int			num_defs;
+-} mux_info;
++static LIST_HEAD(mux_defs);
+ 
+ static const char *mux_peripheral_names[NR_MUX_SETTINGS] = {
+ 	[MUX_ARM]		= "armgpio",
+@@ -62,15 +58,21 @@ static const char *mux_periph_id_to_name(enum mux_setting setting)
+ 	return mux_peripheral_names[setting];
+ }
+ 
+-void picoxcell_mux_register(struct mux_def *defs, int nr_defs)
++static int __init picoxcell_mux_sys_init(void)
+ {
+-	BUG_ON(!defs);
+-
+-	mux_info.num_defs	= nr_defs;
+-	mux_info.defs		= defs;
+-
+ 	muxing_sysfs_init();
+ 	picoxcell_muxing_debugfs_init();
++
++	return 0;
++}
++module_init(picoxcell_mux_sys_init);
++
++void picoxcell_mux_register(struct mux_def *defs, int nr_defs)
++{
++	int i;
++
++	for (i = 0; i < nr_defs; ++i)
++		list_add_tail(&defs[i].head, &mux_defs);
+ }
+ 
+ static enum mux_setting mux_get_config_bus(struct mux_def *def)
+@@ -199,18 +201,12 @@ static int mux_configure(struct mux_def *def, enum mux_setting setting)
+ int mux_configure_one(const char *name, enum mux_setting setting)
+ {
+ 	struct mux_def *def = NULL;
+-	int i;
+ 
+-	for (i = 0; i < mux_info.num_defs; ++i)
+-		if (!strcmp(name, mux_info.defs[i].name)) {
+-			def = &mux_info.defs[i];
+-			break;
+-		}
++	list_for_each_entry(def, &mux_defs, head)
++		if (!strcmp(name, def->name))
++			return mux_configure(def, setting);
+ 
+-	if (!def)
+-		return -ENXIO;
+-
+-	return mux_configure(def, setting);
++	return -ENXIO;
+ }
+ 
+ int mux_configure_table(const struct mux_cfg *cfg,
+@@ -293,7 +289,8 @@ static struct sys_device muxing_device = {
+ 
+ static void muxing_sysfs_init(void)
+ {
+-	int i, err = sysdev_class_register(&muxing_class);
++	int err = sysdev_class_register(&muxing_class);
++	struct mux_def *def;
+ 
+ 	if (err) {
+ 		pr_err("unable to register sysdev class (%d)\n", err);
+@@ -306,9 +303,7 @@ static void muxing_sysfs_init(void)
+ 		return;
+ 	}
+ 
+-	for (i = 0; i < mux_info.num_defs; ++i) {
+-		struct mux_def *def = &mux_info.defs[i];
+-
++	list_for_each_entry(def, &mux_defs, head) {
+ 		err = sysdev_create_file(&muxing_device, &def->attr);
+ 		if (err)
+ 			WARN("unable to create attr for %s\n", def->name);
+@@ -317,31 +312,35 @@ static void muxing_sysfs_init(void)
+ 
+ static ssize_t io_muxing_seq_show(struct seq_file *s, void *v)
+ {
+-	int i = (int)*(loff_t *)v;
+-	struct mux_def *def = &mux_info.defs[i];
++	struct mux_def *def = v;
+ 
+-	if (i == 0)
+-		seq_printf(s, "%16s%16s%10s%10s\n\n",
+-			   "pin_name", "setting", "arm pin", "sd pin");
++	if (def == list_first_entry(&mux_defs, struct mux_def, head))
++		seq_printf(s, "%16s%16s%10s%10s\n", "name", "setting",
++			   "arm", "sd");
+ 
++	seq_printf(s, "%16s%16s%10d%10d\n", def->name,
++		   pin_setting_name(def), def->armgpio, def->sdgpio);
+ 
+-	return seq_printf(s, "%16s%16s%10d%10d\n", def->name,
+-			  pin_setting_name(def), def->armgpio, def->sdgpio);
++	return 0;
+ }
+ 
+ static void *io_muxing_seq_start(struct seq_file *s, loff_t *pos)
+ {
+-	if (*pos >= mux_info.num_defs)
++	if (!pos || *pos > 0)
+ 		return NULL;
+ 
+-	return pos;
++	return !list_empty(&mux_defs) ?
++		list_first_entry(&mux_defs, struct mux_def, head) : NULL;
+ }
+ 
+ static void *io_muxing_seq_next(struct seq_file *s, void *v, loff_t *pos)
+ {
++	struct mux_def *def = v;
++
+ 	(*pos)++;
+ 
+-	return (*pos < mux_info.num_defs) ? pos : NULL;
++	return (def->head.next == &mux_defs) ? NULL :
++		list_entry(def->head.next, struct mux_def, head);
+ }
+ 
+ static void io_muxing_seq_stop(struct seq_file *s, void *v)
+diff --git a/arch/arm/mach-picoxcell/mux.h b/arch/arm/mach-picoxcell/mux.h
+index 865514c..383a08c 100644
+--- a/arch/arm/mach-picoxcell/mux.h
++++ b/arch/arm/mach-picoxcell/mux.h
+@@ -12,6 +12,7 @@
+ #ifndef __MUX_H__
+ #define __MUX_H__
+ 
++#include <linux/list.h>
+ #include <linux/sysdev.h>
+ 
+ #include "soc.h"
+@@ -56,6 +57,7 @@ struct mux_def {
+ 	u16			caddr;
+ 	u16			mask;
+ 	unsigned		flags;
++	struct list_head	head;
+ };
+ 
+ struct mux_cfg {
+-- 
+1.7.0.4
+

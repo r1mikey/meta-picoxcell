@@ -1,0 +1,43 @@
+From ad10f66ef9c7e4f0705fcbfb3913c4636a52cad7 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 22 Mar 2011 15:38:20 +0000
+Subject: [PATCH 015/228] picoxcell/pc3x2: arm gpio support
+
+Define the pins and names for PC3X2 and register the GPIO
+chips.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x2.c |    8 ++++++++
+ 1 files changed, 8 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index 300f051..6c86c9b 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -11,6 +11,7 @@
+ #include <linux/io.h>
+ #include <linux/irq.h>
+ #include <linux/kernel.h>
++#include <linux/platform_device.h>
+ #include <linux/timex.h>
+ 
+ #include <mach/clkdev.h>
+@@ -109,7 +110,14 @@ struct picoxcell_soc pc3x2_soc = {
+ 	.nr_timers	= ARRAY_SIZE(pc3x2_timers),
+ };
+ 
++static void pc3x2_add_gpio(void)
++{
++	picoxcell_add_gpio_port(0, 8, PC3X2_GPIO_PIN_ARM_0);
++	picoxcell_add_gpio_port(1, 8, PC3X2_GPIO_PIN_ARM_8);
++}
++
+ static void pc3x2_init(void)
+ {
+ 	picoxcell_mux_register(pc3x2_mux, ARRAY_SIZE(pc3x2_mux));
++	pc3x2_add_gpio();
+ }
+-- 
+1.7.0.4
+

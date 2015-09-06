@@ -1,0 +1,70 @@
+From bb84762b0d4e781ab00c06c3c8fe713c0ef51cab Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 23 Mar 2011 23:42:07 +0000
+Subject: [PATCH 025/228] pc7302: enable EBI clk before NAND/NOR init
+
+The EBI is currently enabled from bootup, but to allow platforms not
+using the EBI to switch it off, ensure that the EBI clk is explicitly
+enabled when it is going to be used.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |   28 ++++++++++++++++++++++++++++
+ 1 files changed, 28 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index b8c3966..75fcecf 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -9,6 +9,8 @@
+  *
+  * All enquiries to support@picochip.com
+  */
++#include <linux/clk.h>
++#include <linux/err.h>
+ #include <linux/gpio.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+@@ -92,6 +94,19 @@ static struct platform_device pc7302_nor = {
+ 
+ static void pc7302_init_nor(void)
+ {
++	struct clk *ebi_clk = clk_get(NULL, "ebi");
++
++	if (IS_ERR(ebi_clk)) {
++		pr_err("failed to get EBI clk, unable to register NOR flash\n");
++		return;
++	}
++
++	if (clk_enable(ebi_clk)) {
++		pr_err("failed to enable EBI clk, unable to register NOR flash\n");
++		clk_put(ebi_clk);
++		return;
++	}
++
+ 	platform_device_register(&pc7302_nor);
+ }
+ 
+@@ -154,6 +169,19 @@ static struct platform_device pc7302_nand = {
+ 
+ static void pc7302_init_nand(void)
+ {
++	struct clk *ebi_clk = clk_get(NULL, "ebi");
++
++	if (IS_ERR(ebi_clk)) {
++		pr_err("failed to get EBI clk, unable to register NAND flash\n");
++		return;
++	}
++
++	if (clk_enable(ebi_clk)) {
++		pr_err("failed to enable EBI clk, unable to register NAND flash\n");
++		clk_put(ebi_clk);
++		return;
++	}
++
+ 	platform_device_register(&pc7302_nand);
+ }
+ 
+-- 
+1.7.0.4
+

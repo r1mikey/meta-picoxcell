@@ -1,0 +1,109 @@
+From 225d534b9638a26243ee24326666f0b89d588e37 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 29 Mar 2011 12:42:11 +0100
+Subject: [PATCH 032/228] picoxcell: support for GEM TSU
+
+The GEM Ethernet device supports network timestamping and needs an
+external clock source.  Different boards have different TSU input
+rates so provide a mechanism to register the input clock rate.
+The tsu.rate kernel command line parameter can be used to override
+the board rate for boards that have configurable rates by jumpers or
+a VXCO.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Kconfig          |    4 +++
+ arch/arm/mach-picoxcell/Makefile         |    1 +
+ arch/arm/mach-picoxcell/picoxcell_core.h |    6 +++++
+ arch/arm/mach-picoxcell/tsu.c            |   37 ++++++++++++++++++++++++++++++
+ 4 files changed, 48 insertions(+), 0 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/tsu.c
+
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index 50268a5..9d527f3 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -31,9 +31,13 @@ comment "Picochip picoXcell board selection"
+ config BOARD_PC7302
+ 	bool "Support PC7302 Board"
+ 	default y
++	select PICOXCELL_HAVE_TSU
+ 	help
+           Include support for the picoChip PC7302 platform. This platform is
+ 	  can take any of the PC3X2 or PC3X3 devices and includes SPI NOR
+ 	  flash, parallel NOR flash and NAND flash.
+ 
++config PICOXCELL_HAVE_TSU
++	bool
++
+ endif
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index 42f7036..2d8de66 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -10,3 +10,4 @@ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+ obj-$(CONFIG_CPU_FREQ)		+= cpufreq.o
+ obj-$(CONFIG_PM)		+= pm.o
++obj-$(CONFIG_PICOXCELL_HAVE_TSU)+= tsu.o
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index 7c8e39f..fb908b9 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -24,4 +24,10 @@ extern void picoxcell_sched_clock_init(void);
+ 
+ extern int picoxcell_add_gpio_port(int port, int ngpio, int base);
+ 
++#ifdef CONFIG_PICOXCELL_HAVE_TSU
++void picoxcell_tsu_init(unsigned long rate);
++#else /* CONFIG_PICOXCELL_HAVE_TSU */
++static inline void picoxcell_tsu_init(unsigned long rate) {}
++#endif /* CONFIG_PICOXCELL_HAVE_TSU */
++
+ #endif /* __ASM_ARCH_PICOXCELL_CORE_H__ */
+diff --git a/arch/arm/mach-picoxcell/tsu.c b/arch/arm/mach-picoxcell/tsu.c
+new file mode 100644
+index 0000000..8ba2bd9
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/tsu.c
+@@ -0,0 +1,37 @@
++/*
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#define pr_fmt(fmt)	"tsu: " fmt
++
++#include <linux/clkdev.h>
++#include <linux/module.h>
++
++#include "picoxcell_core.h"
++
++FIXED_CLK(tsu, 0, -1);
++static struct clk_lookup tsu_clk_lookup = CLK_LOOKUP("macb", "tsu", &tsu_clk);
++module_param_named(rate, tsu_clk.rate, int, 0);
++
++/*
++ * Initialise the TSU source for the board.  The TSU clock is an input to the
++ * onchip GEM network device but can run at different rates per board (and
++ * some boards support different input clocks configurable by jumpers.  Use
++ * the rate specified as the single parameter by default but allow it to be
++ * overriden on the command line with the tsu.rate option.
++ */
++void __init picoxcell_tsu_init(unsigned long tsu_rate)
++{
++	if (tsu_clk.rate == 0)
++		tsu_clk.rate = tsu_rate;
++
++	picoxcell_clk_add(&tsu_clk);
++	clkdev_add(&tsu_clk_lookup);
++
++	pr_info("tsu registered with rate %d\n", tsu_clk.rate);
++}
+-- 
+1.7.0.4
+

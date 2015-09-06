@@ -1,0 +1,172 @@
+From 7a9cae28b2c298190dc20774d970854c970eedde Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 11 Mar 2011 14:29:21 +0000
+Subject: [PATCH 038/228] at91: provide macb clks with "pclk" and "hclk" name
+
+The macb driver expects clocks with the names "pclk" and "hclk".  We
+currently provide "macb_clk" but to fit in line with other
+architectures (namely AVR32), provide "pclk" and a fake "hclk".
+
+Cc: Jean-Christophe PLAGNIOL-VILLARD <plagnioj@jcrosoft.com>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+Acked-by: David S. Miller <davem@davemloft.net>
+Acked-by: Nicolas Ferre <nicolas.ferre@atmel.com>
+---
+ arch/arm/mach-at91/at91cap9.c    |    8 +++++++-
+ arch/arm/mach-at91/at91sam9260.c |    8 +++++++-
+ arch/arm/mach-at91/at91sam9261.c |   14 +++++++++++++-
+ arch/arm/mach-at91/at91sam9263.c |    8 +++++++-
+ arch/arm/mach-at91/at91sam9g45.c |    8 +++++++-
+ 5 files changed, 41 insertions(+), 5 deletions(-)
+
+diff --git a/arch/arm/mach-at91/at91cap9.c b/arch/arm/mach-at91/at91cap9.c
+index f1013d0..855cd27 100644
+--- a/arch/arm/mach-at91/at91cap9.c
++++ b/arch/arm/mach-at91/at91cap9.c
+@@ -150,10 +150,15 @@ static struct clk pwm_clk = {
+ 	.type		= CLK_TYPE_PERIPHERAL,
+ };
+ static struct clk macb_clk = {
+-	.name		= "macb_clk",
++	.name		= "pclk",
+ 	.pmc_mask	= 1 << AT91CAP9_ID_EMAC,
+ 	.type		= CLK_TYPE_PERIPHERAL,
+ };
++static struct clk macb_hclk = {
++	.name		= "hclk",
++	.pmc_mask	= 0,
++	.type		= CLK_TYPE_PERIPHERAL,
++};
+ static struct clk aestdes_clk = {
+ 	.name		= "aestdes_clk",
+ 	.pmc_mask	= 1 << AT91CAP9_ID_AESTDES,
+@@ -212,6 +217,7 @@ static struct clk *periph_clocks[] __initdata = {
+ 	&tcb_clk,
+ 	&pwm_clk,
+ 	&macb_clk,
++	&macb_hclk,
+ 	&aestdes_clk,
+ 	&adc_clk,
+ 	&isi_clk,
+diff --git a/arch/arm/mach-at91/at91sam9260.c b/arch/arm/mach-at91/at91sam9260.c
+index 7d606b0..c73cb04 100644
+--- a/arch/arm/mach-at91/at91sam9260.c
++++ b/arch/arm/mach-at91/at91sam9260.c
+@@ -162,10 +162,15 @@ static struct clk ohci_clk = {
+ 	.type		= CLK_TYPE_PERIPHERAL,
+ };
+ static struct clk macb_clk = {
+-	.name		= "macb_clk",
++	.name		= "pclk",
+ 	.pmc_mask	= 1 << AT91SAM9260_ID_EMAC,
+ 	.type		= CLK_TYPE_PERIPHERAL,
+ };
++static struct clk macb_hclk = {
++	.name		= "hclk",
++	.pmc_mask	= 0,
++	.type		= CLK_TYPE_PERIPHERAL,
++};
+ static struct clk isi_clk = {
+ 	.name		= "isi_clk",
+ 	.pmc_mask	= 1 << AT91SAM9260_ID_ISI,
+@@ -221,6 +226,7 @@ static struct clk *periph_clocks[] __initdata = {
+ 	&tc2_clk,
+ 	&ohci_clk,
+ 	&macb_clk,
++	&macb_hclk,
+ 	&isi_clk,
+ 	&usart3_clk,
+ 	&usart4_clk,
+diff --git a/arch/arm/mach-at91/at91sam9261.c b/arch/arm/mach-at91/at91sam9261.c
+index c148316..e74be56 100644
+--- a/arch/arm/mach-at91/at91sam9261.c
++++ b/arch/arm/mach-at91/at91sam9261.c
+@@ -71,7 +71,17 @@ static struct clk pioB_clk = {
+ };
+ static struct clk pioC_clk = {
+ 	.name		= "pioC_clk",
+-	.pmc_mask	= 1 << AT91SAM9261_ID_PIOC,
++	.pmc_mask	= 1 << AT572D940HF_ID_PIOC,
++	.type		= CLK_TYPE_PERIPHERAL,
++};
++static struct clk macb_clk = {
++	.name		= "pclk",
++	.pmc_mask	= 1 << AT572D940HF_ID_EMAC,
++	.type		= CLK_TYPE_PERIPHERAL,
++};
++static struct clk macb_hclk = {
++	.name		= "hclk",
++	.pmc_mask	= 0,
+ 	.type		= CLK_TYPE_PERIPHERAL,
+ };
+ static struct clk usart0_clk = {
+@@ -159,6 +169,8 @@ static struct clk *periph_clocks[] __initdata = {
+ 	&pioA_clk,
+ 	&pioB_clk,
+ 	&pioC_clk,
++	&macb_clk,
++	&macb_hclk,
+ 	&usart0_clk,
+ 	&usart1_clk,
+ 	&usart2_clk,
+diff --git a/arch/arm/mach-at91/at91sam9263.c b/arch/arm/mach-at91/at91sam9263.c
+index dc28477..7b3a740 100644
+--- a/arch/arm/mach-at91/at91sam9263.c
++++ b/arch/arm/mach-at91/at91sam9263.c
+@@ -136,10 +136,15 @@ static struct clk pwm_clk = {
+ 	.type		= CLK_TYPE_PERIPHERAL,
+ };
+ static struct clk macb_clk = {
+-	.name		= "macb_clk",
++	.name		= "pclk",
+ 	.pmc_mask	= 1 << AT91SAM9263_ID_EMAC,
+ 	.type		= CLK_TYPE_PERIPHERAL,
+ };
++static struct clk macb_hclk = {
++	.name		= "hclk",
++	.pmc_mask	= 0,
++	.type		= CLK_TYPE_PERIPHERAL,
++};
+ static struct clk dma_clk = {
+ 	.name		= "dma_clk",
+ 	.pmc_mask	= 1 << AT91SAM9263_ID_DMA,
+@@ -190,6 +195,7 @@ static struct clk *periph_clocks[] __initdata = {
+ 	&tcb_clk,
+ 	&pwm_clk,
+ 	&macb_clk,
++	&macb_hclk,
+ 	&twodge_clk,
+ 	&udc_clk,
+ 	&isi_clk,
+diff --git a/arch/arm/mach-at91/at91sam9g45.c b/arch/arm/mach-at91/at91sam9g45.c
+index 11e2141..cfed05d 100644
+--- a/arch/arm/mach-at91/at91sam9g45.c
++++ b/arch/arm/mach-at91/at91sam9g45.c
+@@ -157,10 +157,15 @@ static struct clk ac97_clk = {
+ 	.type		= CLK_TYPE_PERIPHERAL,
+ };
+ static struct clk macb_clk = {
+-	.name		= "macb_clk",
++	.name		= "pclk",
+ 	.pmc_mask	= 1 << AT91SAM9G45_ID_EMAC,
+ 	.type		= CLK_TYPE_PERIPHERAL,
+ };
++static struct clk macb_hclk = {
++	.name		= "hclk",
++	.pmc_mask	= 0,
++	.type		= CLK_TYPE_PERIPHERAL,
++};
+ static struct clk isi_clk = {
+ 	.name		= "isi_clk",
+ 	.pmc_mask	= 1 << AT91SAM9G45_ID_ISI,
+@@ -208,6 +213,7 @@ static struct clk *periph_clocks[] __initdata = {
+ 	&lcdc_clk,
+ 	&ac97_clk,
+ 	&macb_clk,
++	&macb_hclk,
+ 	&isi_clk,
+ 	&udphs_clk,
+ 	&mmc1_clk,
+-- 
+1.7.0.4
+

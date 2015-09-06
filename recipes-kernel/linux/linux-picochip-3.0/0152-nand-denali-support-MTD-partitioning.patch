@@ -1,0 +1,65 @@
+From 62ac54a652d00bbd4875c6da1a21c3c54e128dd2 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 6 May 2011 12:53:26 +0100
+Subject: [PATCH 152/228] nand/denali: support MTD partitioning
+
+If CONFIG_MTD_PARTITION is enabled then take the partitions from the
+platform data.
+
+Cc: David Woodhouse <dwmw2@infradead.org>
+Cc: Chuanxiao Dong <chuanxiao.dong@intel.com>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/mtd/nand/denali.c            |    8 +++++++-
+ include/linux/platform_data/denali.h |    8 ++++++--
+ 2 files changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index 01841fe..4c7e2d5 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -25,6 +25,7 @@
+ #include <linux/slab.h>
+ #include <linux/pci.h>
+ #include <linux/mtd/mtd.h>
++#include <linux/mtd/partitions.h>
+ #include <linux/module.h>
+ #include <linux/platform_data/denali.h>
+ 
+@@ -1658,7 +1659,12 @@ static int denali_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
+ 		goto failed_req_irq;
+ 	}
+ 
+-	ret = mtd_device_register(&denali->mtd, NULL, 0);
++	if (pdata && pdata->parts)
++		ret = mtd_device_register(&denali->mtd, pdata->parts,
++					 pdata->nr_parts);
++	else
++		ret = mtd_device_register(&denali->mtd, NULL, 0);
++
+ 	if (ret) {
+ 		dev_err(&dev->dev, "Spectra: Failed to register MTD: %d\n",
+ 				ret);
+diff --git a/include/linux/platform_data/denali.h b/include/linux/platform_data/denali.h
+index 3767333..141da35 100644
+--- a/include/linux/platform_data/denali.h
++++ b/include/linux/platform_data/denali.h
+@@ -14,9 +14,13 @@
+ #ifndef __DENALI_PDATA_H__
+ #define __DENALI_PDATA_H__
+ 
++struct mtd_partition;
++
+ struct denali_nand_pdata {
+-	int	nr_ecc_bits;
+-	bool	have_hw_ecc_fixup;
++	int				nr_ecc_bits;
++	bool				have_hw_ecc_fixup;
++	const struct mtd_partition	*parts;
++	unsigned int			nr_parts;
+ };
+ 
+ #endif /* __DENALI_PDATA_H__ */
+-- 
+1.7.0.4
+

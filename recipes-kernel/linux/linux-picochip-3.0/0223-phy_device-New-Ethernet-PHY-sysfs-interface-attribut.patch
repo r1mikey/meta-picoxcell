@@ -1,0 +1,214 @@
+From 931bc8f2cd3cf30df046dd3c42dd9849dff448ec Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Wed, 19 Mar 2014 10:12:58 +0000
+Subject: [PATCH 223/228] phy_device: New Ethernet PHY sysfs interface attributes
+ Two new attributes, phyReg and loopback have been added to the PHY sysfs
+ Mantis Issue #11384
+
+---
+ drivers/net/phy/phy_device.c |  161 ++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 161 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/phy/phy_device.c b/drivers/net/phy/phy_device.c
+index ff109fe..d51fdc3 100644
+--- a/drivers/net/phy/phy_device.c
++++ b/drivers/net/phy/phy_device.c
+@@ -39,6 +39,7 @@ MODULE_DESCRIPTION("PHY library");
+ MODULE_AUTHOR("Andy Fleming");
+ MODULE_LICENSE("GPL");
+ 
++
+ void phy_device_free(struct phy_device *phydev)
+ {
+ 	kfree(phydev);
+@@ -50,6 +51,7 @@ static void phy_device_release(struct device *dev)
+ 	phy_device_free(to_phy_device(dev));
+ }
+ 
++struct phy_device *g_phydev = NULL;
+ static struct phy_driver genphy_driver;
+ extern int mdio_bus_init(void);
+ extern void mdio_bus_exit(void);
+@@ -912,6 +914,157 @@ int genphy_resume(struct phy_device *phydev)
+ }
+ EXPORT_SYMBOL(genphy_resume);
+ 
++
++/* Ethernet Phy sysfs
++ * Create 'phyReg' and 'loopback' attributes for the Ethernet phy sysfs 
++ * interface in order to control the ethernet phy interface, in particular
++ *  the LED
++ */
++
++/* Add the store method for phyReg sysfs attribute */
++static ssize_t phy_sysfs_reg_store(struct device *dev,
++                                   struct device_attribute *attr,
++                                   const char *buf,
++                                   size_t count)
++{
++    char cmd;
++    int regAddr=0;
++    int regVal=0;
++    int ret=0;
++
++    /* 
++    Command format should be of the form:
++        echo    r   phy_reg_addr > phyReg 
++        echo    w  phy_reg_addr  phy_reg_val > phyReg
++    */
++
++    if (!g_phydev)
++    {      
++        printk("phy_sysfs_reg_store: phy_probe fail !\n");
++    }
++
++    sscanf(buf, "%c %x %x", &cmd, &regAddr, &regVal);    
++
++    switch (cmd)
++    {
++        case 'r':
++            regVal = phy_read(g_phydev, regAddr); 
++            printk("Read PHY reg_addr 0x%02x => val 0x%04x \n", regAddr, regVal);
++            break;
++        case 'w':
++	     ret = phy_write(g_phydev, regAddr, regVal);
++            if (ret < 0)
++                printk("Write PHY reg_addr %02x, val %04x FAIL %d !\n", regAddr, regVal, ret);
++            else
++                printk("Write PHY reg_addr %02x, val %04x SUCCESS !\n", regAddr, regVal);
++
++            break;
++        default:
++            printk("\rCmd: echo (r reg_addr |w reg_addr reg_val) > phyReg \n");            
++            break;
++    }
++    return (ssize_t)count;
++}
++
++static DEVICE_ATTR(phyReg, S_IWUGO,
++                   NULL,
++                   phy_sysfs_reg_store);
++
++
++/* Add the store method for loopback sysfs attribute */
++static ssize_t phy_sysfs_loopback_store(struct device *dev,
++                                        struct device_attribute *attr,
++                                        const char *buf,
++                                        size_t count)
++{
++    char cmd[10]="";
++    int regVal=0;
++    int ret=0;
++
++    /* 
++    Command format should be of the form:
++        echo  enable > loopback 
++        echo  disable > loopback
++    */
++
++    if (!g_phydev)
++    {      
++        printk("phy_sysfs_reg_store: phy_probe fail !\n");
++    }
++
++    sscanf(buf, "%9s", cmd);   /*NB: one less to allow for null in array */    
++
++    regVal = phy_read(g_phydev, 0); 
++
++    printk("phy_sysfs_reg_store: before regVal %x\n", regVal);
++    if (strcmp(cmd, "enable") == 0)
++    {
++        regVal |= 0x4000;
++    }
++    else if (strcmp(cmd, "disable") == 0)
++    {
++        regVal &= (~0x4000);
++    }
++    else
++    {
++        printk("\rcmd: echo (enable|disable) > loopback \n");
++        return (ssize_t)count;
++    }
++
++    printk("phy_sysfs_reg_store: after regVal %x\n", regVal);
++    ret = phy_write(g_phydev, 0, regVal);
++    if (ret < 0)
++        printk("Set PHY sloopback operation FAIL %d !\n", ret);
++    else
++        printk("Set PHY loopback operation SUCCESS !\n");
++
++    return (ssize_t)count;
++}
++
++static DEVICE_ATTR(loopback, S_IWUGO,
++                   NULL,
++                   phy_sysfs_loopback_store);
++
++static struct attribute *phy_sysfs_attr[] = {
++    &dev_attr_phyReg.attr,   
++    &dev_attr_loopback.attr,   
++    NULL
++};
++
++static int phy_sysfs_add(struct kobject *kobj)
++{
++    int i=0;
++    int n=0;
++    int ret=0;
++
++    n = ARRAY_SIZE(phy_sysfs_attr);
++    for (i = 0; i < n; ++i) {
++        if( phy_sysfs_attr[i] ) {
++            ret = sysfs_create_file(kobj, phy_sysfs_attr[i]);
++            if (ret)
++                return ret;
++        }
++    }
++
++    if (ret)
++        return ret;
++    return 0;
++}
++
++static int phy_sysfs_rm(struct kobject *kobj)
++{
++    int i=0;
++    int n=0;
++
++    n = ARRAY_SIZE(phy_sysfs_attr);
++    for (i = 0; i < n; i++) {
++        if( phy_sysfs_attr[i] )
++            sysfs_remove_file(kobj, phy_sysfs_attr[i]);
++    }
++    return 0;
++}
++
++
+ /**
+  * phy_probe - probe and init a PHY device
+  * @dev: device to probe and init
+@@ -955,6 +1108,11 @@ static int phy_probe(struct device *dev)
+ 
+ 	mutex_unlock(&phydev->lock);
+ 
++        /* add sysfs phydev interface */ 
++        g_phydev = phydev;
++        phy_sysfs_add(&phydev->dev.kobj);
++
++
+ 	return err;
+ 
+ }
+@@ -969,6 +1127,9 @@ static int phy_remove(struct device *dev)
+ 	phydev->state = PHY_DOWN;
+ 	mutex_unlock(&phydev->lock);
+ 
++        /* remove sysfs phydev interface */ 
++        phy_sysfs_rm(&phydev->dev.kobj);
++
+ 	if (phydev->drv->remove)
+ 		phydev->drv->remove(phydev);
+ 
+-- 
+1.7.0.4
+

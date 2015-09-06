@@ -1,0 +1,28 @@
+From 9f5e50312501715d489dd99a4511bea2fda86287 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 29 Mar 2011 12:42:43 +0100
+Subject: [PATCH 033/228] picoxcell/pc7302: register the TSU
+
+Register the TSU on the PC7302 with a default rate of 20MHz, this
+is using the system reference clock on the board.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index 75fcecf..6e2566f 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -187,6 +187,7 @@ static void pc7302_init_nand(void)
+ 
+ static void __init pc7302_init(void)
+ {
++	picoxcell_tsu_init(20000000);
+ 	picoxcell_core_init();
+ 
+ 	if ((axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET) & 0x3) == 0)
+-- 
+1.7.0.4
+

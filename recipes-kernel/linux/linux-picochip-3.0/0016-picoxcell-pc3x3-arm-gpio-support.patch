@@ -1,0 +1,43 @@
+From 0e543a3b2cade761ff76ab7716898466a47cc315 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 18 Mar 2011 17:38:32 +0000
+Subject: [PATCH 016/228] picoxcell/pc3x3: arm gpio support
+
+Define the pins and names for PC3X3 and register the GPIO chips.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x3.c |    9 +++++++++
+ 1 files changed, 9 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index 7fc6f4e..66994ef 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -12,6 +12,7 @@
+ #include <linux/io.h>
+ #include <linux/irq.h>
+ #include <linux/kernel.h>
++#include <linux/platform_device.h>
+ #include <linux/spinlock.h>
+ #include <linux/timex.h>
+ 
+@@ -386,7 +387,15 @@ struct picoxcell_soc pc3x3_soc = {
+ 	.nr_timers	= ARRAY_SIZE(pc3x3_timers),
+ };
+ 
++static void pc3x3_add_gpio(void)
++{
++	picoxcell_add_gpio_port(0, 8, PC3X3_GPIO_PIN_ARM_0);
++	picoxcell_add_gpio_port(1, 16, PC3X3_GPIO_PIN_ARM_8);
++	picoxcell_add_gpio_port(3, 30, PC3X3_GPIO_PIN_ARM_24);
++}
++
+ static void pc3x3_init(void)
+ {
+ 	picoxcell_mux_register(pc3x3_mux, ARRAY_SIZE(pc3x3_mux));
++	pc3x3_add_gpio();
+ }
+-- 
+1.7.0.4
+

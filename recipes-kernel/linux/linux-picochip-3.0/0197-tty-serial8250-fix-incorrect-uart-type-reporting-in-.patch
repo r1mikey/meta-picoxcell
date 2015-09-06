@@ -1,0 +1,29 @@
+From 971fdd295a066390ab75a707ef160778f9a3bbf1 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 13 Jul 2012 11:47:17 +0100
+Subject: [PATCH 197/228] tty: serial8250: fix incorrect uart type reporting in Picoxcell devices
+
+The Picoxcell PC3008 incorrectly identied the UART as being an Xscale
+UART when infact it should be reported as a 16550A.
+
+This commit forms part of the resolution of Mantis Issue #10516
+---
+ drivers/tty/serial/8250.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/tty/serial/8250.c b/drivers/tty/serial/8250.c
+index 094776c..d36d6e6 100644
+--- a/drivers/tty/serial/8250.c
++++ b/drivers/tty/serial/8250.c
+@@ -990,7 +990,7 @@ static void autoconfig_16550a(struct uart_8250_port *up)
+ 	if (!((status2 ^ status1) & UART_MCR_LOOP)) {
+ 		serial_outp(up, UART_LCR, 0);
+ 		serial_outp(up, UART_MCR, status1 ^ UART_MCR_LOOP);
+-		serial_outp(up, UART_LCR, 0xE0);
++		serial_outp(up, UART_LCR, 0xA0);
+ 		status2 = serial_in(up, 0x02); /* EXCR1 */
+ 		serial_outp(up, UART_LCR, 0);
+ 		serial_outp(up, UART_MCR, status1);
+-- 
+1.7.0.4
+

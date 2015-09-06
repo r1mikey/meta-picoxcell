@@ -1,0 +1,55 @@
+From ab5493e827da4ab59cdab466c7a28a1b2644c23c Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 19 Apr 2011 22:52:09 +0100
+Subject: [PATCH 097/228] picoxcell/pc30xx: register the OTP device
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ .../include/mach/picoxcell/picoxcell.h             |    1 +
+ arch/arm/mach-picoxcell/pc30xx.c                   |   11 +++++++++++
+ 2 files changed, 12 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h b/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
+index 9691ec0..83d003d 100644
+--- a/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
++++ b/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
+@@ -48,6 +48,7 @@
+ #define PC3X3_RNG_BASE			0x800B0000
+ #define PC3X3_TIMER2_BASE		0x80260000
+ #define PC3X3_OTP_BASE			0xFFFF8000
++#define PC30XX_OTP_BASE			0xFFFF8000
+ 
+ #define EBI_CS0_BASE			0x40000000
+ #define EBI_CS1_BASE			0x48000000
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index ed249c8..a602baa 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -623,6 +623,16 @@ static void pc30xx_add_ts(void)
+ 					  &pdata, sizeof(pdata));
+ }
+ 
++static void pc30xx_add_otp(void)
++{
++	struct resource res = {
++		.start	= PC30XX_OTP_BASE,
++		.end	= PC30XX_OTP_BASE + SZ_32K - 1,
++		.flags	= IORESOURCE_MEM,
++	};
++	platform_device_register_simple("picoxcell-otp-pc30xx", -1, &res, 1);
++}
++
+ static void __init pc30xx_init(void)
+ {
+ 	pc30xx_init_bus_snoopers();
+@@ -632,6 +642,7 @@ static void __init pc30xx_init(void)
+ 	pc30xx_add_gpio();
+ 	pc30xx_add_fuse();
+ 	pc30xx_add_ts();
++	pc30xx_add_otp();
+ }
+ 
+ const struct picoxcell_soc pc30xx_soc __initconst = {
+-- 
+1.7.0.4
+

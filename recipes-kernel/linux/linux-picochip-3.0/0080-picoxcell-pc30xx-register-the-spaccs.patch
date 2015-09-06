@@ -1,0 +1,46 @@
+From d925c1bab4fa10ec3bdd44bb9dcd09ffbf8f863b Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 16:47:17 +0100
+Subject: [PATCH 080/228] picoxcell/pc30xx: register the spaccs
+
+pc30xx has both l2 and ipsec engines and are v2 spaccs.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc30xx.c |   10 ++++++++++
+ 1 files changed, 10 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 36268c9..765550c 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -21,6 +21,7 @@
+ #include <mach/clkdev.h>
+ #include <mach/hardware.h>
+ 
++#include "picoxcell_core.h"
+ #include "soc.h"
+ 
+ #define AXI2CFG_INPUT_XTAL_CLOCK_REG_OFFSET		0x006C
+@@ -469,9 +470,18 @@ static void pc30xx_init_bus_snoopers(void)
+ 					  sizeof(pc30xx_snoop_err_names));
+ }
+ 
++static void pc30xx_add_spaccs(void)
++{
++	picoxcell_add_spacc("picoxcell-ipsec-v2", PICOXCELL_IPSEC_BASE,
++			    IRQ_IPSEC, -1);
++	picoxcell_add_spacc("picoxcell-l2-v2", PICOXCELL_CIPHER_BASE,
++			    IRQ_AES, -1);
++}
++
+ static void __init pc30xx_init(void)
+ {
+ 	pc30xx_init_bus_snoopers();
++	pc30xx_add_spaccs();
+ }
+ 
+ const struct picoxcell_soc pc30xx_soc __initconst = {
+-- 
+1.7.0.4
+

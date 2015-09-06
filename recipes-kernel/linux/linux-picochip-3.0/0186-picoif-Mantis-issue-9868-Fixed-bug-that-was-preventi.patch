@@ -1,0 +1,25 @@
+From b5dee7e0a2ea7e0963231c90e06d46704c345838 Mon Sep 17 00:00:00 2001
+From: Andrew Watkins <Andrew.Watkins@picochip.com>
+Date: Mon, 9 Jan 2012 13:58:00 +0000
+Subject: [PATCH 186/228] picoif: Mantis issue #9868 - Fixed bug that was preventing .pico file from loading correctly
+
+---
+ drivers/picochip/picoif_main.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/picochip/picoif_main.c b/drivers/picochip/picoif_main.c
+index 2b86e0c..6138ade 100644
+--- a/drivers/picochip/picoif_main.c
++++ b/drivers/picochip/picoif_main.c
+@@ -867,7 +867,7 @@ picoif_ioctl_multi_reg_req( struct picoif_multi_reg_req __user *user_req,
+             sg_mark_end( &sgl );
+ 
+             ret = copy_from_user( bounce, &multi_reg_req.buf[ words_so_far ],
+-                          sgl.length * sizeof( u32 ));
++                          sgl.length);
+             words_so_far += sgl.length / sizeof( u32 );
+ 
+             if ( ret )
+-- 
+1.7.0.4
+

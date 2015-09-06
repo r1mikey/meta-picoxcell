@@ -1,0 +1,26 @@
+From 5c6c75ae0a83f4dc2a98880185ebf0e0169c78a7 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 4 Apr 2011 13:55:35 +0100
+Subject: [PATCH 055/228] picoxcell/pc3x2: convert to use clk_ops
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x2.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index 63db844..b42bdcf 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -21,7 +21,7 @@
+ #include "picoxcell_core.h"
+ #include "soc.h"
+ 
+-FIXED_CLK(dummy,	CLOCK_TICK_RATE, -1);
++FIXED_CLK(dummy,	CLOCK_TICK_RATE, -1, NULL);
+ 
+ static struct clk_lookup pc3x2_clk_lookup[] = {
+ 	CLK_LOOKUP("dw_spi_mmio.0",	NULL,		&dummy_clk),
+-- 
+1.7.0.4
+

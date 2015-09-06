@@ -1,0 +1,39 @@
+From 648a67e0fb52286da2928b78d8909d7e1a3f0307 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 5 May 2011 16:52:51 +0100
+Subject: [PATCH 149/228] nand/denali: annotate pci init/exit functions with correct section
+
+The module init exit functions should be annotated with __init and
+__exit.
+
+Cc: David Woodhouse <dwmw2@infradead.org>
+Cc: Chuanxiao Dong <chuanxiao.dong@intel.com>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/mtd/nand/denali.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index d527621..8ae24e7 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -1699,14 +1699,14 @@ static struct pci_driver denali_pci_driver = {
+ 	.remove = denali_pci_remove,
+ };
+ 
+-static int __devinit denali_init(void)
++static int __init denali_init(void)
+ {
+ 	printk(KERN_INFO "Spectra MTD driver\n");
+ 	return pci_register_driver(&denali_pci_driver);
+ }
+ 
+ /* Free memory */
+-static void __devexit denali_exit(void)
++static void __exit denali_exit(void)
+ {
+ 	pci_unregister_driver(&denali_pci_driver);
+ }
+-- 
+1.7.0.4
+

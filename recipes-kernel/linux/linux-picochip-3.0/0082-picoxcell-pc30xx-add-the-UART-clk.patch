@@ -1,0 +1,28 @@
+From 3eb37719f9b330b679b301ea53252bae4fe79b27 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 16:50:02 +0100
+Subject: [PATCH 082/228] picoxcell/pc30xx: add the UART clk
+
+Unlike pc3x2 and pc3x3, the UART's are now clocked from the AMBA bus at
+200MHz and this is onchip rather than at the board level.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc30xx.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index b93869f..cb4bdfc 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -353,6 +353,7 @@ static struct clk_lookup pc30xx_clk_lookup[] = {
+ 	CLK_LOOKUP(NULL,		"arm",		&arm_clk.clk),
+ 	CLK_LOOKUP("dw_apb_timer.0",	NULL,		&dummy_clk),
+ 	CLK_LOOKUP("dw_apb_timer.1",	NULL,		&dummy_clk),
++	CLK_LOOKUP(NULL,		"uart",		&dummy_clk),
+ };
+ 
+ static void __init pc30xx_clk_init(void)
+-- 
+1.7.0.4
+

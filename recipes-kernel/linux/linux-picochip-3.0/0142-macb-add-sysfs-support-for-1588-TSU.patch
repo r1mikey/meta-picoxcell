@@ -1,0 +1,179 @@
+From acd573f98cd74daae51cc56908ab63650b1187d3 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 31 May 2011 10:46:16 +0100
+Subject: [PATCH 142/228] macb: add sysfs support for 1588 TSU
+
+Export TSU information through sysfs.  Some userspace NTP daemons need
+this to control the TSU, and currently this is the only way to increment
+the timer.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/net/macb.c |  130 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 130 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index ea4f225..c00bd24 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -973,6 +973,127 @@ static void macb_configure_dma(struct macb *bp)
+ 	}
+ }
+ 
++static ssize_t macb_1588_seconds_show(struct device *dev,
++				      struct device_attribute *attr, char *buf)
++{
++	struct net_device *netdev = dev_get_drvdata(dev);
++	struct macb *bp = netdev_priv(netdev);
++
++	return sprintf(buf, "%u\n", gem_readl(bp, TMRSEC));
++}
++
++static ssize_t macb_1588_seconds_store(struct device *dev,
++				       struct device_attribute *attr,
++				       const char *buf, size_t count)
++{
++	struct net_device *netdev = dev_get_drvdata(dev);
++	struct macb *bp = netdev_priv(netdev);
++	int err;
++	u32 seconds;
++
++	err = kstrtou32(buf, 0, &seconds);
++	if (err)
++		return err;
++
++	gem_writel(bp, TMRSEC, seconds);
++
++	return count;
++}
++static DEVICE_ATTR(1588_timer_seconds, 0600, macb_1588_seconds_show,
++		   macb_1588_seconds_store);
++
++static ssize_t macb_1588_nano_seconds_show(struct device *dev,
++					   struct device_attribute *attr,
++					   char *buf)
++{
++	struct net_device *netdev = dev_get_drvdata(dev);
++	struct macb *bp = netdev_priv(netdev);
++
++	return sprintf(buf, "%u\n", gem_readl(bp, TMRNSEC));
++}
++
++static ssize_t macb_1588_nano_seconds_store(struct device *dev,
++					    struct device_attribute *attr,
++					    const char *buf, size_t count)
++{
++	struct net_device *netdev = dev_get_drvdata(dev);
++	struct macb *bp = netdev_priv(netdev);
++	int err;
++	u32 ns;
++
++	err = kstrtou32(buf, 0, &ns);
++	if (err)
++		return err;
++
++	gem_writel(bp, TMRNSEC, ns);
++
++	return count;
++}
++static DEVICE_ATTR(1588_timer_nano_seconds, 0600, macb_1588_nano_seconds_show,
++		   macb_1588_nano_seconds_store);
++
++static ssize_t macb_1588_timer_adjust_store(struct device *dev,
++					    struct device_attribute *attr,
++					    const char *buf, size_t count)
++{
++	struct net_device *netdev = dev_get_drvdata(dev);
++	struct macb *bp = netdev_priv(netdev);
++	int err;
++	u32 delta;
++
++	err = kstrtou32(buf, 0, &delta);
++	if (err)
++		return err;
++
++	gem_writel(bp, TMRADJ, delta);
++
++	return count;
++}
++static DEVICE_ATTR(1588_timer_adjust, 0600, NULL,
++		   macb_1588_timer_adjust_store);
++
++static ssize_t macb_1588_timer_increment_show(struct device *dev,
++					      struct device_attribute *attr,
++					      char *buf)
++{
++	struct net_device *netdev = dev_get_drvdata(dev);
++	struct macb *bp = netdev_priv(netdev);
++
++	return sprintf(buf, "%u\n", gem_readl(bp, TMRINC));
++}
++
++static ssize_t macb_1588_timer_increment_store(struct device *dev,
++					       struct device_attribute *attr,
++					       const char *buf, size_t count)
++{
++	struct net_device *netdev = dev_get_drvdata(dev);
++	struct macb *bp = netdev_priv(netdev);
++	int err;
++	u32 ns;
++
++	err = kstrtou32(buf, 0, &ns);
++	if (err)
++		return err;
++
++	gem_writel(bp, TMRINC, ns);
++
++	return count;
++}
++static DEVICE_ATTR(1588_timer_increment, 0600, macb_1588_timer_increment_show,
++		   macb_1588_timer_increment_store);
++
++static struct attribute *macb_attrs[] = {
++	&dev_attr_1588_timer_seconds.attr,
++	&dev_attr_1588_timer_nano_seconds.attr,
++	&dev_attr_1588_timer_adjust.attr,
++	&dev_attr_1588_timer_increment.attr,
++	NULL
++};
++
++static struct attribute_group macb_attr_group = {
++	.attrs = macb_attrs
++};
++
+ static void macb_program_timer_incr(struct macb *bp, unsigned long tsu_rate)
+ {
+ 	unsigned long cycles_per_nsec = NSEC_PER_SEC / tsu_rate;
+@@ -1027,6 +1148,12 @@ static int macb_configure_tsu(struct macb *bp)
+ 		goto out_put_clk;
+ 	}
+ 
++	err = sysfs_create_group(&bp->pdev->dev.kobj, &macb_attr_group);
++	if (err) {
++		netdev_err(bp->dev, "unable to init sysfs attrs\n");
++		goto out_disable_clk;
++	}
++
+ 	tsu_rate = clk_get_rate(bp->tsu);
+ 
+ 	/* Program the TSU to increment at the correct rate. */
+@@ -1038,6 +1165,8 @@ static int macb_configure_tsu(struct macb *bp)
+ 
+ 	return 0;
+ 
++out_disable_clk:
++	clk_disable(bp->tsu);
+ out_put_clk:
+ 	clk_put(bp->tsu);
+ out:
+@@ -1665,6 +1794,7 @@ static int __exit macb_remove(struct platform_device *pdev)
+ 	dev = platform_get_drvdata(pdev);
+ 
+ 	if (dev) {
++		sysfs_remove_group(&pdev->dev.kobj, &macb_attr_group);
+ 		bp = netdev_priv(dev);
+ 		if (bp->phy_dev)
+ 			phy_disconnect(bp->phy_dev);
+-- 
+1.7.0.4
+

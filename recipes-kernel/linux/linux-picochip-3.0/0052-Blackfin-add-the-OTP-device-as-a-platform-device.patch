@@ -1,0 +1,276 @@
+From be3ebf9b367d5af5f4377842a2f8692276bf03f1 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 25 Mar 2011 16:25:32 +0000
+Subject: [PATCH 052/228] Blackfin: add the OTP device as a platform device
+
+Register the OTP as a platform device so that we can use the generic
+OTP subsystem.
+
+Cc: Mike Frysinger <vapier@gmail.com>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/blackfin/mach-bf518/boards/ezbrd.c      |   10 ++++++++++
+ arch/blackfin/mach-bf518/boards/tcm-bf518.c  |   10 ++++++++++
+ arch/blackfin/mach-bf527/boards/ad7160eval.c |   10 ++++++++++
+ arch/blackfin/mach-bf527/boards/cm_bf527.c   |   10 ++++++++++
+ arch/blackfin/mach-bf527/boards/ezbrd.c      |   10 ++++++++++
+ arch/blackfin/mach-bf527/boards/ezkit.c      |   10 ++++++++++
+ arch/blackfin/mach-bf527/boards/tll6527m.c   |   10 ++++++++++
+ arch/blackfin/mach-bf548/boards/cm_bf548.c   |    9 +++++++++
+ arch/blackfin/mach-bf548/boards/ezkit.c      |   10 ++++++++++
+ 9 files changed, 89 insertions(+), 0 deletions(-)
+
+diff --git a/arch/blackfin/mach-bf518/boards/ezbrd.c b/arch/blackfin/mach-bf518/boards/ezbrd.c
+index c0ccadc..7328ea1 100644
+--- a/arch/blackfin/mach-bf518/boards/ezbrd.c
++++ b/arch/blackfin/mach-bf518/boards/ezbrd.c
+@@ -747,6 +747,12 @@ static struct platform_device bfin_dpmc = {
+ 	},
+ };
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++static struct platform_device bfin_otp_device = {
++	.name = "bfin-otp",
++};
++#endif
++
+ static struct platform_device *stamp_devices[] __initdata = {
+ 
+ 	&bfin_dpmc,
+@@ -814,6 +820,10 @@ static struct platform_device *stamp_devices[] __initdata = {
+ #if defined(CONFIG_MTD_PHYSMAP) || defined(CONFIG_MTD_PHYSMAP_MODULE)
+ 	&ezbrd_flash_device,
+ #endif
++
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++	&bfin_otp_device,
++#endif
+ };
+ 
+ static int __init ezbrd_init(void)
+diff --git a/arch/blackfin/mach-bf518/boards/tcm-bf518.c b/arch/blackfin/mach-bf518/boards/tcm-bf518.c
+index 50fc5c8..a36a1b2 100644
+--- a/arch/blackfin/mach-bf518/boards/tcm-bf518.c
++++ b/arch/blackfin/mach-bf518/boards/tcm-bf518.c
+@@ -659,6 +659,12 @@ static struct platform_device bfin_dpmc = {
+ 	},
+ };
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++static struct platform_device bfin_otp_device = {
++	.name = "bfin-otp",
++};
++#endif
++
+ static struct platform_device *tcm_devices[] __initdata = {
+ 
+ 	&bfin_dpmc,
+@@ -719,6 +725,10 @@ static struct platform_device *tcm_devices[] __initdata = {
+ #if defined(CONFIG_MTD_PHYSMAP) || defined(CONFIG_MTD_PHYSMAP_MODULE)
+ 	&tcm_flash_device,
+ #endif
++
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++	&bfin_otp_device,
++#endif
+ };
+ 
+ static int __init tcm_init(void)
+diff --git a/arch/blackfin/mach-bf527/boards/ad7160eval.c b/arch/blackfin/mach-bf527/boards/ad7160eval.c
+index ccab4c6..05ac322 100644
+--- a/arch/blackfin/mach-bf527/boards/ad7160eval.c
++++ b/arch/blackfin/mach-bf527/boards/ad7160eval.c
+@@ -731,6 +731,12 @@ static struct platform_device bfin_dpmc = {
+ 	},
+ };
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++static struct platform_device bfin_otp_device = {
++	.name = "bfin-otp",
++};
++#endif
++
+ static struct platform_device *stamp_devices[] __initdata = {
+ 
+ 	&bfin_dpmc,
+@@ -806,6 +812,10 @@ static struct platform_device *stamp_devices[] __initdata = {
+ #if defined(CONFIG_SND_BF5XX_TDM) || defined(CONFIG_SND_BF5XX_TDM_MODULE)
+ 	&bfin_tdm,
+ #endif
++
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++	&bfin_otp_device,
++#endif
+ };
+ 
+ static int __init ad7160eval_init(void)
+diff --git a/arch/blackfin/mach-bf527/boards/cm_bf527.c b/arch/blackfin/mach-bf527/boards/cm_bf527.c
+index c9d6dc8..a8e807a 100644
+--- a/arch/blackfin/mach-bf527/boards/cm_bf527.c
++++ b/arch/blackfin/mach-bf527/boards/cm_bf527.c
+@@ -896,6 +896,12 @@ static struct platform_device bfin_dpmc = {
+ 	},
+ };
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++static struct platform_device bfin_otp_device = {
++	.name = "bfin-otp",
++};
++#endif
++
+ static struct platform_device *cmbf527_devices[] __initdata = {
+ 
+ 	&bfin_dpmc,
+@@ -979,6 +985,10 @@ static struct platform_device *cmbf527_devices[] __initdata = {
+ #if defined(CONFIG_MTD_GPIO_ADDR) || defined(CONFIG_MTD_GPIO_ADDR_MODULE)
+ 	&cm_flash_device,
+ #endif
++
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++	&bfin_otp_device,
++#endif
+ };
+ 
+ static int __init cm_init(void)
+diff --git a/arch/blackfin/mach-bf527/boards/ezbrd.c b/arch/blackfin/mach-bf527/boards/ezbrd.c
+index b7101aa..aabfb72 100644
+--- a/arch/blackfin/mach-bf527/boards/ezbrd.c
++++ b/arch/blackfin/mach-bf527/boards/ezbrd.c
+@@ -806,6 +806,12 @@ static struct platform_device bfin_lq035q1_device = {
+ };
+ #endif
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++static struct platform_device bfin_otp_device = {
++	.name = "bfin-otp",
++};
++#endif
++
+ static struct platform_device *stamp_devices[] __initdata = {
+ 
+ 	&bfin_dpmc,
+@@ -873,6 +879,10 @@ static struct platform_device *stamp_devices[] __initdata = {
+ #if defined(CONFIG_MTD_PHYSMAP) || defined(CONFIG_MTD_PHYSMAP_MODULE)
+ 	&ezbrd_flash_device,
+ #endif
++
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++	&bfin_otp_device,
++#endif
+ };
+ 
+ static int __init ezbrd_init(void)
+diff --git a/arch/blackfin/mach-bf527/boards/ezkit.c b/arch/blackfin/mach-bf527/boards/ezkit.c
+index e67ac77..77e72af 100644
+--- a/arch/blackfin/mach-bf527/boards/ezkit.c
++++ b/arch/blackfin/mach-bf527/boards/ezkit.c
+@@ -1180,6 +1180,12 @@ static struct platform_device bfin_dpmc = {
+ 	},
+ };
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++static struct platform_device bfin_otp_device = {
++	.name = "bfin-otp",
++};
++#endif
++
+ static struct platform_device *stamp_devices[] __initdata = {
+ 
+ 	&bfin_dpmc,
+@@ -1288,6 +1294,10 @@ static struct platform_device *stamp_devices[] __initdata = {
+ #if defined(CONFIG_SND_BF5XX_TDM) || defined(CONFIG_SND_BF5XX_TDM_MODULE)
+ 	&bfin_tdm,
+ #endif
++
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++	&bfin_otp_device,
++#endif
+ };
+ 
+ static int __init ezkit_init(void)
+diff --git a/arch/blackfin/mach-bf527/boards/tll6527m.c b/arch/blackfin/mach-bf527/boards/tll6527m.c
+index 18d303d..f1de548 100644
+--- a/arch/blackfin/mach-bf527/boards/tll6527m.c
++++ b/arch/blackfin/mach-bf527/boards/tll6527m.c
+@@ -873,6 +873,12 @@ static struct platform_device bfin_dpmc = {
+ 	},
+ };
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++static struct platform_device bfin_otp_device = {
++	.name = "bfin-otp",
++};
++#endif
++
+ static struct platform_device *tll6527m_devices[] __initdata = {
+ 
+ 	&bfin_dpmc,
+@@ -941,6 +947,10 @@ static struct platform_device *tll6527m_devices[] __initdata = {
+ #if defined(CONFIG_GPIO_DECODER) || defined(CONFIG_GPIO_DECODER_MODULE)
+ 	&spi_decoded_gpio,
+ #endif
++
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++	&bfin_otp_device,
++#endif
+ };
+ 
+ static int __init tll6527m_init(void)
+diff --git a/arch/blackfin/mach-bf548/boards/cm_bf548.c b/arch/blackfin/mach-bf548/boards/cm_bf548.c
+index d11502a..746b3df 100644
+--- a/arch/blackfin/mach-bf548/boards/cm_bf548.c
++++ b/arch/blackfin/mach-bf548/boards/cm_bf548.c
+@@ -1093,6 +1093,12 @@ static struct platform_device bfin_dpmc = {
+ 	},
+ };
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++static struct platform_device bfin_otp_device = {
++	.name = "bfin-otp",
++};
++#endif
++
+ static struct platform_device *cm_bf548_devices[] __initdata = {
+ 
+ 	&bfin_dpmc,
+@@ -1198,6 +1204,9 @@ static struct platform_device *cm_bf548_devices[] __initdata = {
+ 	&bfin_can_device,
+ #endif
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++	&bfin_otp_device,
++#endif
+ };
+ 
+ static int __init cm_bf548_init(void)
+diff --git a/arch/blackfin/mach-bf548/boards/ezkit.c b/arch/blackfin/mach-bf548/boards/ezkit.c
+index 311bf99..92e0163 100644
+--- a/arch/blackfin/mach-bf548/boards/ezkit.c
++++ b/arch/blackfin/mach-bf548/boards/ezkit.c
+@@ -1428,6 +1428,12 @@ static struct platform_device bfin_ac97 = {
+ };
+ #endif
+ 
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++static struct platform_device bfin_otp_device = {
++	.name = "bfin-otp",
++};
++#endif
++
+ static struct platform_device *ezkit_devices[] __initdata = {
+ 
+ 	&bfin_dpmc,
+@@ -1563,6 +1569,10 @@ static struct platform_device *ezkit_devices[] __initdata = {
+ #if defined(CONFIG_SND_BF5XX_AC97) || defined(CONFIG_SND_BF5XX_AC97_MODULE)
+ 	&bfin_ac97,
+ #endif
++
++#if defined(CONFIG_BFIN_OTP) || defined(CONFIG_BFIN_OTP_MODULE)
++	&bfin_otp_device,
++#endif
+ };
+ 
+ static int __init ezkit_init(void)
+-- 
+1.7.0.4
+

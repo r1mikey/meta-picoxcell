@@ -1,0 +1,168 @@
+From 9f5687fb1a3244c22aba1851e07b987d3937f947 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 14:31:30 +0100
+Subject: [PATCH 076/228] crypto: picoxcell - support for v2 SPAccs
+
+The v2 SPAcc's have a slightly different register map to the v1 versions.
+For the registers that vary, keep a pointer to the register in the engine
+and assign at probe time rather than dynamic computation.
+
+Cc: Herbert Xu <herbert@gondor.apana.org.au>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/crypto/picoxcell_crypto.c      |   51 +++++++++++++++++++++++++-------
+ drivers/crypto/picoxcell_crypto_regs.h |   10 +++---
+ 2 files changed, 45 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/crypto/picoxcell_crypto.c b/drivers/crypto/picoxcell_crypto.c
+index 0de290a..68bc1cf 100644
+--- a/drivers/crypto/picoxcell_crypto.c
++++ b/drivers/crypto/picoxcell_crypto.c
+@@ -105,7 +105,20 @@ struct spacc_req {
+ };
+ 
+ struct spacc_engine {
++	int				version;
+ 	void __iomem			*regs;
++
++	/*
++	 * These location of these registers depends on the SPAcc version so
++	 * rather than runtime evaluation we cache the addresses here and use
++	 * the pointers.
++	 */
++	void __iomem			*proc_len;
++	void __iomem			*icv_len;
++	void __iomem			*icv_offs;
++	void __iomem			*ctrl;
++	void __iomem			*aux_info;
++
+ 	struct list_head		pending;
+ 	int				next_ctx;
+ 	spinlock_t			hw_lock;
+@@ -648,11 +661,11 @@ static int spacc_aead_submit(struct spacc_req *req)
+ 	if (!req->is_encrypt)
+ 		proc_len -= ctx->auth_size;
+ 
+-	writel(proc_len, engine->regs + SPA_PROC_LEN_REG_OFFSET);
++	writel(proc_len, engine->proc_len);
+ 	writel(assoc_len, engine->regs + SPA_AAD_LEN_REG_OFFSET);
+-	writel(ctx->auth_size, engine->regs + SPA_ICV_LEN_REG_OFFSET);
+-	writel(0, engine->regs + SPA_ICV_OFFSET_REG_OFFSET);
+-	writel(0, engine->regs + SPA_AUX_INFO_REG_OFFSET);
++	writel(ctx->auth_size, engine->icv_len);
++	writel(0, engine->icv_offs);
++	writel(0, engine->aux_info);
+ 
+ 	ctrl = spacc_alg->ctrl_default | (req->ctx_id << SPA_CTRL_CTX_IDX) |
+ 		(1 << SPA_CTRL_ICV_APPEND);
+@@ -663,7 +676,7 @@ static int spacc_aead_submit(struct spacc_req *req)
+ 
+ 	mod_timer(&engine->packet_timeout, jiffies + PACKET_TIMEOUT);
+ 
+-	writel(ctrl, engine->regs + SPA_CTRL_REG_OFFSET);
++	writel(ctrl, engine->ctrl);
+ 
+ 	return -EINPROGRESS;
+ }
+@@ -972,9 +985,9 @@ static int spacc_ablk_submit(struct spacc_req *req)
+ 	writel(req->dst_addr, engine->regs + SPA_DST_PTR_REG_OFFSET);
+ 	writel(0, engine->regs + SPA_OFFSET_REG_OFFSET);
+ 
+-	writel(ablk_req->nbytes, engine->regs + SPA_PROC_LEN_REG_OFFSET);
+-	writel(0, engine->regs + SPA_ICV_OFFSET_REG_OFFSET);
+-	writel(0, engine->regs + SPA_AUX_INFO_REG_OFFSET);
++	writel(ablk_req->nbytes, engine->proc_len);
++	writel(0, engine->icv_offs);
++	writel(0, engine->aux_info);
+ 	writel(0, engine->regs + SPA_AAD_LEN_REG_OFFSET);
+ 
+ 	ctrl = spacc_alg->ctrl_default | (req->ctx_id << SPA_CTRL_CTX_IDX) |
+@@ -983,7 +996,7 @@ static int spacc_ablk_submit(struct spacc_req *req)
+ 
+ 	mod_timer(&engine->packet_timeout, jiffies + PACKET_TIMEOUT);
+ 
+-	writel(ctrl, engine->regs + SPA_CTRL_REG_OFFSET);
++	writel(ctrl, engine->ctrl);
+ 
+ 	return -EINPROGRESS;
+ }
+@@ -1667,14 +1680,16 @@ static int __devinit spacc_probe(struct platform_device *pdev)
+ 	if (!engine)
+ 		return -ENOMEM;
+ 
+-	if (!strcmp(platid->name, "picoxcell-ipsec")) {
++	if (!strcmp(platid->name, "picoxcell-ipsec") ||
++	    !strcmp(platid->name, "picoxcell-ipsec-v2")) {
+ 		engine->max_ctxs	= SPACC_CRYPTO_IPSEC_MAX_CTXS;
+ 		engine->cipher_pg_sz	= SPACC_CRYPTO_IPSEC_CIPHER_PG_SZ;
+ 		engine->hash_pg_sz	= SPACC_CRYPTO_IPSEC_HASH_PG_SZ;
+ 		engine->fifo_sz		= SPACC_CRYPTO_IPSEC_FIFO_SZ;
+ 		engine->algs		= ipsec_engine_algs;
+ 		engine->num_algs	= ARRAY_SIZE(ipsec_engine_algs);
+-	} else if (!strcmp(platid->name, "picoxcell-l2")) {
++	} else if (!strcmp(platid->name, "picoxcell-l2") ||
++		   !strcmp(platid->name, "picoxcell-l2-v2")) {
+ 		engine->max_ctxs	= SPACC_CRYPTO_L2_MAX_CTXS;
+ 		engine->cipher_pg_sz	= SPACC_CRYPTO_L2_CIPHER_PG_SZ;
+ 		engine->hash_pg_sz	= SPACC_CRYPTO_L2_HASH_PG_SZ;
+@@ -1685,6 +1700,7 @@ static int __devinit spacc_probe(struct platform_device *pdev)
+ 		return -EINVAL;
+ 	}
+ 
++	engine->version		= strstr(platid->name, "v2") ? 2 : 1;
+ 	engine->name		= dev_name(&pdev->dev);
+ 
+ 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+@@ -1704,6 +1720,17 @@ static int __devinit spacc_probe(struct platform_device *pdev)
+ 		return -ENOMEM;
+ 	}
+ 
++	engine->proc_len	= engine->regs +
++				  SPA_PROC_LEN_REG_OFFSET(engine->version);
++	engine->icv_len		= engine->regs +
++				  SPA_ICV_LEN_REG_OFFSET(engine->version);
++	engine->icv_offs	= engine->regs +
++				  SPA_ICV_OFFSET_REG_OFFSET(engine->version);
++	engine->ctrl		= engine->regs +
++				  SPA_CTRL_REG_OFFSET(engine->version);
++	engine->aux_info	= engine->regs +
++				  SPA_AUX_INFO_REG_OFFSET(engine->version);
++
+ 	if (devm_request_irq(&pdev->dev, irq->start, spacc_spacc_irq, 0,
+ 			     engine->name, engine)) {
+ 		dev_err(engine->dev, "failed to request IRQ\n");
+@@ -1812,7 +1839,9 @@ static int __devexit spacc_remove(struct platform_device *pdev)
+ 
+ static const struct platform_device_id spacc_id_table[] = {
+ 	{ "picoxcell-ipsec", },
++	{ "picoxcell-ipsec-v2", },
+ 	{ "picoxcell-l2", },
++	{ "picoxcell-l2-v2", },
+ 	{},
+ };
+ 
+diff --git a/drivers/crypto/picoxcell_crypto_regs.h b/drivers/crypto/picoxcell_crypto_regs.h
+index af93442..238bae7 100644
+--- a/drivers/crypto/picoxcell_crypto_regs.h
++++ b/drivers/crypto/picoxcell_crypto_regs.h
+@@ -41,12 +41,12 @@
+ #define SPA_DST_PTR_REG_OFFSET		0x00000024
+ #define SPA_OFFSET_REG_OFFSET		0x00000028
+ #define SPA_AAD_LEN_REG_OFFSET		0x0000002C
+-#define SPA_PROC_LEN_REG_OFFSET		0x00000030
+-#define SPA_ICV_LEN_REG_OFFSET		0x00000034
+-#define SPA_ICV_OFFSET_REG_OFFSET	0x00000038
++#define SPA_PROC_LEN_REG_OFFSET(ver)	(((ver) == 1) ? 0x30 : 0x34)
++#define SPA_ICV_LEN_REG_OFFSET(ver)	(((ver) == 1) ? 0x34 : 0x38)
++#define SPA_ICV_OFFSET_REG_OFFSET(ver)	(((ver) == 1) ? 0x38 : 0x3c)
+ #define SPA_SW_CTRL_REG_OFFSET		0x0000003C
+-#define SPA_CTRL_REG_OFFSET		0x00000040
+-#define SPA_AUX_INFO_REG_OFFSET		0x0000004C
++#define SPA_CTRL_REG_OFFSET(ver)	(((ver) == 1) ? 0x40 : 0x4c)
++#define SPA_AUX_INFO_REG_OFFSET(ver)	(((ver) == 1) ? 0x4c : 0x48)
+ #define SPA_STAT_POP_REG_OFFSET		0x00000050
+ #define SPA_STATUS_REG_OFFSET		0x00000054
+ #define SPA_KEY_SZ_REG_OFFSET		0x00000100
+-- 
+1.7.0.4
+

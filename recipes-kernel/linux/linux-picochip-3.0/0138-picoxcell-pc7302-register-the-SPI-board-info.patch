@@ -1,0 +1,82 @@
+From 8901ea878bfe7a3772efb0ef85b65e088f88d304 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 26 May 2011 14:27:55 +0100
+Subject: [PATCH 138/228] picoxcell/pc7302: register the SPI board info
+
+We have a SPI flash that can be used for the first stage bootloader or
+configuration.  Tell the kernel where it lives.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |   41 ++++++++++++++++++++++++++++++++
+ 1 files changed, 41 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index dcf24c3..6681ffb 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -19,6 +19,7 @@
+ #include <linux/mtd/nand-gpio.h>
+ #include <linux/mtd/physmap.h>
+ #include <linux/spi/flash.h>
++#include <linux/spi/spi.h>
+ 
+ #include <mach/hardware.h>
+ #include <mach/picoxcell/axi2cfg.h>
+@@ -216,6 +217,44 @@ static void pc7302_register_uarts(void)
+ 	picoxcell_add_uart(PICOXCELL_UART2_BASE, IRQ_UART2, 1);
+ }
+ 
++/*
++ * PC7302 platforms have had a variety of different SPI Flash devices fitted.
++ *
++ * Spansion S25FL128P (128 Mbit) devices
++ * Numonyx M25P05 (512 Kbit) devices
++ *
++ * This setup should be fine for all of them with the proviso that the
++ * partition called "SPI: Data" may not actually be available for use.
++ */
++static struct mtd_partition pc7302_spi_flash_partitions[] = {
++	{
++		.name		= "SPI: First Stage Boot Loader",
++		.size		= SZ_64K,
++		.offset		= 0,
++	},
++	{
++		.name		= "SPI: Data",
++		.size		= MTDPART_SIZ_FULL,
++		.offset		= MTDPART_OFS_APPEND,
++	},
++};
++
++static struct flash_platform_data pc7302_spi_flash_data = {
++	.name			= "pc7302 spi flash",
++	.parts			= pc7302_spi_flash_partitions,
++	.nr_parts		= ARRAY_SIZE(pc7302_spi_flash_partitions),
++};
++
++static struct spi_board_info pc7302_spi_board_info[] __initdata = {
++	{
++		.modalias	= "m25p80",
++		.platform_data	= &pc7302_spi_flash_data,
++		.mode		= SPI_MODE_3,
++		.max_speed_hz	= 2000000,
++		.chip_select	= 0,
++	}
++};
++
+ static void __init pc7302_init(void)
+ {
+ 	picoxcell_tsu_init(20000000);
+@@ -229,6 +268,8 @@ static void __init pc7302_init(void)
+ 		pc7302_init_nand();
+ 
+ 	pc7302_panic_init();
++	spi_register_board_info(pc7302_spi_board_info,
++				ARRAY_SIZE(pc7302_spi_board_info));
+ }
+ 
+ MACHINE_START(PC7302, "PC7302")
+-- 
+1.7.0.4
+

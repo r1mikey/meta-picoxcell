@@ -1,0 +1,177 @@
+From 1e8df0b46bb95d9c5fa32f05aeeda12050372ac6 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 21 Apr 2011 12:24:32 +0100
+Subject: [PATCH 104/228] picoxcell: register the emac dynamically
+
+Some SoC's (pc3x2 in particular) have a number of quirks with the EMAC
+that need different platform data so register this at runtime.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Makefile         |    3 +-
+ arch/arm/mach-picoxcell/device_emac.c    |   69 ++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/devices.c        |   30 -------------
+ arch/arm/mach-picoxcell/picoxcell_core.h |    2 +
+ 4 files changed, 73 insertions(+), 31 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/device_emac.c
+
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index 1c83596..2429e98 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -10,7 +10,8 @@ obj-y				:= picoxcell_core.o io.o axi2cfg.o \
+ 				   device_uart.o \
+ 				   device_spacc.o \
+ 				   device_trng.o \
+-				   device_fuse.o
++				   device_fuse.o \
++				   device_emac.o
+ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+diff --git a/arch/arm/mach-picoxcell/device_emac.c b/arch/arm/mach-picoxcell/device_emac.c
+new file mode 100644
+index 0000000..085030b
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/device_emac.c
+@@ -0,0 +1,69 @@
++/*
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#include <linux/clk.h>
++#include <linux/dma-mapping.h>
++#include <linux/platform_data/macb.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++
++#include <mach/hardware.h>
++
++#include "picoxcell_core.h"
++
++int __init picoxcell_add_emac(unsigned long addr, int irq,
++			      unsigned long quirks)
++{
++	struct resource res[] = {
++		{
++			.start		= addr,
++			.end		= addr + 0xFFFF,
++			.flags		= IORESOURCE_MEM,
++		},
++		{
++			.start		= irq,
++			.end		= irq,
++			.flags		= IORESOURCE_IRQ,
++		},
++	};
++	struct platform_device *pdev = platform_device_alloc("macb", -1);
++	struct macb_platform_data pdata = {
++		.quirks = quirks,
++	};
++	int err = -ENOMEM;
++
++	if (!pdev)
++		return -ENOMEM;
++
++	pdev->dev.dma_mask = kmalloc(sizeof(*pdev->dev.dma_mask), GFP_KERNEL);
++	if (!pdev->dev.dma_mask)
++		goto out_free_dev;
++	*pdev->dev.dma_mask = DMA_BIT_MASK(32);
++	pdev->dev.coherent_dma_mask = *pdev->dev.dma_mask;
++
++	err = platform_device_add_resources(pdev, res, ARRAY_SIZE(res));
++	if (err)
++		goto out_free_mask;
++
++	err = platform_device_add_data(pdev, &pdata, sizeof(pdata));
++	if (err)
++		goto out_free_mask;
++
++	err = platform_device_add(pdev);
++	if (pdev)
++		return 0;
++
++out_free_mask:
++	kfree(pdev->dev.dma_mask);
++out_free_dev:
++	platform_device_put(pdev);
++
++	return err;
++}
++
+diff --git a/arch/arm/mach-picoxcell/devices.c b/arch/arm/mach-picoxcell/devices.c
+index 11444a7..820c654 100644
+--- a/arch/arm/mach-picoxcell/devices.c
++++ b/arch/arm/mach-picoxcell/devices.c
+@@ -10,7 +10,6 @@
+ #include <linux/dma-mapping.h>
+ #include <linux/dw_dmac.h>
+ #include <linux/platform_device.h>
+-#include <linux/platform_data/macb.h>
+ #include <linux/init.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+@@ -35,34 +34,6 @@ static struct platform_device pmu_device = {
+ 	.resource		= &pmu_resource,
+ };
+ 
+-static struct resource eth_resources[] = {
+-	[0] = {
+-		.start		= PICOXCELL_EMAC_BASE,
+-		.end		= PICOXCELL_EMAC_BASE + 0xFFFF,
+-		.flags		= IORESOURCE_MEM,
+-	},
+-	[1] = {
+-		.start		= IRQ_EMAC,
+-		.end		= IRQ_EMAC,
+-		.flags		= IORESOURCE_IRQ,
+-	},
+-};
+-
+-static u64 eth_dmamask = DMA_BIT_MASK(32);
+-static struct macb_platform_data eth_data;
+-
+-static struct platform_device eth_device = {
+-	.name			= "macb",
+-	.id			= -1,
+-	.dev			= {
+-		.dma_mask	= &eth_dmamask,
+-		.coherent_dma_mask = DMA_BIT_MASK(32),
+-		.platform_data	= &eth_data,
+-	},
+-	.resource		= eth_resources,
+-	.num_resources		= ARRAY_SIZE(eth_resources),
+-};
+-
+ static struct resource dmac0_resources[] = {
+ 	{
+ 		.start		= PICOXCELL_DMAC1_BASE,
+@@ -128,7 +99,6 @@ static struct platform_device dmac1_device = {
+ 
+ static struct platform_device *common_devices[] __initdata = {
+ 	&pmu_device,
+-	&eth_device,
+ 	&dmac0_device,
+ 	&dmac1_device,
+ };
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index fc6db49..3586834 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -35,6 +35,8 @@ extern int picoxcell_add_uart(unsigned long addr, int irq, int id);
+ int __init picoxcell_add_spacc(const char *name, unsigned long addr, int irq,
+ 			       int id);
+ int __init picoxcell_add_trng(unsigned long addr);
++extern int __init picoxcell_add_emac(unsigned long addr, int irq,
++				     unsigned long quirks);
+ 
+ struct picoxcell_fuse_map;
+ extern int __init picoxcell_add_fuse(struct picoxcell_fuse_map *map);
+-- 
+1.7.0.4
+

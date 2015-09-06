@@ -1,0 +1,89 @@
+From 34ec0328d29f19d7e09f696c369978f125ed432f Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Mon, 22 Oct 2012 12:11:20 +0100
+Subject: [PATCH 207/228] mtd: enabled buffered programming for M29EW in x8 Mode
+
+From: Massimo Cirillo <maxcir@gmail.com>
+This patch fixes a problem related to an incorrect value contained
+in the CFI of M29EW devices family. The incorrect CFI field is
+MaxBufWriteSize that should be 0x8 if the device is used in 8bit mode, whereas the
+value read out from CFI is 0xA.
+
+This patch is documented in Micron App note TN-13-07.
+
+This commit forms part of the resolution of Mantis Issue #10786
+---
+ drivers/mtd/chips/cfi_probe.c |   23 +++++++++++++++++++++++
+ include/linux/mtd/cfi.h       |    3 ++-
+ 2 files changed, 25 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/mtd/chips/cfi_probe.c b/drivers/mtd/chips/cfi_probe.c
+index d255352..07d6c8e 100644
+--- a/drivers/mtd/chips/cfi_probe.c
++++ b/drivers/mtd/chips/cfi_probe.c
+@@ -158,6 +158,9 @@ static int __xipram cfi_chip_setup(struct map_info *map,
+ 	__u32 base = 0;
+ 	int num_erase_regions = cfi_read_query(map, base + (0x10 + 28)*ofs_factor);
+ 	int i;
++	int extendedId1 = 0;
++	int extendedId2 = 0;
++	int extendedId3 = 0;
+ 	int addr_unlock1 = 0x555, addr_unlock2 = 0x2AA;
+ 
+ 	xip_enable(base, map, cfi);
+@@ -228,11 +231,31 @@ static int __xipram cfi_chip_setup(struct map_info *map,
+ 	cfi->mfr = cfi_read_query16(map, base);
+ 	cfi->id = cfi_read_query16(map, base + ofs_factor);
+ 
++        /* Get device ID cycle 1,2,3 for Micron/ST devices */
++        if ((cfi->mfr == CFI_MFR_NMX || cfi->mfr == CFI_MFR_ST) &&
++            ((cfi->id & 0xff) == 0x7e) &&
++            (le16_to_cpu(cfi->cfiq->P_ID) == 0x0002)) {
++                extendedId1 = cfi_read_query16(map, base + 0x1 * ofs_factor);
++                extendedId2 = cfi_read_query16(map, base + 0xe * ofs_factor);
++                extendedId3 = cfi_read_query16(map, base + 0xf * ofs_factor);
++        }
++
+ 	/* Get AMD/Spansion extended JEDEC ID */
+ 	if (cfi->mfr == CFI_MFR_AMD && (cfi->id & 0xff) == 0x7e)
+ 		cfi->id = cfi_read_query(map, base + 0xe * ofs_factor) << 8 |
+ 			  cfi_read_query(map, base + 0xf * ofs_factor);
+ 
++        /* If the device is a M29EW used in 8-bit mode, adjust buffer size */
++        if ((cfi->cfiq->MaxBufWriteSize > 0x8) &&
++            (cfi->mfr == CFI_MFR_NMX || cfi->mfr == CFI_MFR_ST) &&
++            (extendedId1 == 0x7E) &&
++            (extendedId2 == 0x22 || extendedId2 == 0x23 || extendedId2 == 0x28) &&
++            (extendedId3 == 0x01)) {
++                cfi->cfiq->MaxBufWriteSize = 0x8;
++                pr_warning("Adjusted buffer size on Micron Flash M29EW family "
++                           "in 8 bit mode\n");
++        }
++
+ 	/* Put it back into Read Mode */
+ 	cfi_qry_mode_off(base, map, cfi);
+ 	xip_allowed(base, map);
+diff --git a/include/linux/mtd/cfi.h b/include/linux/mtd/cfi.h
+index d249254..2b80994 100644
+--- a/include/linux/mtd/cfi.h
++++ b/include/linux/mtd/cfi.h
+@@ -305,7 +305,7 @@ static inline uint32_t cfi_build_cmd_addr(uint32_t cmd_ofs,
+ 	unsigned interleave = cfi_interleave(cfi);
+ 	unsigned type = cfi->device_type;
+ 	uint32_t addr;
+-	
++
+ 	addr = (cmd_ofs * type) * interleave;
+ 
+ 	/* Modify the unlock address if we are in compatibility mode.
+@@ -550,6 +550,7 @@ struct cfi_fixup {
+ #define CFI_MFR_ST		0x0020 /* STMicroelectronics */
+ #define CFI_MFR_TOSHIBA		0x0098
+ #define CFI_MFR_WINBOND		0x00DA
++#define CFI_MFR_NMX             0x0089 /* Micron */
+ 
+ void cfi_fixup(struct mtd_info *mtd, struct cfi_fixup* fixups);
+ 
+-- 
+1.7.0.4
+

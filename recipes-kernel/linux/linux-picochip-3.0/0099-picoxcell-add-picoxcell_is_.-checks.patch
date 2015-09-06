@@ -1,0 +1,106 @@
+From 0bc4e81359b767cb3959244f87c50a23af1d0939 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 20 Apr 2011 17:25:51 +0100
+Subject: [PATCH 099/228] picoxcell: add picoxcell_is_.*() checks
+
+Provide a method to determine the SoC family.  This can be useful for
+boards that support multiple families of device.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/picoxcell_core.c |   48 ++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/picoxcell_core.h |    4 ++
+ 2 files changed, 52 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.c b/arch/arm/mach-picoxcell/picoxcell_core.c
+index 6897a96..243f3a0 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.c
++++ b/arch/arm/mach-picoxcell/picoxcell_core.c
+@@ -23,23 +23,71 @@
+ 
+ struct dentry *picoxcell_debugfs;
+ 
++int picoxcell_is_pc3x2(void)
++{
++	unsigned long device_id =
++		__raw_readl(IO_ADDRESS(PICOXCELL_AXI2CFG_BASE +
++				       AXI2CFG_DEVICE_ID_REG_OFFSET));
++	switch (device_id) {
++	case 0x8003:
++	case 0x8007:
++		return 1;
++	default:
++		return 0;
++	}
++}
++
++int picoxcell_is_pc3x3(void)
++{
++	unsigned long device_id =
++		__raw_readl(IO_ADDRESS(PICOXCELL_AXI2CFG_BASE +
++				       AXI2CFG_DEVICE_ID_REG_OFFSET));
++	switch (device_id) {
++	case 0x20:
++	case 0x21:
++	case 0x22:
++		return 1;
++	default:
++		return 0;
++	}
++}
++
++int picoxcell_is_pc30xx(void)
++{
++	unsigned long device_id =
++		__raw_readl(IO_ADDRESS(PICOXCELL_AXI2CFG_BASE +
++				       AXI2CFG_DEVICE_ID_REG_OFFSET));
++	switch (device_id) {
++	case 0x30 ... 0x3F:
++		return 1;
++	default:
++		return 0;
++	}
++}
++
+ const struct picoxcell_soc __init *picoxcell_get_soc(void)
+ {
+ 	unsigned long device_id =
+ 		__raw_readl(IO_ADDRESS(PICOXCELL_AXI2CFG_BASE +
+ 				       AXI2CFG_DEVICE_ID_REG_OFFSET));
+ 	switch (device_id) {
++#ifdef CONFIG_PICOXCELL_PC3X2
+ 	case 0x8003:
+ 	case 0x8007:
+ 		return &pc3x2_soc;
++#endif /* CONFIG_PICOXCELL_PC3X2 */
+ 
++#ifdef CONFIG_PICOXCELL_PC3X3
+ 	case 0x20:
+ 	case 0x21:
+ 	case 0x22:
+ 		return &pc3x3_soc;
++#endif /* CONFIG_PICOXCELL_PC3X3 */
+ 
++#ifdef CONFIG_PICOXCELL_PC30XX
+ 	case 0x30 ... 0x3F:
+ 		return &pc30xx_soc;
++#endif /* CONFIG_PICOXCELL_PC30XX */
+ 
+ 	default:
+ 		panic("unsupported device type %lx", device_id);
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index eea2813..fc6db49 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -39,4 +39,8 @@ int __init picoxcell_add_trng(unsigned long addr);
+ struct picoxcell_fuse_map;
+ extern int __init picoxcell_add_fuse(struct picoxcell_fuse_map *map);
+ 
++extern int picoxcell_is_pc3x2(void);
++extern int picoxcell_is_pc3x3(void);
++extern int picoxcell_is_pc30xx(void);
++
+ #endif /* __ASM_ARCH_PICOXCELL_CORE_H__ */
+-- 
+1.7.0.4
+

@@ -1,0 +1,77 @@
+From 7e1b4c2a3aa2ccf8fdd797209f9ade932a66ed93 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 24 Mar 2011 15:30:40 +0000
+Subject: [PATCH 027/228] picoxcell: register a debugfs dir
+
+Register a debugfs directory for picoxcell related entries such as clk's
+and IO muxing etc.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/picoxcell_core.c |   17 +++++++++++++++++
+ arch/arm/mach-picoxcell/soc.h            |    3 +++
+ 2 files changed, 20 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.c b/arch/arm/mach-picoxcell/picoxcell_core.c
+index 6cd2342..54abb96 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.c
++++ b/arch/arm/mach-picoxcell/picoxcell_core.c
+@@ -7,6 +7,7 @@
+  *
+  * All enquiries to support@picochip.com
+  */
++#include <linux/debugfs.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+ #include <linux/irq.h>
+@@ -20,6 +21,8 @@
+ #include "picoxcell_core.h"
+ #include "soc.h"
+ 
++struct dentry *picoxcell_debugfs;
++
+ struct picoxcell_soc *picoxcell_get_soc(void)
+ {
+ 	unsigned long device_id =
+@@ -84,6 +87,18 @@ static void report_chipinfo(void)
+ 	pr_info("Picochip picoXcell device: %s revision %lu\n", part, revision);
+ }
+ 
++static void picoxcell_debugfs_init(void)
++{
++	picoxcell_debugfs = debugfs_create_dir("picoxcell", NULL);
++
++	if (IS_ERR(picoxcell_debugfs) &&
++	    -ENODEV != PTR_ERR(picoxcell_debugfs)) {
++		pr_err("failed to create picoxcell debugfs entry (%ld)\n",
++		       PTR_ERR(picoxcell_debugfs));
++		picoxcell_debugfs = NULL;
++	}
++}
++
+ void __init picoxcell_init_early(void)
+ {
+ 	struct picoxcell_soc *soc = picoxcell_get_soc();
+@@ -98,5 +113,7 @@ void __init picoxcell_core_init(void)
+ 	struct picoxcell_soc *soc = picoxcell_get_soc();
+ 
+ 	report_chipinfo();
++	picoxcell_debugfs_init();
++
+ 	soc->init();
+ }
+diff --git a/arch/arm/mach-picoxcell/soc.h b/arch/arm/mach-picoxcell/soc.h
+index a69b612..2f6791d 100644
+--- a/arch/arm/mach-picoxcell/soc.h
++++ b/arch/arm/mach-picoxcell/soc.h
+@@ -69,4 +69,7 @@ static inline int picoxcell_init_pm(void (*enter_lowpower)(void),
+ }
+ #endif /* CONFIG_PM */
+ 
++struct dentry;
++extern struct dentry *picoxcell_debugfs;
++
+ #endif /* __PICOXCELL_SOC_H__ */
+-- 
+1.7.0.4
+

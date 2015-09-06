@@ -1,0 +1,39 @@
+From 6204f5069abc4866fd199ec461b5e309f165bf44 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 23 Mar 2011 23:25:40 +0000
+Subject: [PATCH 026/228] picoxcell/pc3x3: disable more clocks at boot time
+
+All users of the clks should explicitly get and enable them.  Now
+that they are doing this, make sure that they are all disabled at
+boot time.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x3.c |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index 5c0e6a4..b5c7ad5 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -267,6 +267,7 @@ static void pc3x3_clk_init(void)
+ 	 * For PC3x3, disable the clocks that aren't required in the core
+ 	 * code. The drivers will enable the clocks when they get initialised.
+ 	 */
++	__clk_disable(&tzprot_clk);
+ 	__clk_disable(&spi_clk);
+ 	__clk_disable(&dmac0_clk);
+ 	__clk_disable(&dmac1_clk);
+@@ -274,6 +275,9 @@ static void pc3x3_clk_init(void)
+ 	__clk_disable(&l2_engine_clk);
+ 	__clk_disable(&trng_clk);
+ 	__clk_disable(&otp_clk);
++	__clk_disable(&ebi_clk);
++	__clk_disable(&trng_clk);
++	__clk_disable(&fuse_clk);
+ }
+ 
+ static struct mux_def pc3x3_mux[] = {
+-- 
+1.7.0.4
+

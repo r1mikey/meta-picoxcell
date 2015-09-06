@@ -1,0 +1,55 @@
+From 0f6bdb899f9736cb560633319e1f3c01009d3564 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 26 May 2011 14:26:50 +0100
+Subject: [PATCH 137/228] picoxcell: register the SPI device
+
+picoxcell contains a Synopsys DesignWare SSI block that can be used for
+SPI.  Rather than using the dw_spi master driver we have our own driver
+that handles quirks with the chip selects.  Some picoxcell devices can't
+control the chip select with GPIO.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/devices.c |   21 +++++++++++++++++++++
+ 1 files changed, 21 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/devices.c b/arch/arm/mach-picoxcell/devices.c
+index 26499f5..9600e85 100644
+--- a/arch/arm/mach-picoxcell/devices.c
++++ b/arch/arm/mach-picoxcell/devices.c
+@@ -145,11 +145,32 @@ static struct platform_device pa0 = {
+ 	.dev.platform_data	= &pa0_pdata,
+ };
+ 
++static struct resource spi_resources[] = {
++	{
++		.start		= PICOXCELL_SSI_BASE,
++		.end		= PICOXCELL_SSI_BASE + 0xFFFF,
++		.flags		= IORESOURCE_MEM,
++	},
++	{
++		.start		= IRQ_SSI,
++		.end		= IRQ_SSI,
++		.flags		= IORESOURCE_IRQ,
++	},
++};
++
++static struct platform_device spi_device = {
++	.name			= "picoxcell-spi",
++	.id			= 0,
++	.resource		= spi_resources,
++	.num_resources		= ARRAY_SIZE(spi_resources),
++};
++
+ static struct platform_device *common_devices[] __initdata = {
+ 	&pmu_device,
+ 	&dmac0_device,
+ 	&dmac1_device,
+ 	&pa0,
++	&spi_device,
+ };
+ 
+ static int __init picoxcell_add_devices(void)
+-- 
+1.7.0.4
+

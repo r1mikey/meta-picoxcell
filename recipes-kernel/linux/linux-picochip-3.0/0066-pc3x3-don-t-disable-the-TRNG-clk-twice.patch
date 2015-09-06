@@ -1,0 +1,25 @@
+From f42e5e34798409a5731a650027b0c54bf8561963 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 6 Apr 2011 15:48:28 +0100
+Subject: [PATCH 066/228] pc3x3: don't disable the TRNG clk twice
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x3.c |    1 -
+ 1 files changed, 0 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index ae870cf..f9788d2 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -291,7 +291,6 @@ static void pc3x3_clk_init(void)
+ 	__clk_disable(&trng_clk);
+ 	__clk_disable(&otp_clk);
+ 	__clk_disable(&ebi_clk);
+-	__clk_disable(&trng_clk);
+ 	__clk_disable(&fuse_clk);
+ }
+ 
+-- 
+1.7.0.4
+

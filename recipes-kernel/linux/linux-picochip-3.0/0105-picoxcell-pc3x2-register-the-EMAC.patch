@@ -1,0 +1,47 @@
+From 4055a2bb071caf55d6b5200be1bb82a625824b3b Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 21 Apr 2011 12:24:44 +0100
+Subject: [PATCH 105/228] picoxcell/pc3x2: register the EMAC
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x2.c |   11 +++++++++++
+ 1 files changed, 11 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index 5d3ce93..689e7e1 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -12,6 +12,7 @@
+ #include <linux/io.h>
+ #include <linux/irq.h>
+ #include <linux/kernel.h>
++#include <linux/platform_data/macb.h>
+ #include <linux/platform_device.h>
+ #include <linux/timex.h>
+ #include <linux/platform_data/picoxcell_fuse.h>
+@@ -223,6 +224,15 @@ static void pc3x2_add_spaccs(void)
+ 			    IRQ_AES, -1);
+ }
+ 
++static void pc3x2_add_emac(void)
++{
++	picoxcell_add_emac(PICOXCELL_EMAC_BASE, IRQ_EMAC,
++			   MACB_QUIRK_NO_UNALIGNED_TX |
++			   MACB_QUIRK_FORCE_DBW64 |
++			   MACB_QUIRK_HAVE_TSU |
++			   MACB_QUIRK_HAVE_TSU_CLK);
++}
++
+ static void __init pc3x2_init(void)
+ {
+ 	picoxcell_mux_register(pc3x2_mux, ARRAY_SIZE(pc3x2_mux));
+@@ -230,4 +240,5 @@ static void __init pc3x2_init(void)
+ 	pc3x2_init_bus_snoopers();
+ 	pc3x2_add_spaccs();
+ 	pc3x2_add_fuse();
++	pc3x2_add_emac();
+ }
+-- 
+1.7.0.4
+

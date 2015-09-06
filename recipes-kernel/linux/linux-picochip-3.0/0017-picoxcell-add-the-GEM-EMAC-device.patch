@@ -1,0 +1,85 @@
+From be61f4006a65ec2e9b4cccc815dfce6e2ea21f0e Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 9 Mar 2011 16:32:52 +0000
+Subject: [PATCH 017/228] picoxcell: add the GEM EMAC device
+
+The GEM is the EMAC device in picoxcell systems to provide 10/100
+MII connectivity.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/Kconfig                  |    1 +
+ arch/arm/mach-picoxcell/devices.c |   31 +++++++++++++++++++++++++++++++
+ 2 files changed, 32 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index b302582..1005462 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -615,6 +615,7 @@ config ARCH_PICOXCELL
+ 	select CLKDEV_LOOKUP
+ 	select ARCH_REQUIRE_GPIOLIB
+ 	select GENERIC_GPIO
++	select HAVE_NET_MACB
+ 	help
+ 	  This enables support for systems based on the Picochip picoXcell
+ 	  family of Femtocell devices.
+diff --git a/arch/arm/mach-picoxcell/devices.c b/arch/arm/mach-picoxcell/devices.c
+index 884ecb5..7860ad6 100644
+--- a/arch/arm/mach-picoxcell/devices.c
++++ b/arch/arm/mach-picoxcell/devices.c
+@@ -7,9 +7,11 @@
+  *
+  * All enquiries to support@picochip.com
+  */
++#include <linux/dma-mapping.h>
+ #include <linux/serial_8250.h>
+ #include <linux/serial_reg.h>
+ #include <linux/platform_device.h>
++#include <linux/platform_data/macb.h>
+ #include <linux/init.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+@@ -107,10 +109,39 @@ static struct platform_device pmu_device = {
+ 	.resource		= &pmu_resource,
+ };
+ 
++static struct resource eth_resources[] = {
++	[0] = {
++		.start		= PICOXCELL_EMAC_BASE,
++		.end		= PICOXCELL_EMAC_BASE + 0xFFFF,
++		.flags		= IORESOURCE_MEM,
++	},
++	[1] = {
++		.start		= IRQ_EMAC,
++		.end		= IRQ_EMAC,
++		.flags		= IORESOURCE_IRQ,
++	},
++};
++
++static u64 eth_dmamask = DMA_BIT_MASK(32);
++static struct macb_platform_data eth_data;
++
++static struct platform_device eth_device = {
++	.name			= "macb",
++	.id			= -1,
++	.dev			= {
++		.dma_mask	= &eth_dmamask,
++		.coherent_dma_mask = DMA_BIT_MASK(32),
++		.platform_data	= &eth_data,
++	},
++	.resource		= eth_resources,
++	.num_resources		= ARRAY_SIZE(eth_resources),
++};
++
+ static struct platform_device *common_devices[] __initdata = {
+ 	&serial1_device,
+ 	&serial2_device,
+ 	&pmu_device,
++	&eth_device,
+ };
+ 
+ static int __init picoxcell_add_devices(void)
+-- 
+1.7.0.4
+

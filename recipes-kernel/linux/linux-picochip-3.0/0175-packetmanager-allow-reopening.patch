@@ -1,0 +1,131 @@
+From bdea12d4e1d43c03673bdbbef7c3fb02fb68b190 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie.iles@picochip.com>
+Date: Tue, 28 Jun 2011 14:48:42 +0100
+Subject: [PATCH 175/228] packetmanager: allow reopening
+
+When the last active user releases the pktman node, make sure that all
+ciphering has completed and any DMA buffers unmapped.  This should allow
+open() to succeed again.
+
+v2: don't immediately free messages and requests as ciphering could
+still be in progress.  Instead, let them filter through to the DMA stage
+but discard them rather than transferring.
+
+Mantis issue #8667
+---
+ drivers/char/packetmanager.c |   48 +++++++++++++++++++++++++++++++++++++----
+ 1 files changed, 43 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/char/packetmanager.c b/drivers/char/packetmanager.c
+index 09ab44e..c6d4304 100644
+--- a/drivers/char/packetmanager.c
++++ b/drivers/char/packetmanager.c
+@@ -254,6 +254,8 @@ struct pktman_dev {
+ 	struct work_struct	    work;
+ };
+ 
++static void pktman_abort_msg(struct pktman_dev *pman, struct pktman_msg *msg);
++
+ /*
+  * pktman_buf_init - initialize a packet manager buffer ready for data.
+  * @buf:	the buffer to initialize.
+@@ -469,24 +471,53 @@ out:
+ 	return err;
+ }
+ 
++/*
++ * Cancel a message that is in progress.  We allow ciphering to complete so we
++ * don't free the request from under the crypto layer's feet then discard it
++ * rather than transferring to the picoArray.
++ */
++static inline void
++pktman_cancel_msg(struct pktman_msg *msg)
++{
++	msg->status = ECANCELED;
++}
++
+ static int
+ pktman_release(struct inode *inode,
+ 	       struct file *filp)
+ {
++	struct pktman_msg *msg, *tmp;
+ 	struct pktman_dev *pman = filp->private_data;
++	bool dma_in_progress = false;
++	bool cipher_in_progress = false;
+ 
+ 	if (mutex_lock_interruptible(&pman->mutex))
+ 		return -ERESTARTSYS;
+ 
+ 	if (0 == atomic_dec_return(&pman->use_count) && pman->picoif) {
+ 		spin_lock_bh(&pman->lock);
++		if (pman->state == PKTMAN_DEV_STATE_TRANSFERRING)
++			dma_in_progress = true;
++
+ 		if (pman->nr_ciphering)
+-			pman->state = PKTMAN_DEV_STATE_STOPPING;
++			cipher_in_progress = true;
+ 		else
+ 			schedule_work(&pman->work);
+ 		spin_unlock_bh(&pman->lock);
+ 
++		pman->state = PKTMAN_DEV_STATE_STOPPING;
++		spin_unlock_bh(&pman->lock);
+ 		picoif_directdma_close(pman->picoif);
++		if (dma_in_progress)
++			dma_unmap_sg(&pman->dev, pman->xfer_sg,
++				     pman->xfer_sg_count, DMA_TO_DEVICE);
++		spin_lock_bh(&pman->lock);
++		if (!cipher_in_progress) {
++			list_for_each_entry_safe(msg, tmp, &pman->in_progress, head)
++				pktman_cancel_msg(msg);
++			pman->state = PKTMAN_DEV_STATE_IDLE;
++		}
++		spin_unlock_bh(&pman->lock);
+ 		pman->picoif = NULL;
+ 		pman->buf.wptr = pman->buf.rptr = 0;
+ 	}
+@@ -664,10 +695,14 @@ pktman_transfer_complete(size_t nbytes,
+ {
+ 	struct pktman_dev *pman = cookie;
+ 
++	spin_lock(&pman->lock);
++
++        if (pman->state != PKTMAN_DEV_STATE_TRANSFERRING)
++                return;
++
+ 	dma_unmap_sg(&pman->dev, pman->xfer_sg, pman->xfer_sg_count,
+ 		     DMA_TO_DEVICE);
+ 
+-	spin_lock(&pman->lock);
+ 	pman->buf.rptr += nbytes;
+ 	if (pman->state != PKTMAN_DEV_STATE_STOPPING)
+ 		pman->state = PKTMAN_DEV_STATE_IDLE;
+@@ -696,10 +731,11 @@ pktman_push(struct pktman_dev *pman)
+ 		goto out;
+ 
+ 	list_for_each_entry_safe(msg, tmp, &pman->in_progress, head) {
+-		if (0 != msg->status)
++		if (0 != msg->status && ECANCELED != msg->status)
+ 			break;
+ 
+-		nbytes += msg->msg_size;
++		if (ECANCELED != msg->status)
++			nbytes += msg->msg_size;
+ 		list_del(&msg->head);
+ 		kfree(msg);
+ 	}
+@@ -762,8 +798,10 @@ __pktman_crypt_complete(struct crypto_async_request *req,
+ 			pr_warning("failed to push buffer\n");
+ 	}
+ 
+-	if (pman->state == PKTMAN_DEV_STATE_STOPPING && !pman->nr_ciphering)
++	if (pman->state == PKTMAN_DEV_STATE_STOPPING && !pman->nr_ciphering) {
+ 		schedule_work(&pman->work);
++                pman->state = PKTMAN_DEV_STATE_IDLE;
++        }
+ }
+ 
+ static void
+-- 
+1.7.0.4
+

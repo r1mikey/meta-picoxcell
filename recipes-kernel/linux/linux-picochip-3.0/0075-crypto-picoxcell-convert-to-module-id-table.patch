@@ -1,0 +1,151 @@
+From 328b7e74984c4d68c4dac5ec041265ff41adf91a Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 12:17:22 +0100
+Subject: [PATCH 075/228] crypto: picoxcell - convert to module id table
+
+Rather than have a separate platform_driver and probe method for each
+spacc type, convert to a module id table so we can share the probe
+function.  This is important for supporting v2 spaccs where the only
+difference are the algorithms supported and register map.
+
+Cc: Herbert Xu <herbert@gondor.apana.org.au>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/crypto/picoxcell_crypto.c |   89 ++++++++++++------------------------
+ 1 files changed, 30 insertions(+), 59 deletions(-)
+
+diff --git a/drivers/crypto/picoxcell_crypto.c b/drivers/crypto/picoxcell_crypto.c
+index 230b5b8..0de290a 100644
+--- a/drivers/crypto/picoxcell_crypto.c
++++ b/drivers/crypto/picoxcell_crypto.c
+@@ -1657,24 +1657,34 @@ static struct spacc_alg l2_engine_algs[] = {
+ 	},
+ };
+ 
+-static int __devinit spacc_probe(struct platform_device *pdev,
+-				 unsigned max_ctxs, size_t cipher_pg_sz,
+-				 size_t hash_pg_sz, size_t fifo_sz,
+-				 struct spacc_alg *algs, size_t num_algs)
++static int __devinit spacc_probe(struct platform_device *pdev)
+ {
+ 	int i, err, ret = -EINVAL;
+ 	struct resource *mem, *irq;
++	const struct platform_device_id *platid = platform_get_device_id(pdev);
+ 	struct spacc_engine *engine = devm_kzalloc(&pdev->dev, sizeof(*engine),
+ 						   GFP_KERNEL);
+ 	if (!engine)
+ 		return -ENOMEM;
+ 
+-	engine->max_ctxs	= max_ctxs;
+-	engine->cipher_pg_sz	= cipher_pg_sz;
+-	engine->hash_pg_sz	= hash_pg_sz;
+-	engine->fifo_sz		= fifo_sz;
+-	engine->algs		= algs;
+-	engine->num_algs	= num_algs;
++	if (!strcmp(platid->name, "picoxcell-ipsec")) {
++		engine->max_ctxs	= SPACC_CRYPTO_IPSEC_MAX_CTXS;
++		engine->cipher_pg_sz	= SPACC_CRYPTO_IPSEC_CIPHER_PG_SZ;
++		engine->hash_pg_sz	= SPACC_CRYPTO_IPSEC_HASH_PG_SZ;
++		engine->fifo_sz		= SPACC_CRYPTO_IPSEC_FIFO_SZ;
++		engine->algs		= ipsec_engine_algs;
++		engine->num_algs	= ARRAY_SIZE(ipsec_engine_algs);
++	} else if (!strcmp(platid->name, "picoxcell-l2")) {
++		engine->max_ctxs	= SPACC_CRYPTO_L2_MAX_CTXS;
++		engine->cipher_pg_sz	= SPACC_CRYPTO_L2_CIPHER_PG_SZ;
++		engine->hash_pg_sz	= SPACC_CRYPTO_L2_HASH_PG_SZ;
++		engine->fifo_sz		= SPACC_CRYPTO_L2_FIFO_SZ;
++		engine->algs		= l2_engine_algs;
++		engine->num_algs	= ARRAY_SIZE(l2_engine_algs);
++	} else {
++		return -EINVAL;
++	}
++
+ 	engine->name		= dev_name(&pdev->dev);
+ 
+ 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+@@ -1800,72 +1810,33 @@ static int __devexit spacc_remove(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
+-static int __devinit ipsec_probe(struct platform_device *pdev)
+-{
+-	return spacc_probe(pdev, SPACC_CRYPTO_IPSEC_MAX_CTXS,
+-			   SPACC_CRYPTO_IPSEC_CIPHER_PG_SZ,
+-			   SPACC_CRYPTO_IPSEC_HASH_PG_SZ,
+-			   SPACC_CRYPTO_IPSEC_FIFO_SZ, ipsec_engine_algs,
+-			   ARRAY_SIZE(ipsec_engine_algs));
+-}
+-
+-static struct platform_driver ipsec_driver = {
+-	.probe		= ipsec_probe,
+-	.remove		= __devexit_p(spacc_remove),
+-	.driver		= {
+-		.name	= "picoxcell-ipsec",
+-#ifdef CONFIG_PM
+-		.pm	= &spacc_pm_ops,
+-#endif /* CONFIG_PM */
+-	},
++static const struct platform_device_id spacc_id_table[] = {
++	{ "picoxcell-ipsec", },
++	{ "picoxcell-l2", },
++	{},
+ };
+ 
+-static int __devinit l2_probe(struct platform_device *pdev)
+-{
+-	return spacc_probe(pdev, SPACC_CRYPTO_L2_MAX_CTXS,
+-			   SPACC_CRYPTO_L2_CIPHER_PG_SZ,
+-			   SPACC_CRYPTO_L2_HASH_PG_SZ, SPACC_CRYPTO_L2_FIFO_SZ,
+-			   l2_engine_algs, ARRAY_SIZE(l2_engine_algs));
+-}
+-
+-static struct platform_driver l2_driver = {
+-	.probe		= l2_probe,
++static struct platform_driver spacc_driver = {
++	.probe		= spacc_probe,
+ 	.remove		= __devexit_p(spacc_remove),
+ 	.driver		= {
+-		.name	= "picoxcell-l2",
++		.name	= "picoxcell-ipsec",
+ #ifdef CONFIG_PM
+ 		.pm	= &spacc_pm_ops,
+ #endif /* CONFIG_PM */
+ 	},
++	.id_table	= spacc_id_table,
+ };
+ 
+ static int __init spacc_init(void)
+ {
+-	int ret = platform_driver_register(&ipsec_driver);
+-	if (ret) {
+-		pr_err("failed to register ipsec spacc driver");
+-		goto out;
+-	}
+-
+-	ret = platform_driver_register(&l2_driver);
+-	if (ret) {
+-		pr_err("failed to register l2 spacc driver");
+-		goto l2_failed;
+-	}
+-
+-	return 0;
+-
+-l2_failed:
+-	platform_driver_unregister(&ipsec_driver);
+-out:
+-	return ret;
++	return platform_driver_register(&spacc_driver);
+ }
+ module_init(spacc_init);
+ 
+ static void __exit spacc_exit(void)
+ {
+-	platform_driver_unregister(&ipsec_driver);
+-	platform_driver_unregister(&l2_driver);
++	platform_driver_unregister(&spacc_driver);
+ }
+ module_exit(spacc_exit);
+ 
+-- 
+1.7.0.4
+

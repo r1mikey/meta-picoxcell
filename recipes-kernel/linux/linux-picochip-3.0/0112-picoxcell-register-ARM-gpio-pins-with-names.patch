@@ -1,0 +1,278 @@
+From 53854d08c42130b5bc5c5f97d1cda1c3bfde4e6f Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 3 May 2011 14:21:37 +0100
+Subject: [PATCH 112/228] picoxcell: register ARM gpio pins with names
+
+Now that the basic-mmio-gpio driver can take pin names, pass them via
+platform data.  For pc30xx where we have some GPIOs with reserved uses
+(GPS, usim, sw_rst etc), we use the function names.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/device_armgpio.c |    4 +-
+ arch/arm/mach-picoxcell/pc30xx.c         |   81 ++++++++++++++++++++++++++++-
+ arch/arm/mach-picoxcell/pc3x2.c          |   28 ++++++++++-
+ arch/arm/mach-picoxcell/pc3x3.c          |   73 ++++++++++++++++++++++++++-
+ arch/arm/mach-picoxcell/picoxcell_core.h |    3 +-
+ 5 files changed, 179 insertions(+), 10 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/device_armgpio.c b/arch/arm/mach-picoxcell/device_armgpio.c
+index 498c8c2..ef6ef0a 100644
+--- a/arch/arm/mach-picoxcell/device_armgpio.c
++++ b/arch/arm/mach-picoxcell/device_armgpio.c
+@@ -27,7 +27,8 @@
+ 		.name = #__name, \
+ 	}
+ 
+-int __init picoxcell_add_gpio_port(int port, int ngpio, int base)
++int __init picoxcell_add_gpio_port(int port, int ngpio, int base,
++				   const char *const *names)
+ {
+ 	struct resource res[] = {
+ 		GPIO_RES(dat, PICOXCELL_GPIO_BASE + 0x50 + port * 4),
+@@ -37,6 +38,7 @@ int __init picoxcell_add_gpio_port(int port, int ngpio, int base)
+ 	struct bgpio_pdata pdata = {
+ 		.base = base,
+ 		.ngpio = ngpio,
++		.names = names,
+ 	};
+ 	struct platform_device *pdev = platform_device_register_resndata(NULL,
+ 		"basic-mmio-gpio", port, res, ARRAY_SIZE(res), &pdata,
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index ac67021..9dc11d1 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -523,11 +523,86 @@ static const struct sdgpio_platform_data pc30xx_sdgpio = {
+ 	.nr_banks			= 1,
+ };
+ 
++static const char *const pc30xx_porta_names[] = {
++	"usim_clk",
++	"usim_io",
++	"usim_vcc",
++	"usim_rst",
++	"usim_cd",
++	"sw_rst",
++	"per_rst",
++	"mii_phy_irq",
++};
++
++static const char *const pc30xx_portb_names[] = {
++	"arm8",
++	"arm9",
++	"arm10",
++	"arm11",
++	"arm12",
++	"arm13",
++	"gps_hclk",
++	"arm15",
++	"gps_do",
++	"gps_clk",
++	"gps_di",
++	"gps_frm",
++	"arm20",
++	"arm21",
++	"arm22",
++	"arm23",
++	"arm24",
++	"arm25",
++	"arm26",
++	"arm27",
++	"arm28",
++	"arm29",
++	"arm30",
++	"arm31",
++	"arm32",
++	"arm33",
++	"arm34",
++	"arm35",
++	"arm36",
++	"arm37",
++	"arm38",
++	"arm39",
++};
++
++static const char *const pc30xx_portc_names[] = {
++	"arm40",
++	"arm41",
++	"arm42",
++	"arm43",
++	"arm44",
++	"arm45",
++	"arm46",
++	"arm47",
++	"arm48",
++	"arm49",
++	"arm50",
++	"arm51",
++	"arm52",
++	"arm53",
++	"arm54",
++	"arm55",
++	"arm56",
++	"arm57",
++	"arm58",
++	"arm59",
++	"arm60",
++	"arm61",
++	"arm62",
++};
++
+ static void pc30xx_add_gpio(void)
+ {
+-	picoxcell_add_gpio_port(0, 8, PC30XX_GPIO_PIN_ARM_0);
+-	picoxcell_add_gpio_port(1, 32, PC30XX_GPIO_PIN_ARM_8);
+-	picoxcell_add_gpio_port(2, 23, PC30XX_GPIO_PIN_ARM_40);
++	picoxcell_add_gpio_port(0, 8, PC30XX_GPIO_PIN_ARM_0,
++				pc30xx_porta_names);
++	picoxcell_add_gpio_port(1, 32, PC30XX_GPIO_PIN_ARM_8,
++				pc30xx_portb_names);
++	picoxcell_add_gpio_port(2, 23, PC30XX_GPIO_PIN_ARM_40,
++				pc30xx_portc_names);
+ }
+ 
+ static struct picoxcell_fuse_map pc30xx_fuse_map = {
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index 689e7e1..11682c7 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -126,10 +126,34 @@ static const struct sdgpio_platform_data pc3x2_sdgpio = {
+ 	.nr_banks			= 2,
+ };
+ 
++static const char *const pc3x2_porta_names[] = {
++	"arm0",
++	"arm1",
++	"arm2",
++	"arm3",
++	"arm4",
++	"arm5",
++	"arm6",
++	"arm7",
++};
++
++static const char *const pc3x2_portb_names[] = {
++	"arm8",
++	"arm9",
++	"arm10",
++	"arm11",
++	"arm12",
++	"arm13",
++	"arm14",
++	"arm15",
++};
++
+ static void pc3x2_add_gpio(void)
+ {
+-	picoxcell_add_gpio_port(0, 8, PC3X2_GPIO_PIN_ARM_0);
+-	picoxcell_add_gpio_port(1, 8, PC3X2_GPIO_PIN_ARM_8);
++	picoxcell_add_gpio_port(0, 8, PC3X2_GPIO_PIN_ARM_0,
++				pc3x2_porta_names);
++	picoxcell_add_gpio_port(1, 8, PC3X2_GPIO_PIN_ARM_8,
++				pc3x2_portb_names);
+ 	platform_device_register_data(NULL, "sdgpio", -1, &pc3x2_sdgpio,
+ 		sizeof(pc3x2_sdgpio));
+ }
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index ea94b62..ee651dc 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -415,11 +415,78 @@ static const struct sdgpio_platform_data pc3x3_sdgpio = {
+ 	.nr_banks			= 1,
+ };
+ 
++static const char *const pc3x3_porta_names[] = {
++	"arm0",
++	"arm1",
++	"arm2",
++	"arm3",
++	"arm4",
++	"arm5",
++	"arm6",
++	"arm7",
++};
++
++static const char *const pc3x3_portb_names[] = {
++	"arm8",
++	"arm9",
++	"arm10",
++	"arm11",
++	"arm12",
++	"arm13",
++	"arm14",
++	"arm15",
++	"arm16",
++	"arm17",
++	"arm18",
++	"arm19",
++	"arm20",
++	"arm21",
++	"arm22",
++	"arm23",
++};
++
++static const char *const pc3x3_portd_names[] = {
++	"arm24",
++	"arm25",
++	"arm26",
++	"arm27",
++	"arm28",
++	"arm29",
++	"arm30",
++	"arm31",
++	"arm32",
++	"arm33",
++	"arm34",
++	"arm35",
++	"arm36",
++	"arm37",
++	"arm38",
++	"arm39",
++	"arm40",
++	"arm41",
++	"arm42",
++	"arm43",
++	"arm44",
++	"arm45",
++	"arm46",
++	"arm47",
++	"arm48",
++	"arm49",
++	"arm50",
++	"arm51",
++	"arm52",
++	"arm53",
++	"arm54",
++};
++
+ static void pc3x3_add_gpio(void)
+ {
+-	picoxcell_add_gpio_port(0, 8, PC3X3_GPIO_PIN_ARM_0);
+-	picoxcell_add_gpio_port(1, 16, PC3X3_GPIO_PIN_ARM_8);
+-	picoxcell_add_gpio_port(3, 30, PC3X3_GPIO_PIN_ARM_24);
++	picoxcell_add_gpio_port(0, 8, PC3X3_GPIO_PIN_ARM_0,
++				pc3x3_porta_names);
++	picoxcell_add_gpio_port(1, 16, PC3X3_GPIO_PIN_ARM_8,
++				pc3x3_portb_names);
++	picoxcell_add_gpio_port(3, 30, PC3X3_GPIO_PIN_ARM_24,
++				pc3x3_portd_names);
+ 	platform_device_register_data(NULL, "sdgpio", -1, &pc3x3_sdgpio,
+ 		sizeof(pc3x3_sdgpio));
+ }
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index 3586834..f5d1ae6 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -22,7 +22,8 @@ extern void picoxcell_map_io(void);
+ extern struct sys_timer picoxcell_sys_timer;
+ extern void picoxcell_sched_clock_init(void);
+ 
+-extern int picoxcell_add_gpio_port(int port, int ngpio, int base);
++extern int picoxcell_add_gpio_port(int port, int ngpio, int base,
++				   const char *const *names);
+ 
+ #ifdef CONFIG_PICOXCELL_HAVE_TSU
+ void picoxcell_tsu_init(unsigned long rate);
+-- 
+1.7.0.4
+

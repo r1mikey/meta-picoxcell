@@ -1,0 +1,24 @@
+From e2f64b916abca77906a1e74d6d5a76d06173c182 Mon Sep 17 00:00:00 2001
+From: Andrew Watkins <Andrew.Watkins@picochip.com>
+Date: Thu, 12 Jan 2012 10:35:58 +0000
+Subject: [PATCH 188/228] packetmanager: Fixed inconsistency in spinlocks
+
+---
+ drivers/char/packetmanager.c |    1 -
+ 1 files changed, 0 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/char/packetmanager.c b/drivers/char/packetmanager.c
+index 5c509b4..0afdcce 100644
+--- a/drivers/char/packetmanager.c
++++ b/drivers/char/packetmanager.c
+@@ -502,7 +502,6 @@ pktman_release(struct inode *inode,
+ 		spin_unlock_bh(&pman->lock);
+ 
+ 		pman->state = PKTMAN_DEV_STATE_STOPPING;
+-		spin_unlock_bh(&pman->lock);
+ 		picoif_directdma_close(pman->picoif);
+ 		if (dma_in_progress)
+ 			dma_unmap_sg(&pman->dev, pman->xfer_sg,
+-- 
+1.7.0.4
+

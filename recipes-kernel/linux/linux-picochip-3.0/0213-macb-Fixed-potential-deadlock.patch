@@ -1,0 +1,28 @@
+From 6441735553b0039d387bc7d9a2c1cbbeb1198b8e Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Tue, 6 Nov 2012 17:09:23 +0000
+Subject: [PATCH 213/228] macb: Fixed potential deadlock
+ Removed prink from within a spinlock which could potentially cause a dead lock.
+ Mantis Issue #10824
+
+---
+ drivers/net/macb.c |    3 ---
+ 1 files changed, 0 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index de1a7cb..7379b9d 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -632,9 +632,6 @@ static irqreturn_t macb_interrupt(int irq, void *dev_id)
+ 			netdev_err(dev, "DMA bus error: HRESP not OK\n");
+ 		}
+ 
+-		if (bp->is_gem && (status & GEM_BIT(EXTIRQ)))
+-			netdev_info(dev, "woken by magic packet\n");
+-
+ 		status = macb_readl(bp, ISR);
+ 	}
+ 
+-- 
+1.7.0.4
+

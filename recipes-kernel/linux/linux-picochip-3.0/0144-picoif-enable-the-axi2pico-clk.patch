@@ -1,0 +1,92 @@
+From 6e2d42f726b47c164d25ad98876e9e989269c257 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 1 Jun 2011 11:44:14 +0100
+Subject: [PATCH 144/228] picoif: enable the axi2pico clk
+
+pc30xx has a gateable axi2pico clk.  Make sure that we get and enable it
+when probing the picoArray.  pc3x[23] provides a dummy clk so we don't
+need conditional code based on device type.
+---
+ drivers/picochip/pc3xx.c |   26 ++++++++++++++++++++++++--
+ 1 files changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/picochip/pc3xx.c b/drivers/picochip/pc3xx.c
+index f7a600a..16bc0b1 100644
+--- a/drivers/picochip/pc3xx.c
++++ b/drivers/picochip/pc3xx.c
+@@ -22,6 +22,7 @@
+  * upon and devices configured.
+  */
+ 
++#include <linux/clk.h>
+ #include <linux/module.h>
+ #include <linux/init.h>
+ #include <linux/list.h>
+@@ -273,6 +274,8 @@ struct pc3xx
+ 
+     struct device               *axi2pico_dmac;
+     struct device               *axi2cfg_dmac;
++
++    struct clk			*axi2pico_clk;
+ };
+ 
+ /*!
+@@ -1280,12 +1283,23 @@ pc3xx_probe( struct platform_device *pdev )
+     if ( !newdev )
+         return -ENOMEM;
+ 
++    newdev->axi2pico_clk = clk_get( &pdev->dev, "axi2pico" );
++    if ( IS_ERR( newdev->axi2pico_clk ) )
++    {
++        ret = PTR_ERR( newdev->axi2pico_clk );
++        goto out;
++    }
++
++    ret = clk_enable( newdev->axi2pico_clk );
++    if ( ret )
++        goto out_put_clk;
++
+     device_init_wakeup( &pdev->dev, 1 );
+ 
+     ret = -ENOMEM;
+     newdev->pa.resources = kmalloc( sizeof( pc3xx_resources ), GFP_KERNEL );
+     if ( !newdev->pa.resources )
+-        goto out;
++        goto out_disable_clk;
+     memcpy( newdev->pa.resources, pc3xx_resources, sizeof( pc3xx_resources ) );
+ 
+     newdev->pa.dev_num = pdev->id;
+@@ -1354,7 +1368,8 @@ pc3xx_probe( struct platform_device *pdev )
+     INIT_LIST_HEAD( &newdev->axi2pico_irq_handlers.list );
+ 
+     ret = picoif_register_dev( &newdev->pa );
+-    goto out;
++    if ( !ret )
++        return 0;
+ 
+ dma_channels_failed:
+     free_irq( newdev->gpr_irq, newdev );
+@@ -1366,6 +1381,10 @@ axi2pico_irq_failed:
+ ahb2pico_map_failed:
+     unmap_and_release( newdev->axi2cfg1_base_phys, newdev->axi2cfg1_base_len,
+                        newdev->axi2cfg1_base );
++out_disable_clk:
++    clk_disable( newdev->axi2pico_clk );
++out_put_clk:
++    clk_put( newdev->axi2pico_clk );
+ out:
+     if ( ret && newdev->pa.resources )
+         kfree( newdev->pa.resources );
+@@ -1393,6 +1412,9 @@ pc3xx_remove( struct platform_device *pdev )
+     struct pc3xx *pc3xxdev = to_pc3xx( pa );
+     int ret = 0, i = 0;
+ 
++    clk_disable( pc3xxdev->axi2pico_clk );
++    clk_put( pc3xxdev->axi2pico_clk );
++
+     for ( i = 0; i < PICO_NUM_DMA_CHANNELS; ++i )
+     {
+         if ( pc3xxdev->dma_channel[ i ].chan )
+-- 
+1.7.0.4
+

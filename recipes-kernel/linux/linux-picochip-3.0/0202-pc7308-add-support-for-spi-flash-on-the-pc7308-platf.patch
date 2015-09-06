@@ -1,0 +1,70 @@
+From 80672003010bbce7dc993135bd36ab134fd9f5e9 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Mon, 8 Oct 2012 09:24:05 +0100
+Subject: [PATCH 202/228] pc7308: add support for spi flash on the pc7308 platform
+
+---
+ arch/arm/mach-picoxcell/board_pc7308.c |   33 ++++++++++++++++++++++++++++++++
+ 1 files changed, 33 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7308.c b/arch/arm/mach-picoxcell/board_pc7308.c
+index 778c1cb..cfa3515 100644
+--- a/arch/arm/mach-picoxcell/board_pc7308.c
++++ b/arch/arm/mach-picoxcell/board_pc7308.c
+@@ -14,6 +14,8 @@
+ #include <linux/io.h>
+ #include <linux/mtd/partitions.h>
+ #include <linux/platform_device.h>
++#include <linux/spi/flash.h>
++#include <linux/spi/spi.h>
+ 
+ #include <mach/hardware.h>
+ #include <mach/picoxcell/axi2cfg.h>
+@@ -122,6 +124,35 @@ static void pc7308_register_uarts(void)
+ 		pr_err("failed to add uart based uicc controller\n");
+ }
+ 
++static struct mtd_partition pc7308_spi_flash_partitions[] = {
++	{
++		.name		= "SPI Flash",
++		.size		= MTDPART_SIZ_FULL,
++		.offset		= 0,
++	},
++};
++
++static struct flash_platform_data pc7308_spi_flash_data = {
++	.name			= "pc7308 spi flash",
++	.parts			= pc7308_spi_flash_partitions,
++	.nr_parts		= ARRAY_SIZE(pc7308_spi_flash_partitions),
++};
++
++static struct spi_board_info pc7308_spi_board_info[] __initdata = {
++	{
++		.modalias	= "m25p80",
++		.platform_data	= &pc7308_spi_flash_data,
++		.mode		= SPI_MODE_3,
++		.max_speed_hz	= 2000000,
++
++                /* Note: Ensure jumper J19 on the PC7308 platform is set
++                 *       correctly to connect ebi_decode1 to the
++                 *       spi flash chip select.
++                 */
++                .chip_select	= 1,
++	}
++};
++
+ static void __init pc7308_init(void)
+ {
+ 	picoxcell_tsu_init(20000000);
+@@ -130,6 +161,8 @@ static void __init pc7308_init(void)
+ 	pc7308_register_uarts();
+ 	pc7308_init_nand();
+ 	pc7308_panic_init();
++	spi_register_board_info(pc7308_spi_board_info,
++			        ARRAY_SIZE(pc7308_spi_board_info));
+ }
+ 
+ MACHINE_START(PC7308, "PC7308")
+-- 
+1.7.0.4
+

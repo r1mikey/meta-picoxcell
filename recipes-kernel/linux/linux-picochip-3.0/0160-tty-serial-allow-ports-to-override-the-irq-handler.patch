@@ -1,0 +1,33 @@
+From 7d5b0c2fd6288c485a6f36a36daa29d9cfdf373a Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 15 Jun 2011 12:58:09 +0100
+Subject: [PATCH 160/228] tty: serial: allow ports to override the irq handler
+
+Some serial ports may have unusal requirements for interrupt handling
+(e.g. the Synopsys DesignWare 8250-alike port and it's busy detect
+interrupt).  Add a .handle_irq callback that can be used for platforms
+to override the interrupt behaviour in a similar fashion to the
+.serial_out and .serial_in callbacks.
+
+Cc: Alan Cox <alan@linux.intel.com>
+Cc: Greg Kroah-Hartman <gregkh@suse.de>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ include/linux/serial_core.h |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/include/linux/serial_core.h b/include/linux/serial_core.h
+index a5c3114..b6fa317 100644
+--- a/include/linux/serial_core.h
++++ b/include/linux/serial_core.h
+@@ -300,6 +300,7 @@ struct uart_port {
+ 	void			(*set_termios)(struct uart_port *,
+ 				               struct ktermios *new,
+ 				               struct ktermios *old);
++	int			(*handle_irq)(struct uart_port *);
+ 	void			(*pm)(struct uart_port *, unsigned int state,
+ 				      unsigned int old);
+ 	unsigned int		irq;			/* irq number */
+-- 
+1.7.0.4
+

@@ -1,0 +1,95 @@
+From 89b0f424360ec5bea0fecc2535b840d14f9d0caf Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 11 Apr 2011 14:41:51 +0100
+Subject: [PATCH 014/228] picoxcell: support for ARM GPIO
+
+Use the basic-mmio-gpio driver for providing ARM GPIO.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Makefile         |    3 +-
+ arch/arm/mach-picoxcell/device_armgpio.c |   46 ++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/picoxcell_core.h |    2 +
+ 3 files changed, 50 insertions(+), 1 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/device_armgpio.c
+
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index b137725..f4aedd6 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -2,7 +2,8 @@ obj-y				:= picoxcell_core.o io.o axi2cfg.o \
+ 				   time.o \
+ 				   devices.o \
+ 				   clk.o \
+-				   mux.o
++				   mux.o \
++				   device_armgpio.o
+ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+diff --git a/arch/arm/mach-picoxcell/device_armgpio.c b/arch/arm/mach-picoxcell/device_armgpio.c
+new file mode 100644
+index 0000000..498c8c2
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/device_armgpio.c
+@@ -0,0 +1,46 @@
++/*
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#include <linux/basic_mmio_gpio.h>
++#include <linux/clk.h>
++#include <linux/err.h>
++#include <linux/gpio.h>
++#include <linux/io.h>
++#include <linux/kernel.h>
++#include <linux/platform_device.h>
++
++#include <mach/hardware.h>
++
++#include "picoxcell_core.h"
++
++#define GPIO_RES(__name, __addr) \
++	{ \
++		.start = (__addr), \
++		.end = (__addr) + 0x3, \
++		.flags = IORESOURCE_MEM, \
++		.name = #__name, \
++	}
++
++int __init picoxcell_add_gpio_port(int port, int ngpio, int base)
++{
++	struct resource res[] = {
++		GPIO_RES(dat, PICOXCELL_GPIO_BASE + 0x50 + port * 4),
++		GPIO_RES(dirout, PICOXCELL_GPIO_BASE + 0x04 + port * 12),
++		GPIO_RES(set, PICOXCELL_GPIO_BASE + 0x00 + port * 12),
++	};
++	struct bgpio_pdata pdata = {
++		.base = base,
++		.ngpio = ngpio,
++	};
++	struct platform_device *pdev = platform_device_register_resndata(NULL,
++		"basic-mmio-gpio", port, res, ARRAY_SIZE(res), &pdata,
++		sizeof(pdata));
++
++	return IS_ERR(pdev) ? PTR_ERR(pdev) : 0;
++}
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index 50cf842..7c8e39f 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -22,4 +22,6 @@ extern void picoxcell_map_io(void);
+ extern struct sys_timer picoxcell_sys_timer;
+ extern void picoxcell_sched_clock_init(void);
+ 
++extern int picoxcell_add_gpio_port(int port, int ngpio, int base);
++
+ #endif /* __ASM_ARCH_PICOXCELL_CORE_H__ */
+-- 
+1.7.0.4
+

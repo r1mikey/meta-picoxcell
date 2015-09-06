@@ -1,0 +1,45 @@
+From de6f2743ce90eaca16a522813b8760be1b8f36f0 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 29 Jul 2011 10:41:18 +0100
+Subject: [PATCH 171/228] picoxcell/pc7308: add mtd partitions for the nand fsbl
+
+The pc3008 on chip boot rom expects to find the nand first stage
+boot loader in nand flash blocks 0, 1, 2 or 3.
+---
+ arch/arm/mach-picoxcell/board_pc7308.c |   20 ++++++++++++++++++++
+ 1 files changed, 20 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7308.c b/arch/arm/mach-picoxcell/board_pc7308.c
+index c1d2fea..653e93f 100644
+--- a/arch/arm/mach-picoxcell/board_pc7308.c
++++ b/arch/arm/mach-picoxcell/board_pc7308.c
+@@ -25,6 +25,26 @@
+ 
+ static struct mtd_partition pc7308_nand_parts[] = {
+ 	{
++		.name	= "Nand First Stage 0",
++		.size	= SZ_128K,
++		.offset	= 0
++	},
++        {
++		.name	= "Nand First Stage 1",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++        {
++		.name	= "Nand First Stage 2",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++        {
++		.name	= "Nand First Stage 3",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++	{
+ 		.name	= "Boot",
+ 		.size	= 4 * SZ_128K,
+ 		.offset	= 8 * SZ_128K,
+-- 
+1.7.0.4
+

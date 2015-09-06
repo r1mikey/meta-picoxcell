@@ -1,0 +1,39 @@
+From ca62e63618fb66f9a2976ffeb7ab2dd73af67458 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 19 Jul 2011 17:30:21 +0100
+Subject: [PATCH 170/228] hwrng: picoxcell: disable runtime pm at device removal
+
+When removing the device we disable it to prevent the runtime pm counts
+from becoming inbalanced.  Additionally, disable the device at the end
+of the probe method so we don't leave the clk enabled.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/char/hw_random/picoxcell-rng.c |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/char/hw_random/picoxcell-rng.c b/drivers/char/hw_random/picoxcell-rng.c
+index ff3e5ac..3fb5a8d 100644
+--- a/drivers/char/hw_random/picoxcell-rng.c
++++ b/drivers/char/hw_random/picoxcell-rng.c
+@@ -142,6 +142,9 @@ static int picoxcell_trng_probe(struct platform_device *pdev)
+ 	pm_runtime_resume(&pdev->dev);
+ 
+ 	picoxcell_trng_start();
++
++	pm_runtime_suspend(&pdev->dev);
++
+ 	ret = hwrng_register(&picoxcell_trng);
+ 	if (ret)
+ 		goto err_register;
+@@ -160,6 +163,7 @@ err_register:
+ static int __devexit picoxcell_trng_remove(struct platform_device *pdev)
+ {
+ 	hwrng_unregister(&picoxcell_trng);
++	pm_runtime_disable(&pdev->dev);
+ 	clk_put(rng_clk);
+ 
+ 	return 0;
+-- 
+1.7.0.4
+

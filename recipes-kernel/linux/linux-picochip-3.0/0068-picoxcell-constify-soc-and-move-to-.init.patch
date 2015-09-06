@@ -1,0 +1,223 @@
+From fb7c7655fa24955740ff87157fe99a75910059b1 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 11 Apr 2011 15:15:10 +0100
+Subject: [PATCH 068/228] picoxcell: constify soc and move to .init
+
+All of the SoC specific operations are carried out at init time so
+move them into the .init sections.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc30xx.c         |    8 ++++----
+ arch/arm/mach-picoxcell/pc3x2.c          |    8 ++++----
+ arch/arm/mach-picoxcell/pc3x3.c          |    8 ++++----
+ arch/arm/mach-picoxcell/picoxcell_core.c |    6 +++---
+ arch/arm/mach-picoxcell/soc.h            |   10 +++++-----
+ arch/arm/mach-picoxcell/time.c           |    6 +++---
+ 6 files changed, 23 insertions(+), 23 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 21fae35..4b37d51 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -354,7 +354,7 @@ static struct clk_lookup pc30xx_clk_lookup[] = {
+ 	CLK_LOOKUP("dw_apb_timer.1",	NULL,		&dummy_clk),
+ };
+ 
+-static void pc30xx_clk_init(void)
++static void __init pc30xx_clk_init(void)
+ {
+ 	static struct clk *amba_clks[] = {
+ 		&tzprot_clk,
+@@ -396,7 +396,7 @@ static void pc30xx_clk_init(void)
+ 	clkdev_add_table(pc30xx_clk_lookup, ARRAY_SIZE(pc30xx_clk_lookup));
+ }
+ 
+-static const struct picoxcell_timer pc30xx_timers[] = {
++static const struct picoxcell_timer pc30xx_timers[] __initconst = {
+ 	{
+ 		.name	= "timer0",
+ 		.type	= TIMER_TYPE_TIMER,
+@@ -429,11 +429,11 @@ static const struct picoxcell_timer pc30xx_timers[] = {
+ 	},
+ };
+ 
+-static void pc30xx_init(void)
++static void __init pc30xx_init(void)
+ {
+ }
+ 
+-struct picoxcell_soc pc30xx_soc = {
++const struct picoxcell_soc pc30xx_soc __initconst = {
+ 	.init		= pc30xx_init,
+ 	.init_clocks	= pc30xx_clk_init,
+ 	.timers		= pc30xx_timers,
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index bedc15b..9be7b0f 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -40,7 +40,7 @@ static struct clk_lookup pc3x2_clk_lookup[] = {
+ 	CLK_LOOKUP(NULL,		"ref",		&ref_clk),
+ };
+ 
+-static void pc3x2_clk_init(void)
++static void __init pc3x2_clk_init(void)
+ {
+ 	picoxcell_clk_add(&dummy_clk);
+ 	picoxcell_clk_add(&ref_clk);
+@@ -73,7 +73,7 @@ static struct mux_def pc3x2_mux[] = {
+ 	MUXGPIO(sdgpio0,	-1,	0,	FRACN,	-1,	-1,	0,	7,	MUX_INVERT_PERIPH),
+ };
+ 
+-static const struct picoxcell_timer pc3x2_timers[] = {
++static const struct picoxcell_timer pc3x2_timers[] __initconst = {
+ 	{
+ 		.name	= "timer0",
+ 		.type	= TIMER_TYPE_TIMER,
+@@ -108,7 +108,7 @@ static const struct picoxcell_timer pc3x2_timers[] = {
+ 
+ static void pc3x2_init(void);
+ 
+-struct picoxcell_soc pc3x2_soc = {
++const struct picoxcell_soc pc3x2_soc __initconst = {
+ 	.init		= pc3x2_init,
+ 	.init_clocks	= pc3x2_clk_init,
+ 	.timers		= pc3x2_timers,
+@@ -213,7 +213,7 @@ static void pc3x2_init_bus_snoopers(void)
+ 					  sizeof(pc3x2_snoop_err_names));
+ }
+ 
+-static void pc3x2_init(void)
++static void __init pc3x2_init(void)
+ {
+ 	picoxcell_mux_register(pc3x2_mux, ARRAY_SIZE(pc3x2_mux));
+ 	pc3x2_add_gpio();
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index f9788d2..3a9a87e 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -266,7 +266,7 @@ static struct clk_lookup pc3x3_clk_lookup[] = {
+ 	CLK_LOOKUP(NULL,		"ref",		&ref_clk),
+ };
+ 
+-static void pc3x3_clk_init(void)
++static void __init pc3x3_clk_init(void)
+ {
+ 	int i;
+ 
+@@ -365,7 +365,7 @@ static struct mux_def pc3x3_mux[] = {
+ 	MUXGPIO(sdgpio0,	-1,	0,	FRACN,	-1,	-1,	0,	7,	MUX_INVERT_PERIPH),
+ };
+ 
+-static const struct picoxcell_timer pc3x3_timers[] = {
++static const struct picoxcell_timer pc3x3_timers[] __initconst = {
+ 	{
+ 		.name	= "timer0",
+ 		.type	= TIMER_TYPE_TIMER,
+@@ -400,7 +400,7 @@ static const struct picoxcell_timer pc3x3_timers[] = {
+ 
+ static void pc3x3_init(void);
+ 
+-struct picoxcell_soc pc3x3_soc = {
++const struct picoxcell_soc pc3x3_soc __initconst = {
+ 	.init		= pc3x3_init,
+ 	.init_clocks	= pc3x3_clk_init,
+ 	.timers		= pc3x3_timers,
+@@ -581,7 +581,7 @@ static void pc3x3_init_bus_snoopers(void)
+ 					  sizeof(pc3x3_snoop_err_names));
+ }
+ 
+-static void pc3x3_init(void)
++static void __init pc3x3_init(void)
+ {
+ 	picoxcell_mux_register(pc3x3_mux, ARRAY_SIZE(pc3x3_mux));
+ 	pc3x3_add_gpio();
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.c b/arch/arm/mach-picoxcell/picoxcell_core.c
+index 459c2e0..6897a96 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.c
++++ b/arch/arm/mach-picoxcell/picoxcell_core.c
+@@ -23,7 +23,7 @@
+ 
+ struct dentry *picoxcell_debugfs;
+ 
+-struct picoxcell_soc *picoxcell_get_soc(void)
++const struct picoxcell_soc __init *picoxcell_get_soc(void)
+ {
+ 	unsigned long device_id =
+ 		__raw_readl(IO_ADDRESS(PICOXCELL_AXI2CFG_BASE +
+@@ -104,7 +104,7 @@ static void picoxcell_debugfs_init(void)
+ 
+ void __init picoxcell_init_early(void)
+ {
+-	struct picoxcell_soc *soc = picoxcell_get_soc();
++	const struct picoxcell_soc *soc = picoxcell_get_soc();
+ 
+ 	axi2cfg_init();
+ 	picoxcell_sched_clock_init();
+@@ -113,7 +113,7 @@ void __init picoxcell_init_early(void)
+ 
+ void __init picoxcell_core_init(void)
+ {
+-	struct picoxcell_soc *soc = picoxcell_get_soc();
++	const struct picoxcell_soc *soc = picoxcell_get_soc();
+ 
+ 	report_chipinfo();
+ 	picoxcell_debugfs_init();
+diff --git a/arch/arm/mach-picoxcell/soc.h b/arch/arm/mach-picoxcell/soc.h
+index f1e0bb4..097ce30 100644
+--- a/arch/arm/mach-picoxcell/soc.h
++++ b/arch/arm/mach-picoxcell/soc.h
+@@ -36,14 +36,14 @@ struct picoxcell_soc {
+ 	unsigned long			features[BITS_TO_LONGS(NR_FEAT_BITS)];
+ };
+ 
+-extern struct picoxcell_soc *picoxcell_get_soc(void);
+-extern struct picoxcell_soc pc3x2_soc;
+-extern struct picoxcell_soc pc3x3_soc;
+-extern struct picoxcell_soc pc30xx_soc;
++extern const struct picoxcell_soc *picoxcell_get_soc(void);
++extern const struct picoxcell_soc pc3x2_soc;
++extern const struct picoxcell_soc pc3x3_soc;
++extern const struct picoxcell_soc pc30xx_soc;
+ 
+ static inline int picoxcell_has_feature(enum picoxcell_features feat)
+ {
+-	struct picoxcell_soc *soc = picoxcell_get_soc();
++	const struct picoxcell_soc *soc = picoxcell_get_soc();
+ 
+ 	return test_bit(feat, soc->features);
+ }
+diff --git a/arch/arm/mach-picoxcell/time.c b/arch/arm/mach-picoxcell/time.c
+index 46b8903..7c9a978 100644
+--- a/arch/arm/mach-picoxcell/time.c
++++ b/arch/arm/mach-picoxcell/time.c
+@@ -101,7 +101,7 @@ static irqreturn_t timer_interrupt(int irq, void *dev_id)
+ 
+ #define PICOXCELL_MIN_RANGE	4
+ 
+-static void picoxcell_clockevent_init(struct picoxcell_soc *soc)
++static void picoxcell_clockevent_init(const struct picoxcell_soc *soc)
+ {
+ 	struct timer_instance *inst = &timers[TIMER_ID_CLOCKEVENT];
+ 	const struct picoxcell_timer *timer = NULL;
+@@ -151,7 +151,7 @@ static struct clocksource clocksource_picoxcell = {
+ 	.flags	    = CLOCK_SOURCE_IS_CONTINUOUS,
+ };
+ 
+-static void picoxcell_clocksource_init(struct picoxcell_soc *soc)
++static void picoxcell_clocksource_init(const struct picoxcell_soc *soc)
+ {
+ 	const struct picoxcell_timer *timer = NULL;
+ 	int i;
+@@ -173,7 +173,7 @@ static void picoxcell_clocksource_init(struct picoxcell_soc *soc)
+ 
+ static void __init picoxcell_timer_init(void)
+ {
+-	struct picoxcell_soc *soc = picoxcell_get_soc();
++	const struct picoxcell_soc *soc = picoxcell_get_soc();
+ 
+ 	picoxcell_clocksource_init(soc);
+ 	picoxcell_clockevent_init(soc);
+-- 
+1.7.0.4
+

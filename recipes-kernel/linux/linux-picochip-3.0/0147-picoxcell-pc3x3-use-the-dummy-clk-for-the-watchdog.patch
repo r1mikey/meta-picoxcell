@@ -1,0 +1,45 @@
+From 9de9e0c0c4b46fcdfb203af395ad2d8e6c2003a6 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 2 Jun 2011 15:52:06 +0100
+Subject: [PATCH 147/228] picoxcell/pc3x3: use the dummy clk for the watchdog
+
+The watchdog doesn't need it's own special dummy clk, just use the one
+that the rest of the devices use.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x3.c |    4 +---
+ 1 files changed, 1 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index 75adbe9..9a3b999 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -60,7 +60,6 @@ FIXED_CLK(l2_engine,	CLOCK_TICK_RATE, 6, &pc3x3_fixed_clk_ops);
+ FIXED_CLK(trng,		CLOCK_TICK_RATE, 7, &pc3x3_fixed_clk_ops);
+ FIXED_CLK(fuse,		CLOCK_TICK_RATE, 8, &pc3x3_fixed_clk_ops);
+ FIXED_CLK(otp,		CLOCK_TICK_RATE, 9, &pc3x3_fixed_clk_ops);
+-FIXED_CLK(wdt,		CLOCK_TICK_RATE, -1, &pc3x3_fixed_clk_ops);
+ FIXED_CLK(dummy,	CLOCK_TICK_RATE, -1, &pc3x3_fixed_clk_ops);
+ FIXED_CLK(ref,		20000000, -1, NULL);
+ VARIABLE_CLK(arm,			 -1, 140000000, 700000000, 5000000, &pc3x3_variable_clk_ops);
+@@ -245,7 +244,6 @@ static struct clk *pc3x3_clks[] = {
+ 	&trng_clk,
+ 	&fuse_clk,
+ 	&otp_clk,
+-	&wdt_clk,
+ 	&arm_clk,
+ };
+ 
+@@ -260,7 +258,7 @@ static struct clk_lookup pc3x3_clk_lookup[] = {
+ 	CLK_LOOKUP("picoxcell-trng",	NULL,		&trng_clk),
+ 	CLK_LOOKUP("picoxcell-fuse",	NULL,		&fuse_clk),
+ 	CLK_LOOKUP("picoxcell-otp-pc3x3", NULL,		&otp_clk),
+-	CLK_LOOKUP("dw_wdt",		NULL,		&wdt_clk),
++	CLK_LOOKUP("dw_wdt",		NULL,		&dummy_clk),
+ 	CLK_LOOKUP(NULL,		"arm",		&arm_clk),
+ 	CLK_LOOKUP("macb",		"pclk",		&dummy_clk),
+ 	CLK_LOOKUP("macb",		"hclk",		&dummy_clk),
+-- 
+1.7.0.4
+

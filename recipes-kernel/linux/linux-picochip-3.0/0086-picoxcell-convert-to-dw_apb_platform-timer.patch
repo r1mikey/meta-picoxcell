@@ -1,0 +1,418 @@
+From 9428420a62d6eab1fb9764bb670f05157f123367 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 8 Apr 2011 11:46:59 +0100
+Subject: [PATCH 086/228] picoxcell: convert to dw_apb_platform timer
+
+The dw_apb_platform timer allows us to use common code and as we only
+use two timers they are in the same location for all picoxcell variants
+so this doesn't need to be SoC variant specific.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/Kconfig                 |    1 +
+ arch/arm/mach-picoxcell/pc30xx.c |   35 --------
+ arch/arm/mach-picoxcell/pc3x2.c  |   35 --------
+ arch/arm/mach-picoxcell/pc3x3.c  |   37 +--------
+ arch/arm/mach-picoxcell/soc.h    |    2 -
+ arch/arm/mach-picoxcell/time.c   |  180 ++++++++------------------------------
+ 6 files changed, 39 insertions(+), 251 deletions(-)
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index f568b3c..411d036 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -617,6 +617,7 @@ config ARCH_PICOXCELL
+ 	select GENERIC_GPIO
+ 	select HAVE_NET_MACB
+ 	select ARCH_HAS_CPUFREQ
++	select DW_APB_TIMER_PLATFORM
+ 	help
+ 	  This enables support for systems based on the Picochip picoXcell
+ 	  family of Femtocell devices.
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 1035a54..56cdccc 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -398,39 +398,6 @@ static void __init pc30xx_clk_init(void)
+ 	clkdev_add_table(pc30xx_clk_lookup, ARRAY_SIZE(pc30xx_clk_lookup));
+ }
+ 
+-static const struct picoxcell_timer pc30xx_timers[] __initconst = {
+-	{
+-		.name	= "timer0",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 0 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER0,
+-	},
+-	{
+-		.name	= "timer1",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 1 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER1,
+-	},
+-	{
+-		.name	= "timer2",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PC3X3_TIMER2_BASE + 0 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER2,
+-	},
+-	{
+-		.name	= "timer3",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PC3X3_TIMER2_BASE + 1 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER3,
+-	},
+-	{
+-		.name	= "rtc",
+-		.type	= TIMER_TYPE_RTC,
+-		.base	= PICOXCELL_RTCLK_BASE,
+-		.irq	= IRQ_RTC,
+-	},
+-};
+-
+ static void pc30xx_init_bus_snoopers(void)
+ {
+ 	static const char *pc30xx_snoop_err_names[32] = {
+@@ -524,6 +491,4 @@ static void __init pc30xx_init(void)
+ const struct picoxcell_soc pc30xx_soc __initconst = {
+ 	.init		= pc30xx_init,
+ 	.init_clocks	= pc30xx_clk_init,
+-	.timers		= pc30xx_timers,
+-	.nr_timers	= ARRAY_SIZE(pc30xx_timers),
+ };
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index 2667425..1c4fc03 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -73,46 +73,11 @@ static struct mux_def pc3x2_mux[] = {
+ 	MUXGPIO(sdgpio0,	-1,	0,	FRACN,	-1,	-1,	0,	7,	MUX_INVERT_PERIPH),
+ };
+ 
+-static const struct picoxcell_timer pc3x2_timers[] __initconst = {
+-	{
+-		.name	= "timer0",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 0 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER0,
+-	},
+-	{
+-		.name	= "timer1",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 1 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER1,
+-	},
+-	{
+-		.name	= "timer2",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 2 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER2,
+-	},
+-	{
+-		.name	= "timer3",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 3 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER3,
+-	},
+-	{
+-		.name	= "rtc",
+-		.type	= TIMER_TYPE_RTC,
+-		.base	= PICOXCELL_RTCLK_BASE,
+-		.irq	= IRQ_RTC,
+-	},
+-};
+-
+ static void pc3x2_init(void);
+ 
+ const struct picoxcell_soc pc3x2_soc __initconst = {
+ 	.init		= pc3x2_init,
+ 	.init_clocks	= pc3x2_clk_init,
+-	.timers		= pc3x2_timers,
+-	.nr_timers	= ARRAY_SIZE(pc3x2_timers),
+ };
+ 
+ static const char * const pc3x2_sdgpio_lo_pins[] = {
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index edc40e4..a1568e2 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -264,6 +264,8 @@ static struct clk_lookup pc3x3_clk_lookup[] = {
+ 	CLK_LOOKUP("macb",		"pclk",		&dummy_clk),
+ 	CLK_LOOKUP("macb",		"hclk",		&dummy_clk),
+ 	CLK_LOOKUP(NULL,		"ref",		&ref_clk),
++	CLK_LOOKUP("dw_apb_timer.0",	NULL,		&dummy_clk),
++	CLK_LOOKUP("dw_apb_timer.1",	NULL,		&dummy_clk),
+ };
+ 
+ static void __init pc3x3_clk_init(void)
+@@ -365,46 +367,11 @@ static struct mux_def pc3x3_mux[] = {
+ 	MUXGPIO(sdgpio0,	-1,	0,	FRACN,	-1,	-1,	0,	7,	MUX_INVERT_PERIPH),
+ };
+ 
+-static const struct picoxcell_timer pc3x3_timers[] __initconst = {
+-	{
+-		.name	= "timer0",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 0 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER0,
+-	},
+-	{
+-		.name	= "timer1",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 1 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER1,
+-	},
+-	{
+-		.name	= "timer2",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PC3X3_TIMER2_BASE + 0 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER2,
+-	},
+-	{
+-		.name	= "timer3",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PC3X3_TIMER2_BASE + 1 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER3,
+-	},
+-	{
+-		.name	= "rtc",
+-		.type	= TIMER_TYPE_RTC,
+-		.base	= PICOXCELL_RTCLK_BASE,
+-		.irq	= IRQ_RTC,
+-	},
+-};
+-
+ static void pc3x3_init(void);
+ 
+ const struct picoxcell_soc pc3x3_soc __initconst = {
+ 	.init		= pc3x3_init,
+ 	.init_clocks	= pc3x3_clk_init,
+-	.timers		= pc3x3_timers,
+-	.nr_timers	= ARRAY_SIZE(pc3x3_timers),
+ };
+ 
+ static const char * const pc3x3_sdgpio_pins[] = {
+diff --git a/arch/arm/mach-picoxcell/soc.h b/arch/arm/mach-picoxcell/soc.h
+index 871a030..61e33db 100644
+--- a/arch/arm/mach-picoxcell/soc.h
++++ b/arch/arm/mach-picoxcell/soc.h
+@@ -25,8 +25,6 @@ struct picoxcell_timer {
+ struct picoxcell_soc {
+ 	void				(*init)(void);
+ 	void				(*init_clocks)(void);
+-	const struct picoxcell_timer	*timers;
+-	int				nr_timers;
+ };
+ 
+ extern const struct picoxcell_soc *picoxcell_get_soc(void);
+diff --git a/arch/arm/mach-picoxcell/time.c b/arch/arm/mach-picoxcell/time.c
+index 7c9a978..f5e0fbf 100644
+--- a/arch/arm/mach-picoxcell/time.c
++++ b/arch/arm/mach-picoxcell/time.c
+@@ -12,6 +12,7 @@
+ #include <linux/cnt32_to_63.h>
+ #include <linux/interrupt.h>
+ #include <linux/irq.h>
++#include <linux/platform_device.h>
+ #include <linux/sched.h>
+ 
+ #include <asm/mach/time.h>
+@@ -22,161 +23,52 @@
+ #include "picoxcell_core.h"
+ #include "soc.h"
+ 
+-enum timer_id {
+-	TIMER_ID_CLOCKEVENT,
+-	TIMER_ID_CLOCKSOURCE,
+-	NR_TIMERS,
++static struct resource timer0_res[] = {
++	{
++		.start	= PICOXCELL_TIMER_BASE,
++		.end	= PICOXCELL_TIMER_BASE + TIMER_SPACING - 1,
++		.flags	= IORESOURCE_MEM,
++	},
++	{
++		.start	= IRQ_TIMER0,
++		.end	= IRQ_TIMER0,
++		.flags	= IORESOURCE_IRQ,
++	},
+ };
+ 
+-struct timer_instance {
+-	void __iomem	    *base;
+-	struct irqaction    irqaction;
++static struct resource timer1_res[] = {
++	{
++		.start	= PICOXCELL_TIMER_BASE + TIMER_SPACING,
++		.end	= PICOXCELL_TIMER_BASE + 2 * TIMER_SPACING - 1,
++		.flags	= IORESOURCE_MEM,
++	},
+ };
+ 
+-/*
+- * We expect to have 2 timers - a freerunning one for the clock source and a
+- * periodic/oneshot one for the clock_event_device.
+- */
+-static struct timer_instance timers[NR_TIMERS];
+-
+-static void timer_set_mode(enum clock_event_mode mode,
+-			   struct clock_event_device *clk)
+-{
+-	struct timer_instance *timer = &timers[TIMER_ID_CLOCKEVENT];
+-	unsigned long load_count = DIV_ROUND_UP(CLOCK_TICK_RATE, HZ);
+-
+-	switch (mode) {
+-	case CLOCK_EVT_MODE_PERIODIC:
+-		/*
+-		 * By default, use the kernel tick rate. The reload value can
+-		 * be changed with the timer_set_next_event() function.
+-		 */
+-		__raw_writel(load_count,
+-			     timer->base + TIMER_LOAD_COUNT_REG_OFFSET);
+-		__raw_writel(TIMER_ENABLE | TIMER_MODE,
+-			     timer->base + TIMER_CONTROL_REG_OFFSET);
+-		break;
+-
+-	case CLOCK_EVT_MODE_ONESHOT:
+-	case CLOCK_EVT_MODE_UNUSED:
+-	case CLOCK_EVT_MODE_SHUTDOWN:
+-	default:
+-		__raw_writel(0, timer->base + TIMER_CONTROL_REG_OFFSET);
+-		break;
+-	}
+-}
+-
+-static int timer_set_next_event(unsigned long evt,
+-				struct clock_event_device *clk)
+-{
+-	struct timer_instance *timer = &timers[TIMER_ID_CLOCKEVENT];
+-
+-	/* Disable the timer, write the new event then enable it. */
+-	__raw_writel(0, timer->base + TIMER_CONTROL_REG_OFFSET);
+-	__raw_writel(evt, timer->base + TIMER_LOAD_COUNT_REG_OFFSET);
+-	__raw_writel(TIMER_ENABLE | TIMER_MODE,
+-		     timer->base + TIMER_CONTROL_REG_OFFSET);
+-
+-	return 0;
+-}
+-
+-static struct clock_event_device clockevent_picoxcell = {
+-	.features		= CLOCK_EVT_FEAT_PERIODIC |
+-				  CLOCK_EVT_FEAT_ONESHOT,
+-	.set_next_event		= timer_set_next_event,
+-	.set_mode		= timer_set_mode,
++static struct platform_device timer0 = {
++	.name		= "dw_apb_timer",
++	.id		= 0,
++	.resource	= timer0_res,
++	.num_resources	= ARRAY_SIZE(timer0_res),
+ };
+ 
+-static irqreturn_t timer_interrupt(int irq, void *dev_id)
+-{
+-	struct timer_instance *timer = &timers[TIMER_ID_CLOCKEVENT];
+-
+-	/* Clear the interrupt. */
+-	__raw_readl(timer->base + TIMER_EOI_REG_OFFSET);
+-
+-	clockevent_picoxcell.event_handler(&clockevent_picoxcell);
+-
+-	return IRQ_HANDLED;
+-}
+-
+-#define PICOXCELL_MIN_RANGE	4
+-
+-static void picoxcell_clockevent_init(const struct picoxcell_soc *soc)
+-{
+-	struct timer_instance *inst = &timers[TIMER_ID_CLOCKEVENT];
+-	const struct picoxcell_timer *timer = NULL;
+-	int i;
+-
+-	for (i = 0; i < soc->nr_timers; ++i)
+-		if (soc->timers[i].type == TIMER_TYPE_TIMER) {
+-			timer = &soc->timers[i];
+-			break;
+-		}
+-
+-	BUG_ON(!timer);
+-
+-	/* Configure the interrupt for this timer. */
+-	inst->irqaction.name	= timer->name;
+-	inst->irqaction.handler	= timer_interrupt;
+-	inst->irqaction.flags	= IRQF_DISABLED | IRQF_TIMER;
+-	inst->base		= ioremap(timer->base, TIMER_SPACING);
+-
+-	clockevent_picoxcell.name = timer->name;
+-	clockevents_calc_mult_shift(&clockevent_picoxcell, CLOCK_TICK_RATE,
+-				    PICOXCELL_MIN_RANGE);
+-	clockevent_picoxcell.max_delta_ns =
+-		clockevent_delta2ns(0xfffffffe, &clockevent_picoxcell);
+-	clockevent_picoxcell.min_delta_ns = 50000;
+-	clockevent_picoxcell.cpumask = cpumask_of(0);
+-
+-	/* Start with the timer disabled and the interrupt enabled. */
+-	__raw_writel(0, inst->base + TIMER_CONTROL_REG_OFFSET);
+-	setup_irq(timer->irq, &inst->irqaction);
+-
+-	clockevents_register_device(&clockevent_picoxcell);
+-}
+-
+-static cycle_t picoxcell_rtc_get_cycles(struct clocksource *cs)
+-{
+-	struct timer_instance *inst = &timers[TIMER_ID_CLOCKSOURCE];
+-
+-	return __raw_readl(inst->base + RTCLK_CCV_REG_OFFSET);
+-}
+-
+-static struct clocksource clocksource_picoxcell = {
+-	.name	    = "rtc",
+-	.rating     = 300,
+-	.read	    = picoxcell_rtc_get_cycles,
+-	.mask	    = CLOCKSOURCE_MASK(32),
+-	.flags	    = CLOCK_SOURCE_IS_CONTINUOUS,
++static struct platform_device timer1 = {
++	.name		= "dw_apb_timer",
++	.id		= 1,
++	.resource	= timer1_res,
++	.num_resources	= ARRAY_SIZE(timer1_res),
+ };
+ 
+-static void picoxcell_clocksource_init(const struct picoxcell_soc *soc)
+-{
+-	const struct picoxcell_timer *timer = NULL;
+-	int i;
+-
+-	for (i = 0; i < soc->nr_timers; ++i)
+-		if (soc->timers[i].type == TIMER_TYPE_RTC) {
+-			timer = &soc->timers[i];
+-			break;
+-		}
+-
+-	BUG_ON(!timer);
+-
+-	timers[TIMER_ID_CLOCKSOURCE].base = ioremap(timer->base, SZ_4K);
+-
+-	/* The RTC is always running. We don't need to do any initialization. */
+-	clocksource_picoxcell.read = picoxcell_rtc_get_cycles;
+-	clocksource_register_hz(&clocksource_picoxcell, CLOCK_TICK_RATE);
+-}
++static struct platform_device *picoxcell_early_devices[] __initdata = {
++	&timer0,
++	&timer1,
++};
+ 
+ static void __init picoxcell_timer_init(void)
+ {
+-	const struct picoxcell_soc *soc = picoxcell_get_soc();
+-
+-	picoxcell_clocksource_init(soc);
+-	picoxcell_clockevent_init(soc);
++	early_platform_add_devices(picoxcell_early_devices,
++				   ARRAY_SIZE(picoxcell_early_devices));
++	early_platform_driver_register_all("earlytimer");
++	early_platform_driver_probe("earlytimer", 2, 0);
+ }
+ 
+ struct sys_timer picoxcell_sys_timer = {
+-- 
+1.7.0.4
+

@@ -1,0 +1,299 @@
+From c0c6ba4182f3b26ba4783aa084ba315bd01b4adc Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Thu, 25 Oct 2012 12:01:11 +0100
+Subject: [PATCH 209/228] spi/picoxcell: driver enhanced to run on pc30xx devices
+
+We now take proper care of the ebi chip select decode
+muxing used on pc30xx devices.
+
+This commit forms part of the resolution of Mantis Issue #10721
+---
+ .../include/mach/picoxcell/axi2cfg.h               |    3 +
+ arch/arm/mach-picoxcell/picoxcell_core.c           |    1 +
+ drivers/spi/picoxcell_spi.c                        |  126 +++++++++----------
+ 3 files changed, 64 insertions(+), 66 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/include/mach/picoxcell/axi2cfg.h b/arch/arm/mach-picoxcell/include/mach/picoxcell/axi2cfg.h
+index 909863b..326f30e 100644
+--- a/arch/arm/mach-picoxcell/include/mach/picoxcell/axi2cfg.h
++++ b/arch/arm/mach-picoxcell/include/mach/picoxcell/axi2cfg.h
+@@ -97,6 +97,9 @@
+ #define AXI2CFG_AXI_ERR_MASK_NONE		   0
+ #define AXI2CFG_AXI_ERR_ENABLE_ALL		   0x00FFFFFF
+ 
++/* PC30XX Decode Mux stuff */
++#define PC30XX_SPI_DECODE_STEP_SIZE                (8)
++
+ #ifndef __ASSEMBLY__
+ 
+ /*
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.c b/arch/arm/mach-picoxcell/picoxcell_core.c
+index 50bec21..01c3eb3 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.c
++++ b/arch/arm/mach-picoxcell/picoxcell_core.c
+@@ -65,6 +65,7 @@ int picoxcell_is_pc30xx(void)
+ 		return 0;
+ 	}
+ }
++EXPORT_SYMBOL(picoxcell_is_pc30xx);
+ 
+ const struct picoxcell_soc __init *picoxcell_get_soc(void)
+ {
+diff --git a/drivers/spi/picoxcell_spi.c b/drivers/spi/picoxcell_spi.c
+index 9f9249c..5d99683 100644
+--- a/drivers/spi/picoxcell_spi.c
++++ b/drivers/spi/picoxcell_spi.c
+@@ -30,6 +30,7 @@
+ #include <mach/hardware.h>
+ 
+ #include "picoxcell_spi.h"
++#include "../../arch/arm/mach-picoxcell/picoxcell_core.h"
+ 
+ /* Macros ------------------------------------------------------------------ */
+ /*!
+@@ -66,6 +67,9 @@ struct pc302_spi
+ 
+     /* The clk that runs the device. */
+     struct clk	    *clk;
++
++    /* Copy of the decode mux register */
++    unsigned int decode_mux_saved;
+ };
+ 
+ /*!
+@@ -215,13 +219,8 @@ pc302spi_setup(struct spi_device *spi)
+     u32 ctrlr0 = 0;
+     u32 sckdv = 0;
+ 
+-    /* Have we been passed a valid combination of bus and cs ?
+-     * Note: PC302 device has a single SPI controller (bus) and
+-     *       4 possible SPI chip selects
+-     */
+     if (master->bus_num > (s16)(PC302_MAX_NUMBER_SPI_BUSSES - 1))
+     {
+-        /* Oops, request bus is out of range. */
+         pr_err("requested 'bus' (%d) out of range. "
+                "(We only have %d SPI bus(ses) available).\n",
+                (unsigned int)master->bus_num,
+@@ -229,10 +228,8 @@ pc302spi_setup(struct spi_device *spi)
+         return -EINVAL;
+     }
+ 
+-    /* Have we been passed a valid chip select ? */
+     if (spi->chip_select > (u8)(PC302_MAX_NUMBER_SPI_CS - 1))
+     {
+-        /* Oops, requested chip select is out of range */
+         pr_err("requested 'cs' (%d) out of range. "
+                "(We only have %d 'cs' available.\n",
+                (unsigned int)spi->chip_select,
+@@ -240,18 +237,14 @@ pc302spi_setup(struct spi_device *spi)
+         return -EINVAL;
+     }
+ 
+-    /* Have we been passed a valid number of bits per word ? */
+     if ((spi->bits_per_word == 0) || (spi->bits_per_word != 8))
+     {
+-        /* Set default bits per word */
+         spi->bits_per_word = 8;
+     }
+ 
+-    /* Have we been passed a valid SPI bus clock rate ? */
+     if ((spi->max_speed_hz < priv->spi_min_clock) ||
+         (spi->max_speed_hz > priv->spi_max_clock))
+     {
+-    	/* Oops, we do not support this requested SPI bus clock rate */
+         pr_err("requested bus 'hz' (%d) out of range. "
+                "(Min = %d Hz, Max = %d Hz).\n",
+                (unsigned int)spi->max_speed_hz,
+@@ -259,28 +252,22 @@ pc302spi_setup(struct spi_device *spi)
+         return -EINVAL;
+     }
+ 
+-    /* Have we been passed a valid SPI mode ? */
+     if ((spi->mode & (SPI_CPHA | SPI_CPOL)) != SPI_MODE_3)
+     {
+-        /* Oops, we only support spi mode 3 */
+         pr_err("requested 'mode' out of range. "
+                "(We only support SPI 'mode' %d).\n",
+                (unsigned int)SPI_MODE_3);
+         return -EINVAL;
+     }
+ 
+-    /* Is the user trying to use active high chip selects ? */
+     if ((spi->mode & SPI_CS_HIGH ) == SPI_CS_HIGH)
+     {
+-        /* Oops, we only support active low chip selects */
+         pr_err("only active low chip selects supported\n");
+         return -EINVAL;
+     }
+ 
+-    /* Is the user trying to send the data LSB first ? */
+     if ((spi->mode & SPI_LSB_FIRST ) == SPI_LSB_FIRST)
+     {
+-        /* Oops, we only support data transmission MSB first */
+         pr_err("only MSB first data transmission supported\n");
+         return -EINVAL;
+     }
+@@ -622,53 +609,67 @@ out_msg_rejected:
+ static void
+ pc302spi_cs_activate(struct spi_device *spi)
+ {
+-    struct spi_master   *master = spi->master;
+-    u32 syscfg = axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET);
+-    u32 syscfg_mask = (AXI2CFG_DECODE_MUX_0 |
+-                       AXI2CFG_DECODE_MUX_1 |
+-                       AXI2CFG_DECODE_MUX_2 |
+-                       AXI2CFG_DECODE_MUX_3);
+-
+-    /* Make sure the SPI block is disabled */
+-    spi_iowrite16(master, PC302_SPI_DISABLE,
+-                  SSI_ENABLE_REG_REG_OFFSET);
+-
+-    /* Write to the Slave Enable Register */
+-    spi_iowrite16(master, (u16)(1 << spi->chip_select),
+-                  SSI_SLAVE_ENABLE_REG_OFFSET);
+-
+-    /* Sort out the SPI/EBI chip select muxing.
+-     * Note: Set all chip select muxing to be SPI
+-     */
+-    syscfg &= ~syscfg_mask;
+-    axi2cfg_writel(syscfg, AXI2CFG_SYSCFG_REG_OFFSET);
++        struct spi_master   *master = spi->master;
++        struct pc302_spi    *priv = spi_master_get_devdata(master);
++
++        u32 decode_mux;
++        u32 syscfg = axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET);
++        u32 syscfg_mask = (AXI2CFG_DECODE_MUX_0 |
++                           AXI2CFG_DECODE_MUX_1 |
++                           AXI2CFG_DECODE_MUX_2 |
++                           AXI2CFG_DECODE_MUX_3);
++
++        /* Make sure the SPI block is disabled */
++        spi_iowrite16(master, PC302_SPI_DISABLE, SSI_ENABLE_REG_REG_OFFSET);
++
++	/* Tell the SPI block the chip select we are using */
++        spi_iowrite16(master, (u16)(1 << spi->chip_select),
++                      SSI_SLAVE_ENABLE_REG_OFFSET);
++
++        /* Sort out the SPI/EBI chip select muxing. */
++        if (picoxcell_is_pc30xx()) {
++    		decode_mux = axi2cfg_readl(AXI2CFG_DECODE_MUX_REG_OFFSET);
++		priv->decode_mux_saved = decode_mux;
++		decode_mux &= ~(0x3 << (spi->chip_select *
++			                PC30XX_SPI_DECODE_STEP_SIZE));
++		decode_mux |= 1 << (spi->chip_select *
++			            PC30XX_SPI_DECODE_STEP_SIZE);
++		axi2cfg_writel(decode_mux, AXI2CFG_DECODE_MUX_REG_OFFSET);
++        }
++        else {
++                syscfg &= ~syscfg_mask;
++                axi2cfg_writel(syscfg, AXI2CFG_SYSCFG_REG_OFFSET);
++        }
+ }
+ 
+ static void
+ pc302spi_cs_deactivate(struct spi_device *spi)
+ {
+-    struct spi_master   *master = spi->master;
+-    u32 syscfg_mask = (AXI2CFG_DECODE_MUX_0 |
+-                       AXI2CFG_DECODE_MUX_1 |
+-                       AXI2CFG_DECODE_MUX_2 |
+-                       AXI2CFG_DECODE_MUX_3);
+-    u32 syscfg = axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET);
+-
+-    /* Make sure the SPI is disabled */
+-    spi_iowrite16(master, PC302_SPI_DISABLE,
+-                  SSI_ENABLE_REG_REG_OFFSET);
+-
+-    /* Write to the Slave Enable Register,
+-     * Note: Just disable all chip selects for now
+-     */
+-    spi_iowrite16(master, PC302_SPI_SLAVES_DISABLE,
+-                  SSI_SLAVE_ENABLE_REG_OFFSET);
+-
+-    /* Sort out the SPI/EBI chip select muxing.
+-     * Note: Set all chip select muxing to be EBI
+-     */
+-    syscfg |= syscfg_mask;
+-    axi2cfg_writel(syscfg, AXI2CFG_SYSCFG_REG_OFFSET);
++        struct spi_master   *master = spi->master;
++        struct pc302_spi    *priv = spi_master_get_devdata(master);
++
++        u32 syscfg_mask = (AXI2CFG_DECODE_MUX_0 |
++                           AXI2CFG_DECODE_MUX_1 |
++                           AXI2CFG_DECODE_MUX_2 |
++                           AXI2CFG_DECODE_MUX_3);
++        u32 syscfg = axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET);
++
++        /* Make sure the SPI is disabled */
++        spi_iowrite16(master, PC302_SPI_DISABLE, SSI_ENABLE_REG_REG_OFFSET);
++
++        /* Just disable all the spi block chip selects */
++        spi_iowrite16(master, PC302_SPI_SLAVES_DISABLE,
++                      SSI_SLAVE_ENABLE_REG_OFFSET);
++
++        /* Sort out the SPI/EBI chip select muxing */
++        if (picoxcell_is_pc30xx()) {
++        	axi2cfg_writel(priv->decode_mux_saved,
++                               AXI2CFG_DECODE_MUX_REG_OFFSET);
++        }
++        else {
++                syscfg |= syscfg_mask;
++                axi2cfg_writel(syscfg, AXI2CFG_SYSCFG_REG_OFFSET);
++        }
+ }
+ 
+ static int
+@@ -682,7 +683,6 @@ spi_drv_probe(struct platform_device *pdev)
+     regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+     if (!regs)
+     {
+-        /* Oops, we can't obtain any resources */
+         pr_err("could not obtain platform resources\n");
+         ret = -EINVAL;
+         goto out;
+@@ -691,7 +691,6 @@ spi_drv_probe(struct platform_device *pdev)
+     if (!request_mem_region(regs->start, (regs->end - regs->start) + 1,
+                             CARDNAME))
+     {
+-        /* Oops, we can't obtain the required memory region */
+         pr_err("memory mapping error, Address=0x%08x,"
+                " Size=0x%08x\n", regs->start,(regs->end - regs->start) + 1);
+         ret = -ENOMEM;
+@@ -701,7 +700,6 @@ spi_drv_probe(struct platform_device *pdev)
+     master = spi_alloc_master(&pdev->dev, sizeof *priv);
+     if (!master)
+     {
+-        /* Oops, something wrong here */
+         pr_err("could not allocate spi_master structure\n");
+         ret = -ENOMEM;
+ 	goto out_alloc_failed;
+@@ -734,17 +732,14 @@ spi_drv_probe(struct platform_device *pdev)
+     priv->regs = ioremap(regs->start, (regs->end - regs->start) + 1);
+     if (!priv->regs)
+     {
+-        /* Oops, we can't remap io memory */
+         pr_err("could not remap io addresses\n");
+ 	ret = -ENOMEM;
+ 	goto out_ioremap_failed;
+     }
+ 
+-    /* Max clock speed that the SPI block can run at */
+     priv->spi_max_clock =
+ 	    (clk_get_rate(priv->clk) / PC302_MIN_SPI_CLK_DIVIDER);
+ 
+-    /* Min clock speed that the SPI block can run at */
+     priv->spi_min_clock =
+ 	    (clk_get_rate(priv->clk) / PC302_MAX_SPI_CLK_DIVIDER);
+ 
+@@ -755,7 +750,6 @@ spi_drv_probe(struct platform_device *pdev)
+     ret = spi_register_master(master);
+     if (ret != 0)
+     {
+-        /* Oops, we can't register as a spi master */
+         pr_err("could not register a spi master\n");
+ 	goto out_registration_failed;
+     }
+-- 
+1.7.0.4
+

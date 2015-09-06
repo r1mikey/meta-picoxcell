@@ -1,0 +1,48 @@
+From 5b9f2a3285cdae4345a07a048d65412aca5d0fc0 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 21 Apr 2011 11:48:07 +0100
+Subject: [PATCH 102/228] macb: workaround for no detectable DMA bus width
+
+Some devices may not have design configuration registers so we can't
+detect the DMA bus width.  Allow this to be specified as a quirk.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/net/macb.c                 |    8 ++++++++
+ include/linux/platform_data/macb.h |    1 +
+ 2 files changed, 9 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index a9f5760..ca60490 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -935,6 +935,14 @@ static u32 macb_dbw(struct macb *bp)
+ 	if (!bp->is_gem)
+ 		return 0;
+ 
++	/*
++	 * Some devices may not have the design configuration registers so
++	 * there is no way of detecting the bus width at run time but we know
++	 * that it is always 64 bits.
++	 */
++	if (bp->quirks & MACB_QUIRK_NO_UNALIGNED_TX)
++		return GEM_BF(DBW, GEM_DBW64);
++
+ 	switch (GEM_BFEXT(DBWDEF, gem_readl(bp, DCFG1))) {
+ 	case 4:
+ 		return GEM_BF(DBW, GEM_DBW128);
+diff --git a/include/linux/platform_data/macb.h b/include/linux/platform_data/macb.h
+index 5ca1f5e..dd4037f 100644
+--- a/include/linux/platform_data/macb.h
++++ b/include/linux/platform_data/macb.h
+@@ -10,6 +10,7 @@
+ 
+ enum macb_quirks {
+ 	MACB_QUIRK_NO_UNALIGNED_TX = (1 << 1),
++	MACB_QUIRK_FORCE_DBW64 = (1 << 2),
+ };
+ 
+ struct macb_platform_data {
+-- 
+1.7.0.4
+

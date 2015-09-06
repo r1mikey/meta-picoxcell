@@ -1,0 +1,193 @@
+From c9e3167666546da3eaf0de593c70feb1848ca21c Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 6 May 2011 12:56:00 +0100
+Subject: [PATCH 115/228] picoxcell/pc30xx: add support for NAND device registration
+
+The NAND controller is supported in the denali driver.  Provide a
+mechanism for this to be registered by board code by supplying the
+partitions to be used.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Kconfig                    |    8 ++
+ arch/arm/mach-picoxcell/Makefile                   |    1 +
+ arch/arm/mach-picoxcell/device_hw_nand.c           |   81 ++++++++++++++++++++
+ .../include/mach/picoxcell/picoxcell.h             |    2 +
+ arch/arm/mach-picoxcell/pc30xx.c                   |    1 +
+ arch/arm/mach-picoxcell/picoxcell_core.h           |   12 +++
+ 6 files changed, 105 insertions(+), 0 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/device_hw_nand.c
+
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index b8eedc0..faa833a 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -32,6 +32,14 @@ config PICOXCELL_STOP_WDT_IN_SUSPEND
+ 	  and PC30XX devices.  This will prevent the watchdog from rebooting
+ 	  the device when suspend is entered.
+ 
++config PC30XX_HW_NAND
++	bool "Hardware NAND flash support for PC30XX"
++	depends on PICOXCELL_PC30XX
++	help
++	  Say yes here to enable hardware NAND support for PC30XX devices.
++	  The PC30XX devices contain a Denali NAND controller.  You will also
++	  need to enable MTD_NAND_DENALI_MMIO to get the device driver built.
++
+ comment "Picochip picoXcell board selection"
+ 
+ config BOARD_PC7302
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index a8bc1d2..5fdc0c5 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -20,3 +20,4 @@ obj-$(CONFIG_CPU_FREQ)		+= cpufreq.o
+ obj-$(CONFIG_PM)		+= pm.o
+ obj-$(CONFIG_PICOXCELL_HAVE_TSU)+= tsu.o
+ obj-$(CONFIG_PICOXCELL_UICC)	+= device_uicc.o
++obj-$(CONFIG_PC30XX_HW_NAND)	+= device_hw_nand.o
+diff --git a/arch/arm/mach-picoxcell/device_hw_nand.c b/arch/arm/mach-picoxcell/device_hw_nand.c
+new file mode 100644
+index 0000000..99d757b
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/device_hw_nand.c
+@@ -0,0 +1,81 @@
++/*
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#include <linux/dma-mapping.h>
++#include <linux/kernel.h>
++#include <linux/platform_data/denali.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++
++#include <mach/hardware.h>
++#include <mach/irqs.h>
++
++#include "picoxcell_core.h"
++
++int __init picoxcell_add_hw_nand(const struct mtd_partition *parts,
++				 unsigned int nr_parts)
++{
++	struct resource res[] = {
++		{
++			.start		= PC30XX_NAND_BASE,
++			.end		= PC30XX_NAND_BASE + 0xFFFF,
++			.flags		= IORESOURCE_MEM,
++			.name		= "reg",
++		},
++		{
++			.start		= NAND_CS_BASE,
++			.end		= NAND_CS_BASE + 0x20,
++			.flags		= IORESOURCE_MEM,
++			.name		= "mem",
++		},
++		{
++			.start		= IRQ_PC30XX_NAND,
++			.end		= IRQ_PC30XX_NAND,
++			.flags		= IORESOURCE_IRQ,
++		},
++	};
++	struct platform_device *pdev =
++		platform_device_alloc("denali-nand-mmio", -1);
++	struct denali_nand_pdata pdata = {
++		.parts			= parts,
++		.nr_parts		= nr_parts,
++		.nr_ecc_bits		= 8,
++		.have_hw_ecc_fixup	= true,
++	};
++	int err = -ENOMEM;
++
++	if (!pdev)
++		return -ENOMEM;
++
++	pdev->dev.dma_mask = kmalloc(sizeof(*pdev->dev.dma_mask), GFP_KERNEL);
++	if (!pdev->dev.dma_mask)
++		goto out_free_dev;
++	*pdev->dev.dma_mask = DMA_BIT_MASK(32);
++	pdev->dev.coherent_dma_mask = *pdev->dev.dma_mask;
++
++	err = platform_device_add_resources(pdev, res, ARRAY_SIZE(res));
++	if (err)
++		goto out_free_mask;
++
++	err = platform_device_add_data(pdev, &pdata, sizeof(pdata));
++	if (err)
++		goto out_free_mask;
++
++	err = platform_device_add(pdev);
++	if (pdev)
++		return 0;
++
++out_free_mask:
++	kfree(pdev->dev.dma_mask);
++out_free_dev:
++	platform_device_put(pdev);
++
++	return err;
++}
++
+diff --git a/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h b/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
+index 83d003d..8a22f99 100644
+--- a/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
++++ b/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
+@@ -46,6 +46,7 @@
+ #define PICOXCELL_UART2_BASE		0x80240000
+ #define PICOXCELL_WDOG_BASE		0x80250000
+ #define PC3X3_RNG_BASE			0x800B0000
++#define PC30XX_NAND_BASE		0x800C0000
+ #define PC3X3_TIMER2_BASE		0x80260000
+ #define PC3X3_OTP_BASE			0xFFFF8000
+ #define PC30XX_OTP_BASE			0xFFFF8000
+@@ -54,6 +55,7 @@
+ #define EBI_CS1_BASE			0x48000000
+ #define EBI_CS2_BASE			0x50000000
+ #define EBI_CS3_BASE			0x58000000
++#define NAND_CS_BASE			0x60000000
+ 
+ #define SRAM_BASE			0x20000000
+ #define SRAM_START			0x20000000
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 31d33f7..f9268bd 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -357,6 +357,7 @@ static struct clk_lookup pc30xx_clk_lookup[] = {
+ 	CLK_LOOKUP("dw_apb_timer.0",	NULL,		&dummy_clk),
+ 	CLK_LOOKUP("dw_apb_timer.1",	NULL,		&dummy_clk),
+ 	CLK_LOOKUP(NULL,		"uart",		&dummy_clk),
++	CLK_LOOKUP("denali-nand-mmio",	NULL,		&nand_clk),
+ };
+ 
+ static void __init pc30xx_clk_init(void)
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index b29d91b..1c4084f 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -45,6 +45,18 @@ extern int __init picoxcell_add_fuse(struct picoxcell_fuse_map *map);
+ extern int __init picoxcell_add_uicc(unsigned long addr, int irq, int id,
+ 				     bool data_invert);
+ 
++struct mtd_partition;
++#ifdef CONFIG_PC30XX_HW_NAND
++extern int __init picoxcell_add_hw_nand(const struct mtd_partition *parts,
++					unsigned int nr_parts);
++#else /* CONFIG_PC30XX_HW_NAND */
++static inline int picoxcell_add_hw_nand(const struct mtd_partition *parts,
++					unsigned int nr_parts)
++{
++	return -ENODEV;
++}
++#endif /* CONFIG_PC30XX_HW_NAND */
++
+ extern int picoxcell_is_pc3x2(void);
+ extern int picoxcell_is_pc3x3(void);
+ extern int picoxcell_is_pc30xx(void);
+-- 
+1.7.0.4
+

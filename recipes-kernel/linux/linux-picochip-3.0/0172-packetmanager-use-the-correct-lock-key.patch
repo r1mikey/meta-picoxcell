@@ -1,0 +1,27 @@
+From 5ea57cb28d6abc686aac305456f04572d52a44fe Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie.iles@picochip.com>
+Date: Tue, 28 Jun 2011 14:01:29 +0100
+Subject: [PATCH 172/228] packetmanager: use the correct lock key
+
+The packetmanager lock is a member of the pktman struct and not a static
+variable.
+---
+ drivers/char/packetmanager.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/char/packetmanager.c b/drivers/char/packetmanager.c
+index b8bbe94..aa48514 100644
+--- a/drivers/char/packetmanager.c
++++ b/drivers/char/packetmanager.c
+@@ -82,7 +82,7 @@ static struct {
+ 	unsigned long		    present_map[BITS_TO_LONGS(PKTMAN_MAX_DEVICES)];
+ } pktman = {
+ 	.devno		    	    = MKDEV(PKTMAN_MAJOR, 0),
+-	.lock		    	    = __SPIN_LOCK_UNLOCKED(pktman_lock),
++	.lock		    	    = __SPIN_LOCK_UNLOCKED(pktman.lock),
+ 	.devices	    	    = LIST_HEAD_INIT(pktman.devices),
+ };
+ 
+-- 
+1.7.0.4
+

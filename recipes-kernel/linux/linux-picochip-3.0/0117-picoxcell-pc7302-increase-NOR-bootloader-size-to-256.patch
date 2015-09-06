@@ -1,0 +1,29 @@
+From cf3f48520026c8149736db28978656291b17567d Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Thu, 5 May 2011 15:34:32 +0100
+Subject: [PATCH 117/228] picoxcell/pc7302: increase NOR bootloader size to 256KB
+
+This change allows 256 kBytes of nor flash (/dev/mtd0) for bootloader
+storage.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index b4b59d8..526a0de 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -54,7 +54,7 @@ static void pc7302_panic_init(void)
+ static struct mtd_partition pc7302_nor_partitions[] = {
+ 	{
+ 		.name		= "Boot",
+-		.size		= SZ_128K,
++		.size		= SZ_256K,
+ 		.offset		= 0,
+ 	},
+ 	{
+-- 
+1.7.0.4
+

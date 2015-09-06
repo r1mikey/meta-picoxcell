@@ -1,0 +1,29 @@
+From dd10c953132de6596ac263f162c543b73f022467 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie.iles@picochip.com>
+Date: Mon, 19 Sep 2011 11:40:33 +0100
+Subject: [PATCH 180/228] picoxcell/pc7308: don't register the 2nd UART
+
+The 2nd UART isn't bonded out for HNB parts so don't register it
+otherwise opening it could result in a flood of IRQs.
+---
+ arch/arm/mach-picoxcell/board_pc7308.c |    4 ----
+ 1 files changed, 0 insertions(+), 4 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7308.c b/arch/arm/mach-picoxcell/board_pc7308.c
+index 653e93f..e8a04d0 100644
+--- a/arch/arm/mach-picoxcell/board_pc7308.c
++++ b/arch/arm/mach-picoxcell/board_pc7308.c
+@@ -93,10 +93,6 @@ static void pc7308_register_uarts(void)
+ 	if (IS_ERR(pdev))
+ 		pr_err("failed to add uart0\n");
+ 
+-	pdev = picoxcell_add_uart(PICOXCELL_UART2_BASE, IRQ_UART2, 1);
+-	if (IS_ERR(pdev))
+-		pr_err("failed to add uart1\n");
+-
+ 	err = picoxcell_add_uicc(PC30XX_UART3_BASE, IRQ_PC30XX_UART3, 2,
+ 				 false);
+ 	if (err)
+-- 
+1.7.0.4
+

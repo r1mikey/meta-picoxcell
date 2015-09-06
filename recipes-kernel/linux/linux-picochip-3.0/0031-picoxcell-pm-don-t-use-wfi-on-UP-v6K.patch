@@ -1,0 +1,34 @@
+From d3605101638f0174de2a6c704313682650cd3b32 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 28 Mar 2011 13:27:17 +0100
+Subject: [PATCH 031/228] picoxcell/pm: don't use wfi() on UP v6K
+
+UP v6K doesn't have the wfi instruction so we need to use the cp15
+version.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pm.c |    7 ++++++-
+ 1 files changed, 6 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pm.c b/arch/arm/mach-picoxcell/pm.c
+index b5afe00..e5f26f3 100644
+--- a/arch/arm/mach-picoxcell/pm.c
++++ b/arch/arm/mach-picoxcell/pm.c
+@@ -37,7 +37,12 @@ static void wait_for_event(void)
+ 	pr_debug("entering sleep - wait for interrupt\n");
+ 	/* Drain the writebuffer and wait for an interrupt. */
+ 	dsb();
+-	wfi();
++	/*
++	 * wfi instruction is only available on SMP v6K so use the cp15
++	 * version.
++	 */
++	asm volatile("mcr   p15, 0, %0, c7, c0, 4\n" : : "r"(0));
++
+ }
+ 
+ static int picoxcell_pm_enter(suspend_state_t state)
+-- 
+1.7.0.4
+

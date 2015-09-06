@@ -1,0 +1,136 @@
+From 9fe737168b35e8ddd0a675c95e7d1c335a012bae Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 9 Mar 2011 16:22:54 +0000
+Subject: [PATCH 043/228] macb: support higher rate GEM MDIO clock divisors
+
+GEM devices support larger clock divisors and have a different
+range of divisors.  Program the MDIO clock divisors based on the
+device type.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+Acked-by: David S. Miller <davem@davemloft.net>
+Acked-by: Nicolas Ferre <nicolas.ferre@atmel.com>
+---
+ drivers/net/macb.c |   55 +++++++++++++++++++++++++++++++++++++++++----------
+ drivers/net/macb.h |   11 ++++++++++
+ 2 files changed, 55 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index 1e79bd7..84ad2a1 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -787,6 +787,48 @@ static void macb_reset_hw(struct macb *bp)
+ 	macb_readl(bp, ISR);
+ }
+ 
++static u32 gem_mdc_clk_div(struct macb *bp)
++{
++	u32 config;
++	unsigned long pclk_hz = clk_get_rate(bp->pclk);
++
++	if (pclk_hz <= 20000000)
++		config = GEM_BF(CLK, GEM_CLK_DIV8);
++	else if (pclk_hz <= 40000000)
++		config = GEM_BF(CLK, GEM_CLK_DIV16);
++	else if (pclk_hz <= 80000000)
++		config = GEM_BF(CLK, GEM_CLK_DIV32);
++	else if (pclk_hz <= 120000000)
++		config = GEM_BF(CLK, GEM_CLK_DIV48);
++	else if (pclk_hz <= 160000000)
++		config = GEM_BF(CLK, GEM_CLK_DIV64);
++	else
++		config = GEM_BF(CLK, GEM_CLK_DIV96);
++
++	return config;
++}
++
++static u32 macb_mdc_clk_div(struct macb *bp)
++{
++	u32 config;
++	unsigned long pclk_hz;
++
++	if (bp->is_gem)
++		return gem_mdc_clk_div(bp);
++
++	pclk_hz = clk_get_rate(bp->pclk);
++	if (pclk_hz <= 20000000)
++		config = MACB_BF(CLK, MACB_CLK_DIV8);
++	else if (pclk_hz <= 40000000)
++		config = MACB_BF(CLK, MACB_CLK_DIV16);
++	else if (pclk_hz <= 80000000)
++		config = MACB_BF(CLK, MACB_CLK_DIV32);
++	else
++		config = MACB_BF(CLK, MACB_CLK_DIV64);
++
++	return config;
++}
++
+ static void macb_init_hw(struct macb *bp)
+ {
+ 	u32 config;
+@@ -794,7 +836,7 @@ static void macb_init_hw(struct macb *bp)
+ 	macb_reset_hw(bp);
+ 	__macb_set_hwaddr(bp);
+ 
+-	config = macb_readl(bp, NCFGR) & MACB_BF(CLK, -1L);
++	config = macb_mdc_clk_div(bp);
+ 	config |= MACB_BIT(PAE);		/* PAuse Enable */
+ 	config |= MACB_BIT(DRFCS);		/* Discard Rx FCS */
+ 	config |= MACB_BIT(BIG);		/* Receive oversized frames */
+@@ -1113,7 +1155,6 @@ static int __init macb_probe(struct platform_device *pdev)
+ 	struct net_device *dev;
+ 	struct macb *bp;
+ 	struct phy_device *phydev;
+-	unsigned long pclk_hz;
+ 	u32 config;
+ 	int err = -ENXIO;
+ 
+@@ -1181,15 +1222,7 @@ static int __init macb_probe(struct platform_device *pdev)
+ 	dev->base_addr = regs->start;
+ 
+ 	/* Set MII management clock divider */
+-	pclk_hz = clk_get_rate(bp->pclk);
+-	if (pclk_hz <= 20000000)
+-		config = MACB_BF(CLK, MACB_CLK_DIV8);
+-	else if (pclk_hz <= 40000000)
+-		config = MACB_BF(CLK, MACB_CLK_DIV16);
+-	else if (pclk_hz <= 80000000)
+-		config = MACB_BF(CLK, MACB_CLK_DIV32);
+-	else
+-		config = MACB_BF(CLK, MACB_CLK_DIV64);
++	config = macb_mdc_clk_div(bp);
+ 	macb_writel(bp, NCFGR, config);
+ 
+ 	macb_get_hwaddr(bp);
+diff --git a/drivers/net/macb.h b/drivers/net/macb.h
+index 3a07352..65abd8a 100644
+--- a/drivers/net/macb.h
++++ b/drivers/net/macb.h
+@@ -135,6 +135,9 @@
+ #define MACB_IRXFCS_OFFSET			19
+ #define MACB_IRXFCS_SIZE			1
+ 
++/* GEM specific NCFGR bitfields. */
++#define GEM_CLK_OFFSET				18
++#define GEM_CLK_SIZE				3
+ /* Bitfields in NSR */
+ #define MACB_NSR_LINK_OFFSET			0
+ #define MACB_NSR_LINK_SIZE			1
+@@ -249,6 +252,14 @@
+ #define MACB_CLK_DIV32				2
+ #define MACB_CLK_DIV64				3
+ 
++/* GEM specific constants for CLK. */
++#define GEM_CLK_DIV8				0
++#define GEM_CLK_DIV16				1
++#define GEM_CLK_DIV32				2
++#define GEM_CLK_DIV48				3
++#define GEM_CLK_DIV64				4
++#define GEM_CLK_DIV96				5
++
+ /* Constants for MAN register */
+ #define MACB_MAN_SOF				1
+ #define MACB_MAN_WRITE				1
+-- 
+1.7.0.4
+

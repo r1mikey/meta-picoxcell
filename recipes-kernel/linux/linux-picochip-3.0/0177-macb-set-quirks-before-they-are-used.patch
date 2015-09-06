@@ -1,0 +1,43 @@
+From 1cada5194c239373cea49b3cc7e8f6330a5e44bf Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie.iles@picochip.com>
+Date: Mon, 15 Aug 2011 11:19:43 +0100
+Subject: [PATCH 177/228] macb: set quirks before they are used
+
+macb_configure_tsu() uses the quirks to determine whether the device has
+a TSU in absence of the design configuration registers.  Make sure that
+we have assigned bp->quirks before we call this.
+
+Signed-off-by: Jamie Iles <jamie.iles@picochip.com>
+---
+ drivers/net/macb.c |    8 ++++----
+ 1 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index c00bd24..de1a7cb 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -1664,6 +1664,10 @@ static int __init macb_probe(struct platform_device *pdev)
+ 	bp->pdev = pdev;
+ 	bp->dev = dev;
+ 
++	pdata = pdev->dev.platform_data;
++	if (pdata)
++		bp->quirks = pdata->quirks;
++
+ 	spin_lock_init(&bp->lock);
+ 
+ 	bp->pclk = clk_get(&pdev->dev, "pclk");
+@@ -1718,10 +1722,6 @@ static int __init macb_probe(struct platform_device *pdev)
+ 	macb_writel(bp, NCFGR, config);
+ 
+ 	macb_get_hwaddr(bp);
+-	pdata = pdev->dev.platform_data;
+-
+-	if (pdata)
+-		bp->quirks = pdata->quirks;
+ 
+ 	if (pdata && pdata->is_rmii)
+ #if defined(CONFIG_ARCH_AT91)
+-- 
+1.7.0.4
+

@@ -1,0 +1,102 @@
+From d4d74b8d8a56af4900f1fb30c9f174d2c16de658 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 11 Apr 2011 16:52:31 +0100
+Subject: [PATCH 088/228] picoxcell/pc30xx: support for SDGPIO
+
+Define the SDGPIO pins and devices for pc30xx
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/include/mach/gpio.h |   24 ++++++++++++++++
+ arch/arm/mach-picoxcell/pc30xx.c            |   40 +++++++++++++++++++++++++++
+ 2 files changed, 64 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/include/mach/gpio.h b/arch/arm/mach-picoxcell/include/mach/gpio.h
+index e25ee3f..085cf53 100644
+--- a/arch/arm/mach-picoxcell/include/mach/gpio.h
++++ b/arch/arm/mach-picoxcell/include/mach/gpio.h
+@@ -203,6 +203,30 @@ enum {
+ 	PC30XX_GPIO_PIN_ARM_60,
+ 	PC30XX_GPIO_PIN_ARM_61,
+ 	PC30XX_GPIO_PIN_ARM_62,
++	PC30XX_GPIO_PIN_SDGPIO_0,
++	PC30XX_GPIO_PIN_SDGPIO_1,
++	PC30XX_GPIO_PIN_SDGPIO_2,
++	PC30XX_GPIO_PIN_SDGPIO_3,
++	PC30XX_GPIO_PIN_SDGPIO_4,
++	PC30XX_GPIO_PIN_SDGPIO_5,
++	PC30XX_GPIO_PIN_SDGPIO_6,
++	PC30XX_GPIO_PIN_SDGPIO_7,
++	PC30XX_GPIO_PIN_SDGPIO_8,
++	PC30XX_GPIO_PIN_SDGPIO_9,
++	PC30XX_GPIO_PIN_SDGPIO_10,
++	PC30XX_GPIO_PIN_SDGPIO_11,
++	PC30XX_GPIO_PIN_SDGPIO_12,
++	PC30XX_GPIO_PIN_SDGPIO_13,
++	PC30XX_GPIO_PIN_SDGPIO_14,
++	PC30XX_GPIO_PIN_SDGPIO_15,
++	PC30XX_GPIO_PIN_SDGPIO_16,
++	PC30XX_GPIO_PIN_SDGPIO_17,
++	PC30XX_GPIO_PIN_SDGPIO_18,
++	PC30XX_GPIO_PIN_SDGPIO_19,
++	PC30XX_GPIO_PIN_SDGPIO_20,
++	PC30XX_GPIO_PIN_SDGPIO_21,
++	PC30XX_GPIO_PIN_SDGPIO_22,
++	PC30XX_GPIO_PIN_SDGPIO_23,
+ };
+ 
+ #ifdef __KERNEL__
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index b920006..21d5788 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -480,6 +480,46 @@ static void pc30xx_init_pm(void)
+ 	picoxcell_init_pm(pc30xx_pm_stop_wdt, pc30xx_pm_restore_wdt);
+ }
+ 
++static const char * const pc30xx_sdgpio_pins[] = {
++	"sdgpio0",
++	"sdgpio1",
++	"sdgpio2",
++	"sdgpio3",
++	"sdgpio4",
++	"sdgpio5",
++	"sdgpio6",
++	"sdgpio7",
++	"sdgpio8",
++	"sdgpio9",
++	"sdgpio10",
++	"sdgpio11",
++	"sdgpio12",
++	"sdgpio13",
++	"sdgpio14",
++	"sdgpio15",
++	"sdgpio16",
++	"sdgpio17",
++	"sdgpio18",
++	"sdgpio19",
++	"sdgpio20",
++	"sdgpio21",
++	"sdgpio22",
++	"sdgpio23",
++};
++
++static const struct sdgpio_platform_data pc30xx_sdgpio = {
++	.banks				= {
++		{
++			.names		= pc30xx_sdgpio_pins,
++			.block_base	= 0,
++			.gpio_start	= PC30XX_GPIO_PIN_SDGPIO_0,
++			.nr_pins	= ARRAY_SIZE(pc30xx_sdgpio_pins),
++			.label		= "sdgpio",
++		},
++	},
++	.nr_banks			= 1,
++};
++
+ static void pc30xx_add_gpio(void)
+ {
+ 	picoxcell_add_gpio_port(0, 8, PC30XX_GPIO_PIN_ARM_0);
+-- 
+1.7.0.4
+

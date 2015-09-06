@@ -1,0 +1,38 @@
+From fa3ff2d52c8a3cdcda8bf74a9eb13c71066fb822 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie.iles@picochip.com>
+Date: Fri, 9 Sep 2011 11:43:03 +0100
+Subject: [PATCH 179/228] picoxcell: update defconfig for testability
+
+Include the crypto self tests and test module so that we can do
+regression testing.  Stop printk from including the timestamp as this
+makes it hard to diff.
+
+Mantis issue #8526
+---
+ arch/arm/configs/picoxcell_defconfig |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/configs/picoxcell_defconfig b/arch/arm/configs/picoxcell_defconfig
+index a93ef49..98a52a2 100644
+--- a/arch/arm/configs/picoxcell_defconfig
++++ b/arch/arm/configs/picoxcell_defconfig
+@@ -151,7 +151,6 @@ CONFIG_UBIFS_FS=y
+ CONFIG_NFS_FS=y
+ CONFIG_NFS_V3=y
+ CONFIG_ROOT_NFS=y
+-CONFIG_PRINTK_TIME=y
+ CONFIG_MAGIC_SYSRQ=y
+ CONFIG_STRIP_ASM_SYMS=y
+ CONFIG_DEBUG_FS=y
+@@ -167,6 +166,8 @@ CONFIG_DEBUG_INFO=y
+ CONFIG_DEBUG_USER=y
+ CONFIG_DEBUG_LL=y
+ CONFIG_EARLY_PRINTK=y
++# CONFIG_CRYPTO_MANAGER_DISABLE_TESTS is not set
++CONFIG_CRYPTO_TEST=m
+ CONFIG_CRYPTO_SEQIV=y
+ CONFIG_CRYPTO_ECB=y
+ CONFIG_CRYPTO_ANSI_CPRNG=y
+-- 
+1.7.0.4
+

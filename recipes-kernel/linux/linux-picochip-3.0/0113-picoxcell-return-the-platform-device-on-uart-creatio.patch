@@ -1,0 +1,71 @@
+From 9c4f17fd89e5dc9f2d33b95ccdd639f8e9025c68 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 3 May 2011 16:59:04 +0100
+Subject: [PATCH 113/228] picoxcell: return the platform device on uart creation
+
+When adding a UART device, return the platform device.  We need to do
+this for UICC support on pc30xx where we need to add attributes to the
+device.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/device_uart.c    |    9 +++++----
+ arch/arm/mach-picoxcell/picoxcell_core.h |    3 ++-
+ 2 files changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/device_uart.c b/arch/arm/mach-picoxcell/device_uart.c
+index 98f19e4..3af461b 100644
+--- a/arch/arm/mach-picoxcell/device_uart.c
++++ b/arch/arm/mach-picoxcell/device_uart.c
+@@ -19,7 +19,8 @@
+ 
+ #define UART_USR_REG_OFFSET			0x7C
+ 
+-int __init picoxcell_add_uart(unsigned long addr, int irq, int id)
++struct platform_device * __init picoxcell_add_uart(unsigned long addr,
++						   int irq, int id)
+ {
+ 	struct plat_serial8250_port pdata[] = {
+ 		{
+@@ -53,7 +54,7 @@ int __init picoxcell_add_uart(unsigned long addr, int irq, int id)
+ 	int err;
+ 
+ 	if (IS_ERR(uart_clk))
+-		return PTR_ERR(uart_clk);
++		return (struct platform_device *)uart_clk;
+ 
+ 	err = clk_enable(uart_clk);
+ 	if (err)
+@@ -68,13 +69,13 @@ int __init picoxcell_add_uart(unsigned long addr, int irq, int id)
+ 		goto out_disable_clk;
+ 	}
+ 
+-	return 0;
++	return pdev;
+ 
+ out_disable_clk:
+ 	clk_disable(uart_clk);
+ out_put_clk:
+ 	clk_put(uart_clk);
+ 
+-	return err;
++	return ERR_PTR(err);
+ }
+ 
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index f5d1ae6..c75744c 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -32,7 +32,8 @@ static inline void picoxcell_tsu_init(unsigned long rate) {}
+ #endif /* CONFIG_PICOXCELL_HAVE_TSU */
+ 
+ extern void __init armgpio_irq_init(void);
+-extern int picoxcell_add_uart(unsigned long addr, int irq, int id);
++extern struct platform_device *picoxcell_add_uart(unsigned long addr, int irq,
++						  int id);
+ int __init picoxcell_add_spacc(const char *name, unsigned long addr, int irq,
+ 			       int id);
+ int __init picoxcell_add_trng(unsigned long addr);
+-- 
+1.7.0.4
+

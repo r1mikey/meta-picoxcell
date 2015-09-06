@@ -1,0 +1,48 @@
+From 80617d7856c8ee0a18676f8dcd788d6f3c7e8681 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 13 May 2011 01:27:45 +0100
+Subject: [PATCH 127/228] picoxcell: allow CONFIG_HZ to be configured
+
+100Hz may be too slow for some applications so allow it to be raised
+through the kernel config system.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/Kconfig                |    1 +
+ arch/arm/mach-picoxcell/Kconfig |    9 +++++++++
+ 2 files changed, 10 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index 411d036..0e5ef1c 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -1432,6 +1432,7 @@ config HZ
+ 	default OMAP_32K_TIMER_HZ if ARCH_OMAP && OMAP_32K_TIMER
+ 	default AT91_TIMER_HZ if ARCH_AT91
+ 	default SHMOBILE_TIMER_HZ if ARCH_SHMOBILE
++	default PICOXCELL_TIMER_HZ if ARCH_PICOXCELL
+ 	default 100
+ 
+ config THUMB2_KERNEL
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index ccfdfdc..fa0f043 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -1,5 +1,14 @@
+ if ARCH_PICOXCELL
+ 
++config PICOXCELL_TIMER_HZ
++	int "Kernel HZ (jiffies per second)"
++	range 100 1000
++	default 1000
++	help
++	  Select the kernel tick rate here.  Higher numbers mean more timer
++	  interrupts per second when ticks are required but may give lower
++	  latencies.
++
+ comment "Picochip SoC device support"
+ 
+ config PICOXCELL_PC3X2
+-- 
+1.7.0.4
+

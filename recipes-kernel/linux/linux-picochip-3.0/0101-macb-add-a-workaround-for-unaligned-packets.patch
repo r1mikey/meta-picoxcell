@@ -1,0 +1,127 @@
+From 39508f8af65eca4a1228a2b068e911fc3827a6ca Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 20 Apr 2011 17:05:12 +0100
+Subject: [PATCH 101/228] macb: add a workaround for unaligned packets
+
+Some devices (Picoxcell pc3x2) can't transmit unaligned packets.  Detect
+if the packet is unaligned, and if it is, duplicate it and align it.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/net/macb.c                 |   52 ++++++++++++++++++++++++++++++++++++
+ drivers/net/macb.h                 |    1 +
+ include/linux/platform_data/macb.h |    5 +++
+ 3 files changed, 58 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index 29582e2..a9f5760 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -658,6 +658,42 @@ static void macb_poll_controller(struct net_device *dev)
+ }
+ #endif
+ 
++static void skb_align(struct sk_buff *skb, int align)
++{
++	int off = ((unsigned long)skb->data) & (align - 1);
++
++	if (off)
++		skb_reserve(skb, align - off);
++}
++
++static struct sk_buff *tx_skb_align_workaround(struct net_device *dev,
++					       struct sk_buff *skb)
++{
++	struct sk_buff *new_skb;
++
++	/* Alloc new skb */
++	new_skb = dev_alloc_skb(skb->len + 4);
++	if (!new_skb) {
++		if (net_ratelimit()) {
++			netdev_warn(dev,
++				    "Memory squeeze, dropping tx packet.\n");
++		}
++		return NULL;
++	}
++
++	/* Make sure new skb is properly aligned */
++	skb_align(new_skb, 4);
++
++	/* Copy data to new skb ... */
++	skb_copy_from_linear_data(skb, new_skb->data, skb->len);
++	skb_put(new_skb, skb->len);
++
++	/* ... and free an old one */
++	dev_kfree_skb_any(skb);
++
++	return new_skb;
++}
++
+ static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
+ {
+ 	struct macb *bp = netdev_priv(dev);
+@@ -678,6 +714,19 @@ static int macb_start_xmit(struct sk_buff *skb, struct net_device *dev)
+ 	printk("\n");
+ #endif
+ 
++	if ((bp->quirks & MACB_QUIRK_NO_UNALIGNED_TX) &&
++	    ((unsigned long)skb->data) & 0x3) {
++		skb = tx_skb_align_workaround(dev, skb);
++		if (!skb) {
++			/*
++			 * We have lost packet due to memory allocation error
++			 * in tx_skb_align_workaround(). Hopefully original
++			 * skb is still valid, so try transmit it later.
++			 */
++			return NETDEV_TX_BUSY;
++		}
++	}
++
+ 	len = skb->len;
+ 	spin_lock_irqsave(&bp->lock, flags);
+ 
+@@ -1532,6 +1581,9 @@ static int __init macb_probe(struct platform_device *pdev)
+ 	macb_get_hwaddr(bp);
+ 	pdata = pdev->dev.platform_data;
+ 
++	if (pdata)
++		bp->quirks = pdata->quirks;
++
+ 	if (pdata && pdata->is_rmii)
+ #if defined(CONFIG_ARCH_AT91)
+ 		macb_or_gem_writel(bp, USRIO, (MACB_BIT(RMII) |
+diff --git a/drivers/net/macb.h b/drivers/net/macb.h
+index 9455419..c8efbc5 100644
+--- a/drivers/net/macb.h
++++ b/drivers/net/macb.h
+@@ -573,6 +573,7 @@ struct macb {
+ #ifdef CONFIG_PM
+ 	u32			save_irq_en;
+ #endif
++	unsigned long		quirks;
+ };
+ 
+ #endif /* _MACB_H */
+diff --git a/include/linux/platform_data/macb.h b/include/linux/platform_data/macb.h
+index e7c748f..5ca1f5e 100644
+--- a/include/linux/platform_data/macb.h
++++ b/include/linux/platform_data/macb.h
+@@ -8,10 +8,15 @@
+ #ifndef __MACB_PDATA_H__
+ #define __MACB_PDATA_H__
+ 
++enum macb_quirks {
++	MACB_QUIRK_NO_UNALIGNED_TX = (1 << 1),
++};
++
+ struct macb_platform_data {
+ 	u32		phy_mask;
+ 	u8		phy_irq_pin;	/* PHY IRQ */
+ 	u8		is_rmii;	/* using RMII interface? */
++	unsigned long	quirks;
+ };
+ 
+ #endif /* __MACB_PDATA_H__ */
+-- 
+1.7.0.4
+

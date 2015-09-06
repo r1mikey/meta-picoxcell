@@ -1,0 +1,27 @@
+From 627559a10c97684be7cf97d194a144a928ea49e8 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 12 May 2011 14:32:39 +0100
+Subject: [PATCH 119/228] picoxcell/pc7302: add a dependency on pc3x2 || pc3x3
+
+The pc7302 board only accepts pc3x2 and pc3x3 devices.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Kconfig |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index faa833a..6a23a9b 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -46,6 +46,7 @@ config BOARD_PC7302
+ 	bool "Support PC7302 Board"
+ 	default y
+ 	select PICOXCELL_HAVE_TSU
++	depends on PICOXCELL_PC3X2 || PICOXCELL_PC3X3
+ 	help
+           Include support for the picoChip PC7302 platform. This platform is
+ 	  can take any of the PC3X2 or PC3X3 devices and includes SPI NOR
+-- 
+1.7.0.4
+

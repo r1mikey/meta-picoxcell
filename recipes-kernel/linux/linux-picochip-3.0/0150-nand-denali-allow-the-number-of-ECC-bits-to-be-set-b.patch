@@ -1,0 +1,140 @@
+From 9a2b87e9e27a2a4125d39c2b1ac158d2f6398bbb Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 6 Jun 2011 16:11:19 +0100
+Subject: [PATCH 150/228] nand/denali: allow the number of ECC bits to be set by pdata
+
+Rather than having the number of ECC bits to be used set by a
+preprocessor definition, allow it to be set by platform_data.  If there
+is no platform_data then default to 8 bit ECC.
+
+Cc: David Woodhouse <dwmw2@infradead.org>
+Cc: Chuanxiao Dong <chuanxiao.dong@intel.com>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/mtd/nand/denali.c            |   28 +++++++++++++++-------------
+ drivers/mtd/nand/denali.h            |    1 +
+ include/linux/platform_data/denali.h |   21 +++++++++++++++++++++
+ 3 files changed, 37 insertions(+), 13 deletions(-)
+ create mode 100644 include/linux/platform_data/denali.h
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index 8ae24e7..663e5ce 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -26,6 +26,7 @@
+ #include <linux/pci.h>
+ #include <linux/mtd/mtd.h>
+ #include <linux/module.h>
++#include <linux/platform_data/denali.h>
+ 
+ #include "denali.h"
+ 
+@@ -60,8 +61,6 @@ MODULE_PARM_DESC(onfi_timing_mode, "Overrides default ONFI setting."
+  * valid or not */
+ #define CHIP_SELECT_INVALID	-1
+ 
+-#define SUPPORT_8BITECC		1
+-
+ /* This macro divides two integers and rounds fractional values up
+  * to the nearest integer value. */
+ #define CEIL_DIV(X, Y) (((X)%(Y)) ? ((X)/(Y)+1) : ((X)/(Y)))
+@@ -358,11 +357,8 @@ static void get_toshiba_nand_para(struct denali_nand_info *denali)
+ 			ioread32(denali->flash_reg + DEVICE_SPARE_AREA_SIZE);
+ 		iowrite32(tmp,
+ 				denali->flash_reg + LOGICAL_PAGE_SPARE_SIZE);
+-#if SUPPORT_15BITECC
+-		iowrite32(15, denali->flash_reg + ECC_CORRECTION);
+-#elif SUPPORT_8BITECC
+-		iowrite32(8, denali->flash_reg + ECC_CORRECTION);
+-#endif
++		iowrite32(denali->nr_ecc_bits,
++			  denali->flash_reg + ECC_CORRECTION);
+ 	}
+ }
+ 
+@@ -386,11 +382,8 @@ static void get_hynix_nand_para(struct denali_nand_info *denali,
+ 		iowrite32(spare_size,
+ 				denali->flash_reg + LOGICAL_PAGE_SPARE_SIZE);
+ 		iowrite32(0, denali->flash_reg + DEVICE_WIDTH);
+-#if SUPPORT_15BITECC
+-		iowrite32(15, denali->flash_reg + ECC_CORRECTION);
+-#elif SUPPORT_8BITECC
+-		iowrite32(8, denali->flash_reg + ECC_CORRECTION);
+-#endif
++		iowrite32(denali->nr_ecc_bits,
++			  denali->flash_reg + ECC_CORRECTION);
+ 		break;
+ 	default:
+ 		dev_warn(denali->dev,
+@@ -1427,11 +1420,21 @@ static int denali_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
+ 	resource_size_t csr_base, mem_base;
+ 	unsigned long csr_len, mem_len;
+ 	struct denali_nand_info *denali;
++	int ret;
++	struct denali_nand_pdata *pdata;
+ 
+ 	denali = kzalloc(sizeof(*denali), GFP_KERNEL);
+ 	if (!denali)
+ 		return -ENOMEM;
+ 
++	denali->dev = &dev->dev;
++
++	pdata = dev_get_platdata(denali->dev);
++	if (pdata && pdata->nr_ecc_bits > 8)
++		denali->nr_ecc_bits = pdata->nr_ecc_bits;
++	else
++		denali->nr_ecc_bits = 8;
++
+ 	ret = pci_enable_device(dev);
+ 	if (ret) {
+ 		printk(KERN_ERR "Spectra: pci_enable_device failed.\n");
+@@ -1481,7 +1484,6 @@ static int denali_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
+ 	}
+ 
+ 	pci_set_master(dev);
+-	denali->dev = &dev->dev;
+ 	denali->mtd.dev.parent = &dev->dev;
+ 
+ 	ret = pci_request_regions(dev, DENALI_NAND_NAME);
+diff --git a/drivers/mtd/nand/denali.h b/drivers/mtd/nand/denali.h
+index fabb9d5..b428ce3 100644
+--- a/drivers/mtd/nand/denali.h
++++ b/drivers/mtd/nand/denali.h
+@@ -494,6 +494,7 @@ struct denali_nand_info {
+ 	uint32_t blksperchip;
+ 	uint32_t bbtskipbytes;
+ 	uint32_t max_banks;
++	int nr_ecc_bits;
+ };
+ 
+ #endif /*_LLD_NAND_*/
+diff --git a/include/linux/platform_data/denali.h b/include/linux/platform_data/denali.h
+new file mode 100644
+index 0000000..cfdb775
+--- /dev/null
++++ b/include/linux/platform_data/denali.h
+@@ -0,0 +1,21 @@
++/*
++ * NAND flash controller device driver platform data.
++ * Copyright © 2011, Picochip
++ *
++ * This program is free software; you can redistribute it and/or modify it
++ * under the terms and conditions of the GNU General Public License,
++ * version 2, as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++ * more details.
++ */
++#ifndef __DENALI_PDATA_H__
++#define __DENALI_PDATA_H__
++
++struct denali_nand_pdata {
++	int	nr_ecc_bits;
++};
++
++#endif /* __DENALI_PDATA_H__ */
+-- 
+1.7.0.4
+

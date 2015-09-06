@@ -1,0 +1,29 @@
+From 1fada2f39c2d424c3c949524224c7c42ed0844e6 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 24 May 2011 12:02:33 +0100
+Subject: [PATCH 129/228] picoxcell/clk: set lower limit for enable count to 0
+
+When disabling a clock, don't let the enable count go negative.
+Different clocks have different enable status at boot and we don't want
+to selectively disable them.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/clk.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/clk.c b/arch/arm/mach-picoxcell/clk.c
+index 4111851..98d76c1 100644
+--- a/arch/arm/mach-picoxcell/clk.c
++++ b/arch/arm/mach-picoxcell/clk.c
+@@ -77,6 +77,7 @@ void __clk_disable(struct clk *clk)
+ 			__clk_disable(clk->parent);
+ 		if (clk->ops && clk->ops->disable)
+ 			clk->ops->disable(clk);
++		clk->enable_count = 0;
+ 	}
+ }
+ 
+-- 
+1.7.0.4
+

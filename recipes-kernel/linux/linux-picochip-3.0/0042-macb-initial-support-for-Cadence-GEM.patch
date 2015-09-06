@@ -1,0 +1,283 @@
+From 8aaf2f15362d25f0b5f3780a7c3dbf90efb8ec10 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 11 Mar 2011 15:50:23 +0000
+Subject: [PATCH 042/228] macb: initial support for Cadence GEM
+
+The Cadence GEM is based on the MACB Ethernet controller but has a few
+small changes with regards to register and bitfield placement.  This
+patch detects the presence of a GEM by reading the module ID register
+and setting a flag appropriately.
+
+This handles the new HW address, USRIO and hash register base register
+locations in GEM.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+Acked-by: David S. Miller <davem@davemloft.net>
+Acked-by: Nicolas Ferre <nicolas.ferre@atmel.com>
+---
+ drivers/net/Kconfig |    8 ++++--
+ drivers/net/macb.c  |   49 +++++++++++++++++++++++++------------------
+ drivers/net/macb.h  |   57 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 90 insertions(+), 24 deletions(-)
+
+diff --git a/drivers/net/Kconfig b/drivers/net/Kconfig
+index 93359fa..9602b35 100644
+--- a/drivers/net/Kconfig
++++ b/drivers/net/Kconfig
+@@ -223,12 +223,14 @@ menuconfig NET_ETHERNET
+ if NET_ETHERNET
+ 
+ config MACB
+-	tristate "Atmel MACB support"
++	tristate "Cadence MACB/GEM support"
+ 	depends on HAVE_NET_MACB
+ 	select PHYLIB
+ 	help
+-	  The Atmel MACB ethernet interface is found on many AT32 and AT91
+-	  parts. Say Y to include support for the MACB chip.
++	  The Cadence MACB ethernet interface is found on many Atmel AT32 and
++	  AT91 parts.  This driver also supports the Cadence GEM (Gigabit
++	  Ethernet MAC found in some ARM SoC devices).  Note: the Gigabit mode
++	  is not yet supported.  Say Y to include support for the MACB/GEM chip.
+ 
+ 	  To compile this driver as a module, choose M here: the module
+ 	  will be called macb.
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index 5a0bd89..1e79bd7 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -1,5 +1,5 @@
+ /*
+- * Atmel MACB Ethernet Controller driver
++ * Cadence MACB/GEM Ethernet Controller driver
+  *
+  * Copyright (C) 2004-2006 Atmel Corporation
+  *
+@@ -7,7 +7,6 @@
+  * it under the terms of the GNU General Public License version 2 as
+  * published by the Free Software Foundation.
+  */
+-
+ #define pr_fmt(fmt) "macb: " fmt
+ #include <linux/clk.h>
+ #include <linux/module.h>
+@@ -58,9 +57,9 @@ static void __macb_set_hwaddr(struct macb *bp)
+ 	u16 top;
+ 
+ 	bottom = cpu_to_le32(*((u32 *)bp->dev->dev_addr));
+-	macb_writel(bp, SA1B, bottom);
++	macb_or_gem_writel(bp, SA1B, bottom);
+ 	top = cpu_to_le16(*((u16 *)(bp->dev->dev_addr + 4)));
+-	macb_writel(bp, SA1T, top);
++	macb_or_gem_writel(bp, SA1T, top);
+ }
+ 
+ static void __init macb_get_hwaddr(struct macb *bp)
+@@ -69,8 +68,8 @@ static void __init macb_get_hwaddr(struct macb *bp)
+ 	u16 top;
+ 	u8 addr[6];
+ 
+-	bottom = macb_readl(bp, SA1B);
+-	top = macb_readl(bp, SA1T);
++	bottom = macb_or_gem_readl(bp, SA1B);
++	top = macb_or_gem_readl(bp, SA1T);
+ 
+ 	addr[0] = bottom & 0xff;
+ 	addr[1] = (bottom >> 8) & 0xff;
+@@ -572,10 +571,12 @@ static irqreturn_t macb_interrupt(int irq, void *dev_id)
+ 		 * Link change detection isn't possible with RMII, so we'll
+ 		 * add that if/when we get our hands on a full-blown MII PHY.
+ 		 */
+-
+ 		if (status & MACB_BIT(ISR_ROVR)) {
+ 			/* We missed at least one packet */
+-			bp->hw_stats.rx_overruns++;
++			if (bp->is_gem)
++				bp->hw_stats.gem.rx_overruns++;
++			else
++				bp->hw_stats.macb.rx_overruns++;
+ 		}
+ 
+ 		if (status & MACB_BIT(HRESP)) {
+@@ -898,8 +899,8 @@ static void macb_sethashtable(struct net_device *dev)
+ 		mc_filter[bitnr >> 5] |= 1 << (bitnr & 31);
+ 	}
+ 
+-	macb_writel(bp, HRB, mc_filter[0]);
+-	macb_writel(bp, HRT, mc_filter[1]);
++	macb_or_gem_writel(bp, HRB, mc_filter[0]);
++	macb_or_gem_writel(bp, HRT, mc_filter[1]);
+ }
+ 
+ /*
+@@ -921,8 +922,8 @@ static void macb_set_rx_mode(struct net_device *dev)
+ 
+ 	if (dev->flags & IFF_ALLMULTI) {
+ 		/* Enable all multicast mode */
+-		macb_writel(bp, HRB, -1);
+-		macb_writel(bp, HRT, -1);
++		macb_or_gem_writel(bp, HRB, -1);
++		macb_or_gem_writel(bp, HRT, -1);
+ 		cfg |= MACB_BIT(NCFGR_MTI);
+ 	} else if (!netdev_mc_empty(dev)) {
+ 		/* Enable specific multicasts */
+@@ -930,8 +931,8 @@ static void macb_set_rx_mode(struct net_device *dev)
+ 		cfg |= MACB_BIT(NCFGR_MTI);
+ 	} else if (dev->flags & (~IFF_ALLMULTI)) {
+ 		/* Disable all multicast mode */
+-		macb_writel(bp, HRB, 0);
+-		macb_writel(bp, HRT, 0);
++		macb_or_gem_writel(bp, HRB, 0);
++		macb_or_gem_writel(bp, HRT, 0);
+ 		cfg &= ~MACB_BIT(NCFGR_MTI);
+ 	}
+ 
+@@ -1169,6 +1170,10 @@ static int __init macb_probe(struct platform_device *pdev)
+ 		goto err_out_iounmap;
+ 	}
+ 
++	/* Cadence GEM has a module ID of 2. */
++	if (MACB_BFEXT(IDNUM, macb_readl(bp, MID)) == 0x2)
++		bp->is_gem = 1;
++
+ 	dev->netdev_ops = &macb_netdev_ops;
+ 	netif_napi_add(dev, &bp->napi, macb_poll, 64);
+ 	dev->ethtool_ops = &macb_ethtool_ops;
+@@ -1192,15 +1197,16 @@ static int __init macb_probe(struct platform_device *pdev)
+ 
+ 	if (pdata && pdata->is_rmii)
+ #if defined(CONFIG_ARCH_AT91)
+-		macb_writel(bp, USRIO, (MACB_BIT(RMII) | MACB_BIT(CLKEN)) );
++		macb_or_gem_writel(bp, USRIO, (MACB_BIT(RMII) |
++					       MACB_BIT(CLKEN)));
+ #else
+-		macb_writel(bp, USRIO, 0);
++		macb_or_gem_writel(bp, USRIO, 0);
+ #endif
+ 	else
+ #if defined(CONFIG_ARCH_AT91)
+-		macb_writel(bp, USRIO, MACB_BIT(CLKEN));
++		macb_or_gem_writel(bp, USRIO, MACB_BIT(CLKEN));
+ #else
+-		macb_writel(bp, USRIO, MACB_BIT(MII));
++		macb_or_gem_writel(bp, USRIO, MACB_BIT(MII));
+ #endif
+ 
+ 	bp->tx_pending = DEF_TX_RING_PENDING;
+@@ -1217,8 +1223,9 @@ static int __init macb_probe(struct platform_device *pdev)
+ 
+ 	platform_set_drvdata(pdev, dev);
+ 
+-	netdev_info(dev, "Atmel MACB at 0x%08lx irq %d (%pM)\n",
+-		dev->base_addr, dev->irq, dev->dev_addr);
++	netdev_info(dev, "Cadence %s at 0x%08lx irq %d (%pM)\n",
++		    bp->is_gem ? "GEM" : "MACB", dev->base_addr,
++		    dev->irq, dev->dev_addr);
+ 
+ 	phydev = bp->phy_dev;
+ 	netdev_info(dev, "attached PHY driver [%s] "
+@@ -1329,6 +1336,6 @@ module_init(macb_init);
+ module_exit(macb_exit);
+ 
+ MODULE_LICENSE("GPL");
+-MODULE_DESCRIPTION("Atmel MACB Ethernet driver");
++MODULE_DESCRIPTION("Cadence MACB/GEM Ethernet driver");
+ MODULE_AUTHOR("Haavard Skinnemoen (Atmel)");
+ MODULE_ALIAS("platform:macb");
+diff --git a/drivers/net/macb.h b/drivers/net/macb.h
+index d3212f6..3a07352 100644
+--- a/drivers/net/macb.h
++++ b/drivers/net/macb.h
+@@ -59,6 +59,15 @@
+ #define MACB_TPQ				0x00bc
+ #define MACB_USRIO				0x00c0
+ #define MACB_WOL				0x00c4
++#define MACB_MID				0x00fc
++
++/* GEM register offsets. */
++#define GEM_NCFGR				0x0004
++#define GEM_USRIO				0x000c
++#define GEM_HRB					0x0080
++#define GEM_HRT					0x0084
++#define GEM_SA1B				0x0088
++#define GEM_SA1T				0x008C
+ 
+ /* Bitfields in NCR */
+ #define MACB_LB_OFFSET				0
+@@ -228,6 +237,12 @@
+ #define MACB_WOL_MTI_OFFSET			19
+ #define MACB_WOL_MTI_SIZE			1
+ 
++/* Bitfields in MID */
++#define MACB_IDNUM_OFFSET			16
++#define MACB_IDNUM_SIZE				16
++#define MACB_REV_OFFSET				0
++#define MACB_REV_SIZE				16
++
+ /* Constants for CLK */
+ #define MACB_CLK_DIV8				0
+ #define MACB_CLK_DIV16				1
+@@ -254,11 +269,52 @@
+ 		    << MACB_##name##_OFFSET))		\
+ 	 | MACB_BF(name,value))
+ 
++#define GEM_BIT(name)					\
++	(1 << GEM_##name##_OFFSET)
++#define GEM_BF(name, value)				\
++	(((value) & ((1 << GEM_##name##_SIZE) - 1))	\
++	 << GEM_##name##_OFFSET)
++#define GEM_BFEXT(name, value)\
++	(((value) >> GEM_##name##_OFFSET)		\
++	 & ((1 << GEM_##name##_SIZE) - 1))
++#define GEM_BFINS(name, value, old)			\
++	(((old) & ~(((1 << GEM_##name##_SIZE) - 1)	\
++		    << GEM_##name##_OFFSET))		\
++	 | GEM_BF(name, value))
++
+ /* Register access macros */
+ #define macb_readl(port,reg)				\
+ 	__raw_readl((port)->regs + MACB_##reg)
+ #define macb_writel(port,reg,value)			\
+ 	__raw_writel((value), (port)->regs + MACB_##reg)
++#define gem_readl(port, reg)				\
++	__raw_readl((port)->regs + GEM_##reg)
++#define gem_writel(port, reg, value)			\
++	__raw_writel((value), (port)->regs + GEM_##reg)
++
++/*
++ * Conditional GEM/MACB macros.  These perform the operation to the correct
++ * register dependent on whether the device is a GEM or a MACB.  For registers
++ * and bitfields that are common across both devices, use macb_{read,write}l
++ * to avoid the cost of the conditional.
++ */
++#define macb_or_gem_writel(__bp, __reg, __value) \
++	({ \
++		if ((__bp)->is_gem) \
++			gem_writel((__bp), __reg, __value); \
++		else \
++			macb_writel((__bp), __reg, __value); \
++	})
++
++#define macb_or_gem_readl(__bp, __reg) \
++	({ \
++		u32 __v; \
++		if ((__bp)->is_gem) \
++			__v = gem_readl((__bp), __reg); \
++		else \
++			__v = macb_readl((__bp), __reg); \
++		__v; \
++	})
+ 
+ struct dma_desc {
+ 	u32	addr;
+@@ -360,6 +416,7 @@ struct macb_stats {
+ 
+ struct macb {
+ 	void __iomem		*regs;
++	int			is_gem;
+ 
+ 	unsigned int		rx_tail;
+ 	struct dma_desc		*rx_ring;
+-- 
+1.7.0.4
+

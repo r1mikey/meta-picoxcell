@@ -1,0 +1,269 @@
+From 96426cf5e897e0982b64ab08c76d732ded0e4727 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 7 Sep 2012 16:09:53 +0100
+Subject: [PATCH 199/228] pc73032: add support for the pc73032 platform
+
+This commit forms part of the resoultion of Mantis Issue #10607
+---
+ arch/arm/mach-picoxcell/Kconfig         |   10 ++
+ arch/arm/mach-picoxcell/Makefile        |    1 +
+ arch/arm/mach-picoxcell/board_pc73032.c |  178 +++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/pc30xx.c        |    9 ++-
+ arch/arm/tools/mach-types               |    1 +
+ 5 files changed, 197 insertions(+), 2 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/board_pc73032.c
+
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index fa0f043..e2d6baa 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -71,6 +71,16 @@ config BOARD_PC7308
+ 	  takes the PC3008 device and includes NAND flash, SPI flash, 10/100
+ 	  Ethernet and a number of other femtocell peripherals.
+ 
++config BOARD_PC73032
++	bool "Support PC73032 Board"
++	default y
++	depends on PICOXCELL_PC30XX
++	select PICOXCELL_HAVE_TSU
++	help
++	  Include support for the Picochip PC73032 platform.  This platform
++	  takes the PC3032 device and includes NAND flash, SPI flash, 10/100/1000
++	  Ethernet and a number of other femtocell peripherals.
++
+ config PICOXCELL_HAVE_TSU
+ 	bool
+ 
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index 7a20463..732da1e 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -14,6 +14,7 @@ obj-y				:= picoxcell_core.o io.o axi2cfg.o \
+ 				   device_emac.o
+ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
+ obj-$(CONFIG_BOARD_PC7308)	+= board_pc7308.o
++obj-$(CONFIG_BOARD_PC73032)     += board_pc73032.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+ obj-$(CONFIG_PICOXCELL_PC30XX)	+= pc30xx.o
+diff --git a/arch/arm/mach-picoxcell/board_pc73032.c b/arch/arm/mach-picoxcell/board_pc73032.c
+new file mode 100644
+index 0000000..1c503b0
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/board_pc73032.c
+@@ -0,0 +1,178 @@
++/*
++ * linux/arch/arm/mach-picoxcell/board_pc73032.c
++ *
++ * Copyright (c) 2012 Picochip Ltd., Dave Aldridge
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#include <linux/err.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/mtd/partitions.h>
++#include <linux/platform_device.h>
++#include <linux/spi/flash.h>
++#include <linux/spi/spi.h>
++
++#include <mach/hardware.h>
++#include <mach/picoxcell/axi2cfg.h>
++#include <asm/mach-types.h>
++#include <asm/mach/arch.h>
++
++#include "mux.h"
++#include "picoxcell_core.h"
++
++static long pc73032_panic_blink(int state)
++{
++	__raw_writel(state ? 0x01 : 0, IO_ADDRESS(PICOXCELL_GPIO_BASE +
++					    GPIO_SW_PORT_D_DR_REG_OFFSET));
++	return 0;
++}
++
++static void pc73032_panic_init(void)
++{
++	/*
++	 * We have a BOOT_ERROR led on the PC73032.
++	 * Reuse that for signalling when the kernel panics.
++	 *
++	 * Note: There is only 1 bit wired up to gpio port D
++	 */
++	__raw_writel(0x01, IO_ADDRESS(PICOXCELL_GPIO_BASE +
++			       GPIO_SW_PORT_D_DDR_REG_OFFSET));
++	__raw_writel(0x00, IO_ADDRESS(PICOXCELL_GPIO_BASE +
++			       GPIO_SW_PORT_D_CTL_REG_OFFSET));
++
++	panic_blink = pc73032_panic_blink;
++}
++
++static struct mtd_partition pc73032_nand_parts[] = {
++	{
++		.name	= "Nand First Stage 0",
++		.size	= SZ_128K,
++		.offset	= 0
++	},
++        {
++		.name	= "Nand First Stage 1",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++        {
++		.name	= "Nand First Stage 2",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++        {
++		.name	= "Nand First Stage 3",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++	{
++		.name	= "Boot",
++		.size	= 4 * SZ_128K,
++		.offset	= 8 * SZ_128K,
++	},
++	{
++		.name	= "Redundant Boot",
++		.size	= 4 * SZ_128K,
++		.offset	= 16 * SZ_128K,
++	},
++	{
++		.name	= "Boot Environment",
++		.size	= SZ_128K,
++		.offset	= 24 * SZ_128K,
++	},
++	{
++		.name	= "Redundant Boot Environment",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++	{
++		.name	= "Kernel",
++		.size	= 8 * SZ_1M,
++		.offset	= (28 * SZ_128K),
++	},
++	{
++		.name	= "File System",
++		.size	= MTDPART_SIZ_FULL,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++};
++
++static void pc73032_init_nand(void)
++{
++	int err = picoxcell_add_hw_nand(pc73032_nand_parts,
++					ARRAY_SIZE(pc73032_nand_parts));
++	if (err)
++		pr_err("failed to register nand partitions\n");
++}
++
++static void pc73032_register_uarts(void)
++{
++	int err;
++	struct platform_device *pdev;
++
++	pdev = picoxcell_add_uart(PICOXCELL_UART1_BASE, IRQ_UART1, 0);
++	if (IS_ERR(pdev))
++		pr_err("failed to add uart0\n");
++
++        pdev = picoxcell_add_uart(PICOXCELL_UART2_BASE, IRQ_UART2, 1);
++	if (IS_ERR(pdev))
++		pr_err("failed to add uart1\n");
++
++	err = picoxcell_add_uicc(PC30XX_UART3_BASE, IRQ_PC30XX_UART3, 2,
++				 true);
++	if (err)
++		pr_err("failed to add uart based uicc controller\n");
++}
++
++static struct mtd_partition pc73032_spi_flash_partitions[] = {
++	{
++		.name		= "SPI Flash",
++		.size		= MTDPART_SIZ_FULL,
++		.offset		= 0,
++	},
++};
++
++static struct flash_platform_data pc73032_spi_flash_data = {
++	.name			= "pc73032 spi flash",
++	.parts			= pc73032_spi_flash_partitions,
++	.nr_parts		= ARRAY_SIZE(pc73032_spi_flash_partitions),
++};
++
++static struct spi_board_info pc73032_spi_board_info[] __initdata = {
++	{
++		.modalias	= "m25p80",
++		.platform_data	= &pc73032_spi_flash_data,
++		.mode		= SPI_MODE_3,
++		.max_speed_hz	= 2000000,
++
++                /* Note: Ensure jumper J11 on the PC73032 platform is set
++                 *       correctly to connect ebi_decode1 to the
++                 *       spi flash chip select.
++                 */
++                .chip_select	= 1,
++	}
++};
++
++static void __init pc73032_init(void)
++{
++	picoxcell_tsu_init(20000000);
++	picoxcell_core_init();
++
++	pc73032_register_uarts();
++	pc73032_init_nand();
++	pc73032_panic_init();
++	spi_register_board_info(pc73032_spi_board_info,
++				ARRAY_SIZE(pc73032_spi_board_info));
++}
++
++MACHINE_START(PC73032, "PC73032")
++	.map_io		= picoxcell_map_io,
++	.init_irq	= picoxcell_init_irq,
++	.init_early	= picoxcell_init_early,
++	.timer		= &picoxcell_sys_timer,
++	.init_machine	= pc73032_init,
++MACHINE_END
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 977741e..e9281dc 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ * Copyright (c) 2011-2012 Picochip Ltd., Jamie Iles
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -958,7 +958,12 @@ static void __init pc30xx_init(void)
+ 		picoxcell_mux_register(pc30xx_hnb_mux,
+ 				       ARRAY_SIZE(pc30xx_hnb_mux));
+ 		break;
+-
++	case 0x31:
++    	        picoxcell_mux_register(pc30xx_hnb_mux,
++				       ARRAY_SIZE(pc30xx_hnb_mux));
++                picoxcell_mux_register(pc30xx_labs_mux,
++				       ARRAY_SIZE(pc30xx_labs_mux));
++		break;
+ 	default:
+ 		panic("Unsupported device variant %lx\n", device_id);
+ 	}
+diff --git a/arch/arm/tools/mach-types b/arch/arm/tools/mach-types
+index 3b3776d..8eabaf8 100644
+--- a/arch/arm/tools/mach-types
++++ b/arch/arm/tools/mach-types
+@@ -1113,3 +1113,4 @@ blissc			MACH_BLISSC		BLISSC			3491
+ thales_adc		MACH_THALES_ADC		THALES_ADC		3492
+ ubisys_p9d_evp		MACH_UBISYS_P9D_EVP	UBISYS_P9D_EVP		3493
+ atdgp318		MACH_ATDGP318		ATDGP318		3494
++pc73032			MACH_PC73032		PC73032			4336
+-- 
+1.7.0.4
+

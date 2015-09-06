@@ -1,0 +1,27 @@
+From 7952fd954d44e2e000a09e503192113de1c910dd Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Wed, 23 Nov 2011 09:30:28 +0000
+Subject: [PATCH 183/228] picoif: Fixed up a compiler warning
+
+---
+ drivers/picochip/picoif_main.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/picochip/picoif_main.c b/drivers/picochip/picoif_main.c
+index 6be1f36..2b86e0c 100644
+--- a/drivers/picochip/picoif_main.c
++++ b/drivers/picochip/picoif_main.c
+@@ -862,8 +862,8 @@ picoif_ioctl_multi_reg_req( struct picoif_multi_reg_req __user *user_req,
+         for(i = 0; i < num_transfers; i++)
+         {
+             sg_init_one( &sgl, bounce,
+-                         min( ( multi_reg_req.count - words_so_far ) *
+-                         sizeof( u32 ), PICOIF_MAX_TRANSFER_SIZE ) );
++                         min( (unsigned)(( multi_reg_req.count - words_so_far ) *
++                         sizeof( u32 )), (unsigned) PICOIF_MAX_TRANSFER_SIZE ) );
+             sg_mark_end( &sgl );
+ 
+             ret = copy_from_user( bounce, &multi_reg_req.buf[ words_so_far ],
+-- 
+1.7.0.4
+

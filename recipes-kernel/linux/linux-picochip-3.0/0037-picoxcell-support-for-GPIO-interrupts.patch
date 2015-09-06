@@ -1,0 +1,269 @@
+From 3b4cab52ee2f992da7827352d2e402e19f0246f9 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 11 Apr 2011 14:41:08 +0100
+Subject: [PATCH 037/228] picoxcell: support for GPIO interrupts
+
+The GPIO block is capable of generating interrupts on pins 0..7 so
+provide capability to use these as interrupt sources.  This is
+implemented as a chained handler.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Makefile         |    3 +-
+ arch/arm/mach-picoxcell/gpioirq.c        |  206 ++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/picoxcell_core.c |    2 +
+ arch/arm/mach-picoxcell/picoxcell_core.h |    2 +
+ 4 files changed, 212 insertions(+), 1 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/gpioirq.c
+
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index 79602ca..86e9501 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -5,7 +5,8 @@ obj-y				:= picoxcell_core.o io.o axi2cfg.o \
+ 				   mux.o \
+ 				   device_armgpio.o \
+ 				   gpio.o \
+-				   bus_err.o
++				   bus_err.o \
++				   gpioirq.o
+ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+diff --git a/arch/arm/mach-picoxcell/gpioirq.c b/arch/arm/mach-picoxcell/gpioirq.c
+new file mode 100644
+index 0000000..c5bbcd0
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/gpioirq.c
+@@ -0,0 +1,206 @@
++/*
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#include <linux/gpio.h>
++#include <linux/io.h>
++#include <linux/irq.h>
++#include <linux/interrupt.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++#include <linux/spinlock.h>
++#include <mach/hardware.h>
++
++#include "picoxcell_core.h"
++
++static void __iomem *gpio_irq_base;
++
++#define INT_EN_REG		(gpio_irq_base + GPIO_INT_EN_REG_OFFSET)
++#define INT_MASK_REG		(gpio_irq_base + GPIO_INT_MASK_REG_OFFSET)
++#define INT_TYPE_REG		(gpio_irq_base + \
++				 GPIO_INT_TYPE_LEVEL_REG_OFFSET)
++#define INT_POLARITY_REG	(gpio_irq_base + GPIO_INT_POLARITY_REG_OFFSET)
++#define INT_STATUS_REG		(gpio_irq_base + GPIO_INT_STATUS_REG_OFFSET)
++#define EOI_REG			(gpio_irq_base + GPIO_PORT_A_EOI_REG_OFFSET)
++
++static void armgpio_irq_enable(struct irq_data *d)
++{
++	int gpio = irq_to_gpio(d->irq);
++	void __iomem *port_inten = INT_EN_REG;
++	unsigned long val;
++
++	val = readl(port_inten);
++	val |= (1 << gpio);
++	writel(val, port_inten);
++}
++
++static void armgpio_irq_disable(struct irq_data *d)
++{
++	int gpio = irq_to_gpio(d->irq);
++	void __iomem *port_inten = INT_EN_REG;
++	unsigned long val;
++
++	val = readl(port_inten);
++	val &= ~(1 << gpio);
++	writel(val, port_inten);
++}
++
++static void armgpio_irq_mask(struct irq_data *d)
++{
++	int gpio = irq_to_gpio(d->irq);
++	void __iomem *port_mask = INT_MASK_REG;
++	unsigned long val;
++
++	val = readl(port_mask);
++	val |= (1 << gpio);
++	writel(val, port_mask);
++}
++
++static void armgpio_irq_ack(struct irq_data *d)
++{
++	int gpio = irq_to_gpio(d->irq);
++	void __iomem *port_eoi = EOI_REG;
++	unsigned long val;
++
++	/* Edge-sensitive */
++	val = readl(port_eoi);
++	val |= (1 << gpio);
++	writel(val, port_eoi);
++}
++
++static void armgpio_irq_unmask(struct irq_data *d)
++{
++	int gpio = irq_to_gpio(d->irq);
++	void __iomem *port_intmask = INT_MASK_REG;
++	unsigned long val;
++
++	val = readl(port_intmask);
++	val &= ~(1 << gpio);
++	writel(val, port_intmask);
++}
++
++static struct irq_chip armgpio_level_irqchip;
++static struct irq_chip armgpio_edge_irqchip;
++
++static int armgpio_irq_set_type(struct irq_data *d, unsigned int trigger)
++{
++	int gpio = irq_to_gpio(d->irq);
++	void __iomem *port_inttype_level = INT_TYPE_REG;
++	void __iomem *port_int_polarity = INT_POLARITY_REG;
++	unsigned long level, polarity;
++	void (*handler)(unsigned int irq, struct irq_desc *desc) =
++		handle_level_irq;
++	struct irq_chip *chip = &armgpio_level_irqchip;
++
++	if (trigger & ~(IRQ_TYPE_EDGE_RISING | IRQ_TYPE_EDGE_FALLING |
++			IRQ_TYPE_LEVEL_HIGH | IRQ_TYPE_LEVEL_LOW))
++		return -EINVAL;
++
++	level = readl(port_inttype_level);
++	polarity = readl(port_int_polarity);
++
++	if (trigger & IRQ_TYPE_EDGE_RISING) {
++		level	    |= (1 << gpio);
++		polarity    |= (1 << gpio);
++		handler	    = handle_edge_irq;
++		chip	    = &armgpio_edge_irqchip;
++	} else if (trigger & IRQ_TYPE_EDGE_FALLING) {
++		level	    |= (1 << gpio);
++		polarity    &= ~(1 << gpio);
++		handler	    = handle_edge_irq;
++		chip	    = &armgpio_edge_irqchip;
++	} else if (trigger & IRQ_TYPE_LEVEL_HIGH) {
++		level	    &= ~(1 << gpio);
++		polarity    |= (1 << gpio);
++	} else if (trigger & IRQ_TYPE_LEVEL_LOW) {
++		level	    &= ~(1 << gpio);
++		polarity    &= ~(1 << gpio);
++	}
++
++	writel(level, port_inttype_level);
++	writel(polarity, port_int_polarity);
++	__irq_set_chip_handler_name_locked(d->irq, chip, handler, "gpioirq");
++
++	return 0;
++}
++
++static struct irq_chip armgpio_level_irqchip = {
++	.name		= "armgpio",
++	.irq_mask	= armgpio_irq_mask,
++	.irq_unmask	= armgpio_irq_unmask,
++	.irq_enable	= armgpio_irq_enable,
++	.irq_disable	= armgpio_irq_disable,
++	.irq_set_type	= armgpio_irq_set_type,
++};
++
++static struct irq_chip armgpio_edge_irqchip = {
++	.name		= "armgpio",
++	.irq_ack	= armgpio_irq_ack,
++	.irq_mask	= armgpio_irq_mask,
++	.irq_unmask	= armgpio_irq_unmask,
++	.irq_enable	= armgpio_irq_enable,
++	.irq_disable	= armgpio_irq_disable,
++	.irq_set_type	= armgpio_irq_set_type,
++};
++
++static void gpio_irq_handler(unsigned irq, struct irq_desc *desc)
++{
++	int i;
++	struct irq_data *d = irq_desc_get_irq_data(desc);
++
++	/*
++	 * Mask and ack the interrupt in the parent interrupt controller
++	 * before handling it.
++	 */
++	d->chip->irq_mask(&desc->irq_data);
++	d->chip->irq_ack(&desc->irq_data);
++	for (;;) {
++		unsigned long status = readl(INT_STATUS_REG);
++
++		if (!status)
++			break;
++		writel(status, EOI_REG);
++
++		for (i = 0; i < 8; ++i)
++			if (status & (1 << i))
++				generic_handle_irq(IRQ_GPIO0 + i);
++	}
++	d->chip->irq_unmask(&desc->irq_data);
++}
++
++/*
++ * We want to enable/disable interrupts for the GPIO pins through the GPIO
++ * block itself. To do this we install a chained handler. If a user requests
++ * one of the __IRQ_GPIOn interrupts then the GPIO block won't get configured.
++ * We provide these interrupts below as virtual ones that will configure the
++ * GPIO block and enable the source in the VIC.
++ *
++ * The chained handler simply converts from the virtual IRQ handler to the
++ * real interrupt source and calls the GPIO IRQ handler.
++ */
++void __init armgpio_irq_init(void)
++{
++	int i;
++
++	gpio_irq_base = ioremap(PICOXCELL_GPIO_BASE, SZ_4K);
++	if (!gpio_irq_base) {
++		pr_warning("failed to initialize ARM GPIO IRQ's\n");
++		return;
++	}
++
++	writel(0, INT_EN_REG);
++	writel(~0, EOI_REG);
++	for (i = IRQ_GPIO0; i <= IRQ_GPIO7; ++i)
++		irq_set_chip_and_handler(i, &armgpio_level_irqchip,
++					 handle_level_irq);
++
++	for (i = __IRQ_GPIO0; i <= __IRQ_GPIO7; ++i) {
++		irq_set_chained_handler(i, gpio_irq_handler);
++		set_irq_flags(i, IRQF_VALID);
++	}
++}
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.c b/arch/arm/mach-picoxcell/picoxcell_core.c
+index 17a4a4f..e6b9d41 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.c
++++ b/arch/arm/mach-picoxcell/picoxcell_core.c
+@@ -117,4 +117,6 @@ void __init picoxcell_core_init(void)
+ 
+ 	soc->init();
+ 	picoxcell_clk_debugfs_init();
++
++	armgpio_irq_init();
+ }
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index fb908b9..57ff544 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -30,4 +30,6 @@ void picoxcell_tsu_init(unsigned long rate);
+ static inline void picoxcell_tsu_init(unsigned long rate) {}
+ #endif /* CONFIG_PICOXCELL_HAVE_TSU */
+ 
++extern void __init armgpio_irq_init(void);
++
+ #endif /* __ASM_ARCH_PICOXCELL_CORE_H__ */
+-- 
+1.7.0.4
+

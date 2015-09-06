@@ -1,0 +1,86 @@
+From 1127c2016788807904307ea59bd098f74e97f3df Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 13 Apr 2011 15:57:32 +0100
+Subject: [PATCH 095/228] picoxcell/pc30xx: register the onchip temperature sensor
+
+The temperature sensor uses calibration data stored in the fuses.
+Extract the trim value and register the device.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc30xx.c |   45 ++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 45 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 0238fb6..ed249c8 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -14,6 +14,7 @@
+ #include <linux/io.h>
+ #include <linux/irq.h>
+ #include <linux/kernel.h>
++#include <linux/platform_data/pc30xxts.h>
+ #include <linux/platform_data/picoxcell_fuse.h>
+ #include <linux/platform_device.h>
+ #include <linux/spinlock.h>
+@@ -579,6 +580,49 @@ static void pc30xx_add_fuse(void)
+ 	picoxcell_add_fuse(&pc30xx_fuse_map);
+ }
+ 
++static u8 pc30xx_temp_cal(void)
++{
++#define TEMP_CAL_FUSE	896
++#define TEMP_CAL_REG	IO_ADDRESS(PICOXCELL_FUSE_BASE + TEMP_CAL_FUSE / 8)
++	u8 temp_cal;
++	struct clk *fuse;
++
++	fuse = clk_get_sys("picoxcell-fuse", NULL);
++	if (IS_ERR(fuse)) {
++		pr_warn("no fuse clk, unable to get temperature calibration data\n");
++		temp_cal = 0;
++		goto out;
++	}
++
++	if (clk_enable(fuse)) {
++		pr_warn("unable to enable fuse clk, unable to get temperature calibration data\n");
++		temp_cal = 0;
++		goto out_put;
++	}
++
++	temp_cal = readb(TEMP_CAL_REG);
++	clk_disable(fuse);
++
++out_put:
++	clk_put(fuse);
++out:
++	return temp_cal;
++}
++
++static void pc30xx_add_ts(void)
++{
++	struct resource res = {
++		.start	= PICOXCELL_AXI2CFG_BASE + 0xB0,
++		.end	= PICOXCELL_AXI2CFG_BASE + 0xB7,
++		.flags	= IORESOURCE_MEM,
++	};
++	struct pc30xxts_pdata pdata = {
++		.trim	= pc30xx_temp_cal(),
++	};
++	platform_device_register_resndata(NULL, "pc30xxts", -1, &res, 1,
++					  &pdata, sizeof(pdata));
++}
++
+ static void __init pc30xx_init(void)
+ {
+ 	pc30xx_init_bus_snoopers();
+@@ -587,6 +631,7 @@ static void __init pc30xx_init(void)
+ 	pc30xx_init_pm();
+ 	pc30xx_add_gpio();
+ 	pc30xx_add_fuse();
++	pc30xx_add_ts();
+ }
+ 
+ const struct picoxcell_soc pc30xx_soc __initconst = {
+-- 
+1.7.0.4
+

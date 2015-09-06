@@ -1,0 +1,78 @@
+From fd5a67f307434d5f6ea337ad5fca0a2dff4b25ee Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 16:55:51 +0100
+Subject: [PATCH 084/228] picoxcell/pc30xx: PM support for PC30XX
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Kconfig  |    6 +++---
+ arch/arm/mach-picoxcell/pc30xx.c |   29 +++++++++++++++++++++++++++++
+ 2 files changed, 32 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index 7048f46..9daa8c5 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -26,11 +26,11 @@ comment "Picochip picoXcell device configuration"
+ 
+ config PICOXCELL_STOP_WDT_IN_SUSPEND
+ 	bool "Disable watchdog timer in suspend"
+-	depends on PICOXCELL_PC3X3
++	depends on PICOXCELL_PC3X3 || PICOXCELL_PC30XX
+ 	help
+ 	  Say yes to pause the watchdog timer when in suspend mode on PC3X3
+-	  devices.  This will prevent the watchdog from rebooting the device
+-	  when suspend is entered.
++	  and PC30XX devices.  This will prevent the watchdog from rebooting
++	  the device when suspend is entered.
+ 
+ comment "Picochip picoXcell board selection"
+ 
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index cb4bdfc..1035a54 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -485,11 +485,40 @@ static void pc30xx_init_cpufreq(void)
+ 		pr_err("failed to init cpufreq for pc30xx\n");
+ }
+ 
++#ifdef CONFIG_PICOXCELL_STOP_WDT_IN_SUSPEND
++static inline void pc30xx_pm_stop_wdt(void)
++{
++	unsigned long syscfg = axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET);
++
++	syscfg |= (1 << AXI2CFG_SYSCFG_WDG_PAUSE_IDX);
++
++	axi2cfg_writel(syscfg, AXI2CFG_SYSCFG_REG_OFFSET);
++}
++
++static inline void pc30xx_pm_restore_wdt(void)
++{
++	unsigned long syscfg = axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET);
++
++	syscfg &= ~(1 << AXI2CFG_SYSCFG_WDG_PAUSE_IDX);
++
++	axi2cfg_writel(syscfg, AXI2CFG_SYSCFG_REG_OFFSET);
++}
++#else /* CONFIG_PICOXCELL_STOP_WDT_IN_SUSPEND */
++static inline void pc30xx_pm_stop_wdt(void) {}
++static inline void pc30xx_pm_restore_wdt(void) {}
++#endif /* CONFIG_PICOXCELL_STOP_WDT_IN_SUSPEND */
++
++static void pc30xx_init_pm(void)
++{
++	picoxcell_init_pm(pc30xx_pm_stop_wdt, pc30xx_pm_restore_wdt);
++}
++
+ static void __init pc30xx_init(void)
+ {
+ 	pc30xx_init_bus_snoopers();
+ 	pc30xx_add_spaccs();
+ 	pc30xx_init_cpufreq();
++	pc30xx_init_pm();
+ }
+ 
+ const struct picoxcell_soc pc30xx_soc __initconst = {
+-- 
+1.7.0.4
+

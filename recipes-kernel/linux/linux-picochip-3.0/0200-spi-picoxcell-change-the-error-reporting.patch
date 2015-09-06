@@ -1,0 +1,286 @@
+From 951411d88f202ef5a088d39d7205c3a4eda53707 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Thu, 13 Sep 2012 15:49:46 +0100
+Subject: [PATCH 200/228] spi/picoxcell: change the error reporting
+
+---
+ drivers/spi/picoxcell_spi.c |   85 +++++++++++++++++--------------------------
+ 1 files changed, 34 insertions(+), 51 deletions(-)
+
+diff --git a/drivers/spi/picoxcell_spi.c b/drivers/spi/picoxcell_spi.c
+index 2432dd8..9f9249c 100644
+--- a/drivers/spi/picoxcell_spi.c
++++ b/drivers/spi/picoxcell_spi.c
+@@ -3,10 +3,10 @@
+  *****************************************************************************/
+ 
+ /*!
+-* \file pc3xx_spi.c
+-* \brief SPI driver for the PC302.
++* \file picoxcell_spi.c
++* \brief SPI driver for picoXcell devices.
+ *
+-* Copyright (c) 2006-2009 picoChip Designs Ltd
++* Copyright (c) 2006-2012 picoChip Designs Ltd
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+@@ -14,6 +14,7 @@
+ *
+ * All enquiries to support@picochip.com
+ */
++#define pr_fmt(fmt) "picoxcell-spi: " fmt
+ 
+ /* Includes ---------------------------------------------------------------- */
+ #include <linux/clk.h>
+@@ -38,11 +39,6 @@
+ #define CARDNAME "picoxcell-spi"
+ 
+ /*!
+- * A name for this module
+- */
+-#define TITLE "PC302 SPI Driver"
+-
+-/*!
+  * Max number of queued SPI messages this driver can handle
+  */
+  #define PC302_MAX_QUEUED_SPI_MESSAGES (2)
+@@ -226,9 +222,9 @@ pc302spi_setup(struct spi_device *spi)
+     if (master->bus_num > (s16)(PC302_MAX_NUMBER_SPI_BUSSES - 1))
+     {
+         /* Oops, request bus is out of range. */
+-        printk(KERN_ERR "%s: SPI 'bus' (%d) out of range. "
++        pr_err("requested 'bus' (%d) out of range. "
+                "(We only have %d SPI bus(ses) available).\n",
+-               CARDNAME, (unsigned int)master->bus_num,
++               (unsigned int)master->bus_num,
+                (unsigned int)PC302_MAX_NUMBER_SPI_BUSSES);
+         return -EINVAL;
+     }
+@@ -237,9 +233,9 @@ pc302spi_setup(struct spi_device *spi)
+     if (spi->chip_select > (u8)(PC302_MAX_NUMBER_SPI_CS - 1))
+     {
+         /* Oops, requested chip select is out of range */
+-        printk(KERN_ERR "%s: SPI 'cs' (%d) out of range. "
++        pr_err("requested 'cs' (%d) out of range. "
+                "(We only have %d 'cs' available.\n",
+-               CARDNAME, (unsigned int)spi->chip_select,
++               (unsigned int)spi->chip_select,
+                (unsigned int)PC302_MAX_NUMBER_SPI_CS);
+         return -EINVAL;
+     }
+@@ -256,8 +252,8 @@ pc302spi_setup(struct spi_device *spi)
+         (spi->max_speed_hz > priv->spi_max_clock))
+     {
+     	/* Oops, we do not support this requested SPI bus clock rate */
+-        printk(KERN_ERR "%s: SPI bus 'hz' (%d) out of range. "
+-               "(Min = %d Hz, Max = %d Hz).\n", CARDNAME,
++        pr_err("requested bus 'hz' (%d) out of range. "
++               "(Min = %d Hz, Max = %d Hz).\n",
+                (unsigned int)spi->max_speed_hz,
+                priv->spi_min_clock, priv->spi_max_clock);
+         return -EINVAL;
+@@ -267,9 +263,9 @@ pc302spi_setup(struct spi_device *spi)
+     if ((spi->mode & (SPI_CPHA | SPI_CPOL)) != SPI_MODE_3)
+     {
+         /* Oops, we only support spi mode 3 */
+-        printk(KERN_ERR "%s: SPI 'mode' out of range. "
++        pr_err("requested 'mode' out of range. "
+                "(We only support SPI 'mode' %d).\n",
+-               CARDNAME, (unsigned int)SPI_MODE_3);
++               (unsigned int)SPI_MODE_3);
+         return -EINVAL;
+     }
+ 
+@@ -277,8 +273,7 @@ pc302spi_setup(struct spi_device *spi)
+     if ((spi->mode & SPI_CS_HIGH ) == SPI_CS_HIGH)
+     {
+         /* Oops, we only support active low chip selects */
+-        printk(KERN_ERR "%s: Only active low chip selects supported\n",
+-               CARDNAME);
++        pr_err("only active low chip selects supported\n");
+         return -EINVAL;
+     }
+ 
+@@ -286,8 +281,7 @@ pc302spi_setup(struct spi_device *spi)
+     if ((spi->mode & SPI_LSB_FIRST ) == SPI_LSB_FIRST)
+     {
+         /* Oops, we only support data transmission MSB first */
+-        printk(KERN_ERR "%s: Only MSB first data transmission supported\n",
+-               CARDNAME);
++        pr_err("only MSB first data transmission supported\n");
+         return -EINVAL;
+     }
+ 
+@@ -382,7 +376,7 @@ pc302spi_transfer(struct spi_device *spi,
+      */
+     if (num_lists > PC302_MAX_QUEUED_SPI_MESSAGES)
+     {
+-        WARN(1, "%s: Too many SPI messages queued up\n", CARDNAME);
++        WARN(1, "Too many SPI messages queued up\n");
+         return -EMSGSIZE;
+     }
+ 
+@@ -405,10 +399,7 @@ pc302spi_transfer(struct spi_device *spi,
+             (transfer->rx_buf == NULL) &&
+             transfer->len)
+         {
+-	    printk(KERN_ERR "%s: Message rejected : "
+-                   "invalid transfer data buffers\n",
+-                   CARDNAME);
+-
++	    pr_err("message rejected: invalid transfer data buffers\n");
+ 	    ret = -EINVAL;
+             goto out_msg_rejected;
+         }
+@@ -425,9 +416,8 @@ pc302spi_transfer(struct spi_device *spi,
+ 
+         if (bits_per_word != 8)
+         {
+-	    printk(KERN_ERR "%s: Message rejected : "
+-                   "invalid transfer size (%d bits)\n",
+-                   CARDNAME, bits_per_word);
++	    pr_err("message rejected: invalid transfer size (%d bits)\n",
++                   bits_per_word);
+ 
+ 	    ret = -EINVAL;
+             goto out_msg_rejected;
+@@ -437,10 +427,10 @@ pc302spi_transfer(struct spi_device *spi,
+         if (transfer->speed_hz &&
+             (transfer->speed_hz < priv->spi_min_clock))
+         {
+-	    printk(KERN_ERR "%s: Message rejected : "
++	    pr_err("message rejected: "
+                    "device min speed (%d Hz) exceeds "
+ 		   "required transfer speed (%d Hz)\n",
+-		   CARDNAME, priv->spi_min_clock, transfer->speed_hz);
++		   priv->spi_min_clock, transfer->speed_hz);
+ 
+ 	    ret = -EINVAL;
+             goto out_msg_rejected;
+@@ -450,10 +440,10 @@ pc302spi_transfer(struct spi_device *spi,
+         if (transfer->speed_hz &&
+             (transfer->speed_hz > priv->spi_max_clock))
+         {
+-	    printk(KERN_ERR "%s: Message rejected : "
++	    pr_err("message rejected: "
+                    "device max speed (%d Hz) is less than the "
+ 		   "required transfer speed (%d Hz)\n",
+-		   CARDNAME, priv->spi_max_clock, transfer->speed_hz);
++		   priv->spi_max_clock, transfer->speed_hz);
+ 
+ 	    ret = -EINVAL;
+             goto out_msg_rejected;
+@@ -693,8 +683,7 @@ spi_drv_probe(struct platform_device *pdev)
+     if (!regs)
+     {
+         /* Oops, we can't obtain any resources */
+-        printk(KERN_ERR "%s: could not obtain platform resources.\n",
+-                         CARDNAME);
++        pr_err("could not obtain platform resources\n");
+         ret = -EINVAL;
+         goto out;
+     }
+@@ -703,9 +692,8 @@ spi_drv_probe(struct platform_device *pdev)
+                             CARDNAME))
+     {
+         /* Oops, we can't obtain the required memory region */
+-        printk(KERN_ERR "%s: memory mapping error, Address=0x%08x,"
+-                        " Size=0x%08x\n", CARDNAME, regs->start,
+-                         (regs->end - regs->start) + 1);
++        pr_err("memory mapping error, Address=0x%08x,"
++               " Size=0x%08x\n", regs->start,(regs->end - regs->start) + 1);
+         ret = -ENOMEM;
+         goto out;
+     }
+@@ -714,8 +702,7 @@ spi_drv_probe(struct platform_device *pdev)
+     if (!master)
+     {
+         /* Oops, something wrong here */
+-        printk(KERN_ERR "%s: could not allocate spi_master structure.\n",
+-                         CARDNAME);
++        pr_err("could not allocate spi_master structure\n");
+         ret = -ENOMEM;
+ 	goto out_alloc_failed;
+     }
+@@ -732,14 +719,14 @@ spi_drv_probe(struct platform_device *pdev)
+     priv->clk = clk_get(&pdev->dev, NULL);
+     if (!priv->clk || IS_ERR(priv->clk))
+     {
+-	printk(KERN_ERR "%s: could not get clk.\n", CARDNAME);
++	pr_err("could not get clk\n");
+ 	ret = PTR_ERR(priv->clk);
+ 	goto out_alloc_failed;
+     }
+ 
+     if (clk_enable(priv->clk))
+     {
+-	printk(KERN_ERR "%s: could not enable clk.\n", CARDNAME);
++	pr_err("could not enable clk\n");
+ 	ret = -EIO;
+ 	goto out_clk_en_failed;
+     }
+@@ -748,8 +735,7 @@ spi_drv_probe(struct platform_device *pdev)
+     if (!priv->regs)
+     {
+         /* Oops, we can't remap io memory */
+-        printk(KERN_ERR "%s: could not remap io addresses.\n",
+-                         CARDNAME);
++        pr_err("could not remap io addresses\n");
+ 	ret = -ENOMEM;
+ 	goto out_ioremap_failed;
+     }
+@@ -770,8 +756,7 @@ spi_drv_probe(struct platform_device *pdev)
+     if (ret != 0)
+     {
+         /* Oops, we can't register as a spi master */
+-        printk(KERN_ERR "%s: could not register a spi master.\n",
+-                         CARDNAME);
++        pr_err("could not register a spi master\n");
+ 	goto out_registration_failed;
+     }
+ 
+@@ -790,7 +775,6 @@ out_alloc_failed:
+     spi_master_put(master);
+ 
+ out:
+-    printk(KERN_ERR "%s: SPI driver registration failed\n", CARDNAME);
+     return ret;
+ }
+ 
+@@ -863,15 +847,14 @@ spi_init_module(void)
+ {
+     int ret = 0;
+ 
+-    /* Register the platform driver */
+     ret = platform_driver_register(&spi_driver);
+     if (ret != 0)
+     {
+-        printk(KERN_INFO "%s failed to load\n", TITLE);
++        pr_err("failed to register driver\n");
+         return ret;
+     }
+ 
+-    printk(KERN_INFO "%s loaded\n", TITLE);
++    pr_info("registered driver\n");
+ 
+     return ret;
+ }
+@@ -880,12 +863,12 @@ static void
+ spi_cleanup_module(void)
+ {
+     platform_driver_unregister(&spi_driver);
+-    printk(KERN_INFO "%s unloaded\n", TITLE);
++    pr_info("unloaded driver\n");
+ }
+ 
+ module_init(spi_init_module);
+ module_exit(spi_cleanup_module);
+ 
+ MODULE_AUTHOR("picoChip");
+-MODULE_DESCRIPTION("picoChip PC302 SPI Controller Driver");
++MODULE_DESCRIPTION("picoChip picoXcell SPI driver");
+ MODULE_LICENSE("GPL");
+-- 
+1.7.0.4
+

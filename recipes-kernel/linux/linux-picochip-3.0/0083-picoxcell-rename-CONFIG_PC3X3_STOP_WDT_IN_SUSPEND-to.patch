@@ -1,0 +1,57 @@
+From e60270f390bb50d1aab47b9057ffca27e4d2b476 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 16:55:20 +0100
+Subject: [PATCH 083/228] picoxcell: rename CONFIG_PC3X3_STOP_WDT_IN_SUSPEND to be more generic
+
+pc30xx shares the same feature so allow it to reuse this config option.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Kconfig |    4 ++--
+ arch/arm/mach-picoxcell/pc3x3.c |    6 +++---
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index 3c95dd2..7048f46 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -24,8 +24,8 @@ config PICOXCELL_PC30XX
+ 
+ comment "Picochip picoXcell device configuration"
+ 
+-config PC3X3_STOP_WDT_IN_SUSPEND
+-	bool "Disable watchdog timer in suspend (PC3X3)"
++config PICOXCELL_STOP_WDT_IN_SUSPEND
++	bool "Disable watchdog timer in suspend"
+ 	depends on PICOXCELL_PC3X3
+ 	help
+ 	  Say yes to pause the watchdog timer when in suspend mode on PC3X3
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index 22be921..edc40e4 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -496,7 +496,7 @@ static void pc3x3_init_cpufreq(void)
+ 		pr_err("failed to init cpufreq for pc3x3\n");
+ }
+ 
+-#ifdef CONFIG_PC3X3_STOP_WDT_IN_SUSPEND
++#ifdef CONFIG_PICOXCELL_STOP_WDT_IN_SUSPEND
+ static inline void pc3x3_pm_stop_wdt(void)
+ {
+ 	unsigned long syscfg = axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET);
+@@ -514,10 +514,10 @@ static inline void pc3x3_pm_restore_wdt(void)
+ 
+ 	axi2cfg_writel(syscfg, AXI2CFG_SYSCFG_REG_OFFSET);
+ }
+-#else /* CONFIG_PC3X3_STOP_WDT_IN_SUSPEND */
++#else /* CONFIG_PICOXCELL_STOP_WDT_IN_SUSPEND */
+ static inline void pc3x3_pm_stop_wdt(void) {}
+ static inline void pc3x3_pm_restore_wdt(void) {}
+-#endif /* CONFIG_PC3X3_STOP_WDT_IN_SUSPEND */
++#endif /* CONFIG_PICOXCELL_STOP_WDT_IN_SUSPEND */
+ 
+ static void pc3x3_init_pm(void)
+ {
+-- 
+1.7.0.4
+

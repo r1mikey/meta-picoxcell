@@ -1,0 +1,159 @@
+From 685056c52686df6a709eb9463386b5f4f6019202 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 12 May 2011 14:47:57 +0100
+Subject: [PATCH 121/228] picoxcell/pc7308: add initial support for the pc7308 board
+
+The pc7308 board is a development board for pc3008 based femtocells.
+Currently only NAND flash and UARTs are supported.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Kconfig        |   10 +++
+ arch/arm/mach-picoxcell/Makefile       |    1 +
+ arch/arm/mach-picoxcell/board_pc7308.c |  101 ++++++++++++++++++++++++++++++++
+ 3 files changed, 112 insertions(+), 0 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/board_pc7308.c
+
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index 6a23a9b..ccfdfdc 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -52,6 +52,16 @@ config BOARD_PC7302
+ 	  can take any of the PC3X2 or PC3X3 devices and includes SPI NOR
+ 	  flash, parallel NOR flash and NAND flash.
+ 
++config BOARD_PC7308
++	bool "Support PC7308 Board"
++	default y
++	depends on PICOXCELL_PC30XX
++	select PICOXCELL_HAVE_TSU
++	help
++	  Include support for the Picochip PC7308 platform.  This platform
++	  takes the PC3008 device and includes NAND flash, SPI flash, 10/100
++	  Ethernet and a number of other femtocell peripherals.
++
+ config PICOXCELL_HAVE_TSU
+ 	bool
+ 
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index 5fdc0c5..7a20463 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -13,6 +13,7 @@ obj-y				:= picoxcell_core.o io.o axi2cfg.o \
+ 				   device_fuse.o \
+ 				   device_emac.o
+ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
++obj-$(CONFIG_BOARD_PC7308)	+= board_pc7308.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+ obj-$(CONFIG_PICOXCELL_PC30XX)	+= pc30xx.o
+diff --git a/arch/arm/mach-picoxcell/board_pc7308.c b/arch/arm/mach-picoxcell/board_pc7308.c
+new file mode 100644
+index 0000000..c1d2fea
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/board_pc7308.c
+@@ -0,0 +1,101 @@
++/*
++ * linux/arch/arm/mach-picoxcell/board_pc7308.c
++ *
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#include <linux/err.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/mtd/partitions.h>
++#include <linux/platform_device.h>
++
++#include <mach/hardware.h>
++#include <mach/picoxcell/axi2cfg.h>
++#include <asm/mach-types.h>
++#include <asm/mach/arch.h>
++
++#include "mux.h"
++#include "picoxcell_core.h"
++
++static struct mtd_partition pc7308_nand_parts[] = {
++	{
++		.name	= "Boot",
++		.size	= 4 * SZ_128K,
++		.offset	= 8 * SZ_128K,
++	},
++	{
++		.name	= "Redundant Boot",
++		.size	= 4 * SZ_128K,
++		.offset	= 16 * SZ_128K,
++	},
++	{
++		.name	= "Boot Environment",
++		.size	= SZ_128K,
++		.offset	= 24 * SZ_128K,
++	},
++	{
++		.name	= "Redundant Boot Environment",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++	{
++		.name	= "Kernel",
++		.size	= 8 * SZ_1M,
++		.offset	= (28 * SZ_128K),
++	},
++	{
++		.name	= "File System",
++		.size	= MTDPART_SIZ_FULL,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++};
++
++static void pc7308_init_nand(void)
++{
++	int err = picoxcell_add_hw_nand(pc7308_nand_parts,
++					ARRAY_SIZE(pc7308_nand_parts));
++	if (err)
++		pr_err("failed to register nand partitions\n");
++}
++
++static void pc7308_register_uarts(void)
++{
++	int err;
++	struct platform_device *pdev;
++
++	pdev = picoxcell_add_uart(PICOXCELL_UART1_BASE, IRQ_UART1, 0);
++	if (IS_ERR(pdev))
++		pr_err("failed to add uart0\n");
++
++	pdev = picoxcell_add_uart(PICOXCELL_UART2_BASE, IRQ_UART2, 1);
++	if (IS_ERR(pdev))
++		pr_err("failed to add uart1\n");
++
++	err = picoxcell_add_uicc(PC30XX_UART3_BASE, IRQ_PC30XX_UART3, 2,
++				 false);
++	if (err)
++		pr_err("failed to add uart based uicc controller\n");
++}
++
++static void __init pc7308_init(void)
++{
++	picoxcell_tsu_init(20000000);
++	picoxcell_core_init();
++
++	pc7308_register_uarts();
++	pc7308_init_nand();
++}
++
++MACHINE_START(PC7308, "PC7308")
++	.map_io		= picoxcell_map_io,
++	.init_irq	= picoxcell_init_irq,
++	.init_early	= picoxcell_init_early,
++	.timer		= &picoxcell_sys_timer,
++	.init_machine	= pc7308_init,
++MACHINE_END
+-- 
+1.7.0.4
+

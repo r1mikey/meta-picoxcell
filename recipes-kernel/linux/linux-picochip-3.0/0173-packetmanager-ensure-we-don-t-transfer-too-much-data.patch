@@ -1,0 +1,26 @@
+From 64e8b8983fa60db2975f2c0699a2b56b00571291 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie.iles@picochip.com>
+Date: Tue, 28 Jun 2011 14:02:29 +0100
+Subject: [PATCH 173/228] packetmanager: ensure we don't transfer too much data
+
+Add a sanity check to ensure that we don't send more data to the
+picoArray than there can be in the FIFO.
+---
+ drivers/char/packetmanager.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/char/packetmanager.c b/drivers/char/packetmanager.c
+index aa48514..35842e7 100644
+--- a/drivers/char/packetmanager.c
++++ b/drivers/char/packetmanager.c
+@@ -627,6 +627,7 @@ pktman_transfer(struct pktman_dev *pman,
+ 	unsigned nsgs = 0, rptr = pktman_buf_offset(&pman->buf, pman->buf.rptr);
+ 	size_t bytes_added = 0;
+ 
++	nbytes = min(nbytes, pman->buf.buf_sz);
+ 	sg_init_table(pman->xfer_sg, (nbytes / PAGE_SIZE) + 2);
+ 
+ 	while (bytes_added < nbytes) {
+-- 
+1.7.0.4
+

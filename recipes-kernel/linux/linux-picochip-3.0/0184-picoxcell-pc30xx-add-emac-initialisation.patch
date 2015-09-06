@@ -1,0 +1,38 @@
+From 4b9446d21d65f8d70aaadfe107e44e78bd45d64d Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 25 Nov 2011 15:00:37 +0000
+Subject: [PATCH 184/228] picoxcell/pc30xx: add emac initialisation
+
+This commit fixes Mantis Issue #9602
+---
+ arch/arm/mach-picoxcell/pc30xx.c |    7 +++++++
+ 1 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index bf7f84d..f5353bf 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -895,6 +895,12 @@ static void pc30xx_add_trng(void)
+ 	picoxcell_add_trng(PC3X3_RNG_BASE);
+ }
+ 
++static void pc30xx_add_emac(void)
++{
++	picoxcell_add_emac(PICOXCELL_EMAC_BASE, IRQ_EMAC, 0);
++}
++
++
+ static void __init pc30xx_init(void)
+ {
+ 	unsigned long device_id = axi2cfg_readl(AXI2CFG_DEVICE_ID_REG_OFFSET);
+@@ -917,6 +923,7 @@ static void __init pc30xx_init(void)
+ 	pc30xx_add_ts();
+ 	pc30xx_add_otp();
+ 	pc30xx_add_trng();
++	pc30xx_add_emac();
+ }
+ 
+ const struct picoxcell_soc pc30xx_soc __initconst = {
+-- 
+1.7.0.4
+

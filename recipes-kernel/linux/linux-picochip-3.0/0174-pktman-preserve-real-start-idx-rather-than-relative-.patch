@@ -1,0 +1,32 @@
+From 317d069c492476a40bd3091901b95e28f16182d5 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie.iles@picochip.com>
+Date: Tue, 28 Jun 2011 14:05:21 +0100
+Subject: [PATCH 174/228] pktman: preserve real start idx rather than relative wptr
+
+When we store the write pointer at the time of adding data we need to
+keep the real write pointer rather than offset.  Failure to do this
+means that if the message is aborted we calculate an invalid amount of
+data in the fifo.
+
+Mantis issue #8667
+---
+ drivers/char/packetmanager.c |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/char/packetmanager.c b/drivers/char/packetmanager.c
+index 35842e7..09ab44e 100644
+--- a/drivers/char/packetmanager.c
++++ b/drivers/char/packetmanager.c
+@@ -327,7 +327,8 @@ pktman_buf_add(struct pktman_buf *buf,
+ 		return -EFAULT;
+ 
+ 	if (start_idx)
+-		*start_idx = pktman_buf_offset(buf, buf->wptr);
++		*start_idx = buf->wptr;
++
+ 	buf->wptr += count;
+ 
+ 	/*
+-- 
+1.7.0.4
+

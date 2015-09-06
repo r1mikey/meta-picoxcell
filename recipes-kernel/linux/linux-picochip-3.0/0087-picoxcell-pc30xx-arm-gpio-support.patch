@@ -1,0 +1,118 @@
+From 50db1229c47f4db7a63d1df7ae87f3c30d2e8fe0 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 11 Apr 2011 15:35:03 +0100
+Subject: [PATCH 087/228] picoxcell/pc30xx: arm gpio support
+
+Add the ARM GPIO banks for PC30XX.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/include/mach/gpio.h |   66 +++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/pc30xx.c            |    8 +++
+ 2 files changed, 74 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/include/mach/gpio.h b/arch/arm/mach-picoxcell/include/mach/gpio.h
+index fa730f9..e25ee3f 100644
+--- a/arch/arm/mach-picoxcell/include/mach/gpio.h
++++ b/arch/arm/mach-picoxcell/include/mach/gpio.h
+@@ -139,6 +139,72 @@ enum {
+ 	PC3X3_GPIO_PIN_SDGPIO_23,
+ };
+ 
++enum {
++	PC30XX_GPIO_PIN_ARM_0,
++	PC30XX_GPIO_PIN_ARM_1,
++	PC30XX_GPIO_PIN_ARM_2,
++	PC30XX_GPIO_PIN_ARM_3,
++	PC30XX_GPIO_PIN_ARM_4,
++	PC30XX_GPIO_PIN_ARM_5,
++	PC30XX_GPIO_PIN_ARM_6,
++	PC30XX_GPIO_PIN_ARM_7,
++	PC30XX_GPIO_PIN_ARM_8,
++	PC30XX_GPIO_PIN_ARM_9,
++	PC30XX_GPIO_PIN_ARM_10,
++	PC30XX_GPIO_PIN_ARM_11,
++	PC30XX_GPIO_PIN_ARM_12,
++	PC30XX_GPIO_PIN_ARM_13,
++	PC30XX_GPIO_PIN_ARM_14,
++	PC30XX_GPIO_PIN_ARM_15,
++	PC30XX_GPIO_PIN_ARM_16,
++	PC30XX_GPIO_PIN_ARM_17,
++	PC30XX_GPIO_PIN_ARM_18,
++	PC30XX_GPIO_PIN_ARM_19,
++	PC30XX_GPIO_PIN_ARM_20,
++	PC30XX_GPIO_PIN_ARM_21,
++	PC30XX_GPIO_PIN_ARM_22,
++	PC30XX_GPIO_PIN_ARM_23,
++	PC30XX_GPIO_PIN_ARM_24,
++	PC30XX_GPIO_PIN_ARM_25,
++	PC30XX_GPIO_PIN_ARM_26,
++	PC30XX_GPIO_PIN_ARM_27,
++	PC30XX_GPIO_PIN_ARM_28,
++	PC30XX_GPIO_PIN_ARM_29,
++	PC30XX_GPIO_PIN_ARM_30,
++	PC30XX_GPIO_PIN_ARM_31,
++	PC30XX_GPIO_PIN_ARM_32,
++	PC30XX_GPIO_PIN_ARM_33,
++	PC30XX_GPIO_PIN_ARM_34,
++	PC30XX_GPIO_PIN_ARM_35,
++	PC30XX_GPIO_PIN_ARM_36,
++	PC30XX_GPIO_PIN_ARM_37,
++	PC30XX_GPIO_PIN_ARM_38,
++	PC30XX_GPIO_PIN_ARM_39,
++	PC30XX_GPIO_PIN_ARM_40,
++	PC30XX_GPIO_PIN_ARM_41,
++	PC30XX_GPIO_PIN_ARM_42,
++	PC30XX_GPIO_PIN_ARM_43,
++	PC30XX_GPIO_PIN_ARM_44,
++	PC30XX_GPIO_PIN_ARM_45,
++	PC30XX_GPIO_PIN_ARM_46,
++	PC30XX_GPIO_PIN_ARM_47,
++	PC30XX_GPIO_PIN_ARM_48,
++	PC30XX_GPIO_PIN_ARM_49,
++	PC30XX_GPIO_PIN_ARM_50,
++	PC30XX_GPIO_PIN_ARM_51,
++	PC30XX_GPIO_PIN_ARM_52,
++	PC30XX_GPIO_PIN_ARM_53,
++	PC30XX_GPIO_PIN_ARM_54,
++	PC30XX_GPIO_PIN_ARM_55,
++	PC30XX_GPIO_PIN_ARM_56,
++	PC30XX_GPIO_PIN_ARM_57,
++	PC30XX_GPIO_PIN_ARM_58,
++	PC30XX_GPIO_PIN_ARM_59,
++	PC30XX_GPIO_PIN_ARM_60,
++	PC30XX_GPIO_PIN_ARM_61,
++	PC30XX_GPIO_PIN_ARM_62,
++};
++
+ #ifdef __KERNEL__
+ 
+ #include <asm-generic/gpio.h>
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 56cdccc..b920006 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -480,12 +480,20 @@ static void pc30xx_init_pm(void)
+ 	picoxcell_init_pm(pc30xx_pm_stop_wdt, pc30xx_pm_restore_wdt);
+ }
+ 
++static void pc30xx_add_gpio(void)
++{
++	picoxcell_add_gpio_port(0, 8, PC30XX_GPIO_PIN_ARM_0);
++	picoxcell_add_gpio_port(1, 32, PC30XX_GPIO_PIN_ARM_8);
++	picoxcell_add_gpio_port(2, 23, PC30XX_GPIO_PIN_ARM_40);
++}
++
+ static void __init pc30xx_init(void)
+ {
+ 	pc30xx_init_bus_snoopers();
+ 	pc30xx_add_spaccs();
+ 	pc30xx_init_cpufreq();
+ 	pc30xx_init_pm();
++	pc30xx_add_gpio();
+ }
+ 
+ const struct picoxcell_soc pc30xx_soc __initconst = {
+-- 
+1.7.0.4
+

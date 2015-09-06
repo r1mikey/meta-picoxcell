@@ -1,0 +1,29 @@
+From 61cff96095e6804d1d8132d4c8f6fc0cb5c32c35 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie.iles@picochip.com>
+Date: Wed, 29 Jun 2011 14:40:23 +0100
+Subject: [PATCH 176/228] packetmanager: remove redundant pktman_kreq::children
+
+A crypto request doesn't have any children so remove the redundant
+list_head
+---
+ drivers/char/packetmanager.c |    4 ----
+ 1 files changed, 0 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/char/packetmanager.c b/drivers/char/packetmanager.c
+index c6d4304..5c509b4 100644
+--- a/drivers/char/packetmanager.c
++++ b/drivers/char/packetmanager.c
+@@ -177,10 +177,6 @@ struct pktman_kreq {
+ 					     * The position in the in_progress
+ 					     * list.
+ 					     */
+-	struct list_head	    children;/*
+-					      * Child nodes. Once they have
+-					      * completed, we can do the DMA.
+-					      */
+ 	struct scatterlist	    sg[2];  /*
+ 					     * Where the plaintext is in the
+ 					     * FIFO.
+-- 
+1.7.0.4
+

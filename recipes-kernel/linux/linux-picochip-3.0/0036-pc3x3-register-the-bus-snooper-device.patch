@@ -1,0 +1,78 @@
+From 4b7f48ac17f20b22d38f218a476d0d66517744c8 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 30 Mar 2011 16:34:11 +0100
+Subject: [PATCH 036/228] pc3x3: register the bus snooper device
+
+Register the snooper register mapping and interrupts.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x3.c |   47 +++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 47 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index 1e77a68..d8919b9 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -521,6 +521,52 @@ static void pc3x3_add_otp(void)
+ 	platform_device_register_simple("picoxcell-otp-pc3x3", -1, &otp_mem, 1);
+ }
+ 
++static void pc3x3_init_bus_snoopers(void)
++{
++	static const char *pc3x3_snoop_err_names[32] = {
++		[0]	= "dmac1_channel0 (read)",
++		[1]	= "dmac1_channel1 (read)",
++		[2]	= "dmac1_channel2 (read)",
++		[3]	= "dmac1_channel3 (read)",
++		[4]	= "dmac2_channel0 (read)",
++		[5]	= "dmac2_channel1 (read)",
++		[6]	= "dmac2_channel2 (read)",
++		[7]	= "dmac2_channel3 (read)",
++		[8]	= "emac (read)",
++		[9]	= "cipher (read)",
++		[11]	= "ipsec (read)",
++		[12]	= "dmac1_channel0 (write)",
++		[13]	= "dmac1_channel1 (write)",
++		[14]	= "dmac1_channel2 (write)",
++		[15]	= "dmac1_channel3 (write)",
++		[16]	= "dmac2_channel0 (write)",
++		[17]	= "dmac2_channel1 (write)",
++		[18]	= "dmac2_channel2 (write)",
++		[19]	= "dmac2_channel3 (write)",
++		[20]	= "emac (write)",
++		[21]	= "cipher (write)",
++		[23]	= "ipsec (write)",
++	};
++
++	static struct resource irqs[] = {
++		{
++			.start	= IRQ_AXI_RD_ERR,
++			.end	= IRQ_AXI_RD_ERR,
++			.flags	= IORESOURCE_IRQ,
++		},
++		{
++			.start	= IRQ_AXI_WR_ERR,
++			.end	= IRQ_AXI_WR_ERR,
++			.flags	= IORESOURCE_IRQ,
++		},
++	};
++
++	platform_device_register_resndata(NULL, "picoxcell-bus-error", -1,
++					  irqs, ARRAY_SIZE(irqs),
++					  pc3x3_snoop_err_names,
++					  sizeof(pc3x3_snoop_err_names));
++}
++
+ static void pc3x3_init(void)
+ {
+ 	picoxcell_mux_register(pc3x3_mux, ARRAY_SIZE(pc3x3_mux));
+@@ -528,4 +574,5 @@ static void pc3x3_init(void)
+ 	pc3x3_init_cpufreq();
+ 	pc3x3_init_pm();
+ 	pc3x3_add_otp();
++	pc3x3_init_bus_snoopers();
+ }
+-- 
+1.7.0.4
+

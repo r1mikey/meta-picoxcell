@@ -1,0 +1,55 @@
+From d310f872a70bf16da8fd87b495ec4d9b882e926b Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 12 May 2011 16:41:19 +0100
+Subject: [PATCH 122/228] picoxcell: add an axi2pico clkdev lookup
+
+The AXI2Pico is used in the picoArray for ARM<->picoArray communications
+through interrupts, GPRs and DMA.  PC30XX has this as a gateable clk so
+add lookups for all devices.  For PC3X[23] this is a nop-clk.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc30xx.c |    1 +
+ arch/arm/mach-picoxcell/pc3x2.c  |    1 +
+ arch/arm/mach-picoxcell/pc3x3.c  |    1 +
+ 3 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index f9268bd..845138e 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -358,6 +358,7 @@ static struct clk_lookup pc30xx_clk_lookup[] = {
+ 	CLK_LOOKUP("dw_apb_timer.1",	NULL,		&dummy_clk),
+ 	CLK_LOOKUP(NULL,		"uart",		&dummy_clk),
+ 	CLK_LOOKUP("denali-nand-mmio",	NULL,		&nand_clk),
++	CLK_LOOKUP("picoArray.0",	"axi2pico",	&axi2pico_clk),
+ };
+ 
+ static void __init pc30xx_clk_init(void)
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index 11682c7..21245f6 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -42,6 +42,7 @@ static struct clk_lookup pc3x2_clk_lookup[] = {
+ 	CLK_LOOKUP(NULL,		"ref",		&ref_clk),
+ 	CLK_LOOKUP("dw_apb_timer.0",	NULL,		&dummy_clk),
+ 	CLK_LOOKUP("dw_apb_timer.1",	NULL,		&dummy_clk),
++	CLK_LOOKUP("picoArray.0",	"axi2pico",	&dummy_clk),
+ };
+ 
+ static void __init pc3x2_clk_init(void)
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index ee651dc..f909b90 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -267,6 +267,7 @@ static struct clk_lookup pc3x3_clk_lookup[] = {
+ 	CLK_LOOKUP(NULL,		"ref",		&ref_clk),
+ 	CLK_LOOKUP("dw_apb_timer.0",	NULL,		&dummy_clk),
+ 	CLK_LOOKUP("dw_apb_timer.1",	NULL,		&dummy_clk),
++	CLK_LOOKUP("picoArray.0",	"axi2pico",	&dummy_clk),
+ };
+ 
+ static void __init pc3x3_clk_init(void)
+-- 
+1.7.0.4
+

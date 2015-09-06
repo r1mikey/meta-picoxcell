@@ -1,0 +1,224 @@
+From 709d6a46a16bc6a8497841f40e652dd9dee01d7b Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 1 Apr 2011 12:08:11 +0100
+Subject: [PATCH 085/228] clocksource: platform driver for APB timers
+
+Add a platform driver for the APB timers that can be used for embedded
+systems such as ARM SoC.  This uses early_platform so that the timers
+can be used early in the boot sequence.
+
+Cc: John Stultz <johnstul@us.ibm.com>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/clocksource/Kconfig                 |    5 +
+ drivers/clocksource/Makefile                |    2 +
+ drivers/clocksource/dw_apb_timer_platform.c |  173 +++++++++++++++++++++++++++
+ 3 files changed, 180 insertions(+), 0 deletions(-)
+ create mode 100644 drivers/clocksource/dw_apb_timer_platform.c
+
+diff --git a/drivers/clocksource/Kconfig b/drivers/clocksource/Kconfig
+index 96c9219..a084cd2 100644
+--- a/drivers/clocksource/Kconfig
++++ b/drivers/clocksource/Kconfig
+@@ -3,3 +3,8 @@ config CLKSRC_I8253
+ 
+ config CLKSRC_MMIO
+ 	bool
++
++config DW_APB_TIMER_PLATFORM
++	depends on HAVE_CLK
++	select DW_APB_TIMER
++	bool
+diff --git a/drivers/clocksource/Makefile b/drivers/clocksource/Makefile
+index b995942..0b94d67 100644
+--- a/drivers/clocksource/Makefile
++++ b/drivers/clocksource/Makefile
+@@ -8,3 +8,5 @@ obj-$(CONFIG_SH_TIMER_MTU2)	+= sh_mtu2.o
+ obj-$(CONFIG_SH_TIMER_TMU)	+= sh_tmu.o
+ obj-$(CONFIG_CLKSRC_I8253)	+= i8253.o
+ obj-$(CONFIG_CLKSRC_MMIO)	+= mmio.o
++obj-$(CONFIG_DW_APB_TIMER)	+= dw_apb_timer.o
++obj-$(CONFIG_DW_APB_TIMER_PLATFORM) += dw_apb_timer_platform.o
+diff --git a/drivers/clocksource/dw_apb_timer_platform.c b/drivers/clocksource/dw_apb_timer_platform.c
+new file mode 100644
+index 0000000..22b5fcd
+--- /dev/null
++++ b/drivers/clocksource/dw_apb_timer_platform.c
+@@ -0,0 +1,173 @@
++/*
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * Platform driver support for Synopsys DesignWare APB timers.
++ */
++#include <linux/clk.h>
++#include <linux/dw_apb_timer.h>
++#include <linux/err.h>
++#include <linux/clockchips.h>
++#include <linux/clocksource.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/irq.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++
++static int dw_apb_event_probe(struct platform_device *pdev, int irq)
++{
++	int err;
++	struct resource *mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	struct dw_apb_clock_event_device *dwclk;
++	void __iomem *base;
++	struct clk *clk;
++
++	if (!request_mem_region(mem->start, resource_size(mem),
++				"dw_apb_timer"))
++		return -ENOMEM;
++
++	base = ioremap(mem->start, resource_size(mem));
++	if (!base) {
++		dev_err(&pdev->dev, "failed to remap i/o memory\n");
++		err = -ENOMEM;
++		goto out_release_mem;
++	}
++
++	clk = clk_get(&pdev->dev, NULL);
++	if (IS_ERR(clk)) {
++		dev_err(&pdev->dev, "no clk\n");
++		err = PTR_ERR(clk);
++		goto out_unmap;
++	}
++
++	err = clk_enable(clk);
++	if (err) {
++		dev_err(&pdev->dev, "failed to enable clk\n");
++		goto out_put_clk;
++	}
++
++	dwclk = dw_apb_clockevent_init(0, "dw_apb_timer_plat0", 300, base,
++				       irq, clk_get_rate(clk));
++	if (!dwclk) {
++		err = -ENODEV;
++		goto out_disable_clk;
++	}
++
++	dw_apb_clockevent_register(dwclk);
++
++	return 0;
++
++out_disable_clk:
++	clk_disable(clk);
++out_put_clk:
++	clk_put(clk);
++out_unmap:
++	iounmap(base);
++out_release_mem:
++	release_mem_region(mem->start, resource_size(mem));
++
++	return err;
++}
++
++static int dw_apb_source_probe(struct platform_device *pdev)
++{
++	struct resource *mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	int err;
++	void __iomem *base;
++	struct clk *clk;
++	struct dw_apb_clocksource *dwclk;
++
++	if (!request_mem_region(mem->start, resource_size(mem),
++				"dw_apb_timer"))
++		return -ENOMEM;
++
++	base = ioremap(mem->start, resource_size(mem));
++	if (!base) {
++		dev_err(&pdev->dev, "failed to remap i/o memory\n");
++		err = -ENOMEM;
++		goto out_release_mem;
++	}
++
++	clk = clk_get(&pdev->dev, NULL);
++	if (IS_ERR(clk)) {
++		dev_err(&pdev->dev, "no clk\n");
++		err = PTR_ERR(clk);
++		goto out_unmap;
++	}
++
++	err = clk_enable(clk);
++	if (err) {
++		dev_err(&pdev->dev, "failed to enable clk\n");
++		goto out_put_clk;
++	}
++
++	dwclk = dw_apb_clocksource_init(300, "dw_apb_plat0", base,
++					clk_get_rate(clk));
++	if (!dwclk) {
++		err = -ENODEV;
++		goto out_disable_clk;
++	}
++	dw_apb_clocksource_start(dwclk);
++	dw_apb_clocksource_register(dwclk);
++
++	return 0;
++
++out_disable_clk:
++	clk_disable(clk);
++out_put_clk:
++	clk_put(clk);
++out_unmap:
++	iounmap(base);
++out_release_mem:
++	release_mem_region(mem->start, resource_size(mem));
++
++	return err;
++}
++
++static int __devinit dw_apb_timer_probe(struct platform_device *pdev)
++{
++	int irq = platform_get_irq(pdev, 0);
++
++	/*
++	 * If the timer has an interrupt defined then we use it as a
++	 * clockevents device otherwise we use it as a clocksource device.
++	 */
++	return irq >= 0 ? dw_apb_event_probe(pdev, irq) :
++		dw_apb_source_probe(pdev);
++}
++
++static int __devexit dw_apb_timer_remove(struct platform_device *pdev)
++{
++	return -EBUSY;
++}
++
++static struct platform_driver dw_apb_timer_driver = {
++	.probe		= dw_apb_timer_probe,
++	.remove		= __devexit_p(dw_apb_timer_remove),
++	.driver		= {
++		.owner	= THIS_MODULE,
++		.name	= "dw_apb_timer",
++	},
++};
++early_platform_init("earlytimer", &dw_apb_timer_driver);
++
++
++static int __init dw_apb_timers_init(void)
++{
++	return platform_driver_register(&dw_apb_timer_driver);
++}
++module_init(dw_apb_timers_init);
++
++static void __exit dw_apb_timers_exit(void)
++{
++	platform_driver_unregister(&dw_apb_timer_driver);
++}
++module_exit(dw_apb_timers_exit);
++
++MODULE_AUTHOR("Jamie Iles");
++MODULE_LICENSE("GPL");
++MODULE_DESCRIPTION("Timer driver for Synopsys DesignWare APB timers");
+-- 
+1.7.0.4
+

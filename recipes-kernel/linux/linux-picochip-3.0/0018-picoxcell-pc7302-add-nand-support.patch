@@ -1,0 +1,112 @@
+From 7df266ddd411c018b45d779c7a9fdabf121fbd3b Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 18 Mar 2011 17:43:13 +0000
+Subject: [PATCH 018/228] picoxcell/pc7302: add nand support
+
+Register the GPIO based NAND device for PC7302 when we boot in
+non-parallel boot mode.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |   71 +++++++++++++++++++++++++++++++-
+ 1 files changed, 70 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index 6d2b5e0..b8c3966 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -13,10 +13,12 @@
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+ #include <linux/platform_device.h>
++#include <linux/mtd/nand-gpio.h>
+ #include <linux/mtd/physmap.h>
+ #include <linux/spi/flash.h>
+ 
+ #include <mach/hardware.h>
++#include <mach/picoxcell/axi2cfg.h>
+ #include <asm/leds.h>
+ #include <asm/mach-types.h>
+ #include <asm/mach/arch.h>
+@@ -93,10 +95,77 @@ static void pc7302_init_nor(void)
+ 	platform_device_register(&pc7302_nor);
+ }
+ 
++static struct resource pc7302_nand_resource = {
++	.start = EBI_CS2_BASE,
++	.end   = EBI_CS2_BASE + 2 * SZ_1K,
++	.flags = IORESOURCE_MEM,
++};
++
++static struct mtd_partition pc7302_nand_parts[] = {
++	{
++		.name	= "Boot",
++		.size	= 4 * SZ_128K,
++		.offset	= 0,
++	},
++	{
++		.name	= "Redundant Boot",
++		.size	= 4 * SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++	{
++		.name	= "Boot Environment",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++	{
++		.name	= "Redundant Boot Environment",
++		.size	= SZ_128K,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++	{
++		.name	= "Kernel",
++		.size	= 8 * SZ_1M,
++		.offset	= (12 * SZ_128K),
++	},
++	{
++		.name	= "File System",
++		.size	= MTDPART_SIZ_FULL,
++		.offset	= MTDPART_OFS_APPEND,
++	},
++};
++
++static struct gpio_nand_platdata pc7302_nand_platdata = {
++	.gpio_rdy   = PC3X2_GPIO_PIN_ARM_1,
++	.gpio_nce   = PC3X2_GPIO_PIN_ARM_2,
++	.gpio_ale   = PC3X2_GPIO_PIN_ARM_3,
++	.gpio_cle   = PC3X2_GPIO_PIN_ARM_4,
++	.gpio_nwp   = -1,
++	.parts	    = pc7302_nand_parts,
++	.num_parts  = ARRAY_SIZE(pc7302_nand_parts),
++};
++
++static struct platform_device pc7302_nand = {
++	.name		    = "gpio-nand",
++	.num_resources	    = 1,
++	.resource	    = &pc7302_nand_resource,
++	.id		    = -1,
++	.dev.platform_data  = &pc7302_nand_platdata,
++};
++
++static void pc7302_init_nand(void)
++{
++	platform_device_register(&pc7302_nand);
++}
++
+ static void __init pc7302_init(void)
+ {
+ 	picoxcell_core_init();
+-	pc7302_init_nor();
++
++	if ((axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET) & 0x3) == 0)
++		pc7302_init_nor();
++	else
++		pc7302_init_nand();
++
+ 	pc7302_panic_init();
+ }
+ 
+-- 
+1.7.0.4
+

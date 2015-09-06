@@ -1,0 +1,395 @@
+From f42f92e231f30fddb371055ae707350e4a33bdb4 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 24 May 2011 12:13:00 +0100
+Subject: [PATCH 130/228] picogpio: add an ioctl() based userspace gpio interface
+
+The gpiolib infrastructure provides a userspace interface to the
+gpio pins on a board but this is insufficient for some applications:
+
+	- Pin ownership isn't bound to an application.
+	- Some people don't like sysfs etc.
+
+picogpio is a very thin wrapper around the gpiolib interface that
+provides ioctl calls to access gpio pins. Ownership is bound to an
+application so all pins will be released when the application
+terminates.
+---
+ drivers/misc/Kconfig           |    8 ++
+ drivers/misc/Makefile          |    1 +
+ drivers/misc/picogpio.c        |  256 ++++++++++++++++++++++++++++++++++++++++
+ include/linux/picogpio_ioctl.h |   72 +++++++++++
+ 4 files changed, 337 insertions(+), 0 deletions(-)
+ create mode 100644 drivers/misc/picogpio.c
+ create mode 100644 include/linux/picogpio_ioctl.h
+
+diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
+index 00d12ef..1a968f5 100644
+--- a/drivers/misc/Kconfig
++++ b/drivers/misc/Kconfig
+@@ -405,6 +405,14 @@ config EP93XX_PWM
+ 	  To compile this driver as a module, choose M here: the module will
+ 	  be called ep93xx_pwm.
+ 
++config PICOGPIO
++        tristate "Userspace GPIO interface"
++        ---help---
++          This option enables the picogpio userspace interface. This is a
++	  simple driver that provides an ioctl interface to the kernel GPIO
++	  API and picoChip PC3XX analogue SD-GPIO interface. Saying 'm' here
++	  will build a module called picogpio.
++
+ config DS1682
+ 	tristate "Dallas DS1682 Total Elapsed Time Recorder with Alarm"
+ 	depends on I2C && EXPERIMENTAL
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index a3c05de..9d7844f 100644
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -47,3 +47,4 @@ obj-$(CONFIG_AB8500_PWM)	+= ab8500-pwm.o
+ obj-y				+= lis3lv02d/
+ obj-y				+= carma/
+ obj-$(CONFIG_PICOXCELL_FUSE)	+= picoxcell_fuse.o
++obj-$(CONFIG_PICOGPIO)		+= picogpio.o
+diff --git a/drivers/misc/picogpio.c b/drivers/misc/picogpio.c
+new file mode 100644
+index 0000000..886bacc
+--- /dev/null
++++ b/drivers/misc/picogpio.c
+@@ -0,0 +1,256 @@
++/*
++ * Copyright 2008-2011 Picochip, All Rights Reserved.
++ * http://www.picochip.com
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; either version
++ * 2 of the License, or (at your option) any later version.
++ */
++
++#define pr_fmt(fmt) "picogpio: " fmt
++
++#include <linux/fs.h>
++#include <linux/gpio.h>
++#include <linux/io.h>
++#include <linux/miscdevice.h>
++#include <linux/module.h>
++#include <linux/picogpio_ioctl.h>
++#include <linux/seq_file.h>
++#include <linux/slab.h>
++#include <linux/spinlock.h>
++#include <linux/types.h>
++#include <linux/uaccess.h>
++
++static int picogpio_open(struct inode *inode, struct file *filp);
++
++static int picogpio_release(struct inode *inode, struct file *filp);
++
++static long picogpio_ioctl(struct file *filp, unsigned int cmd,
++			   unsigned long arg);
++
++static const struct file_operations picogpio_fops = {
++	.open		= picogpio_open,
++	.release	= picogpio_release,
++	.unlocked_ioctl	= picogpio_ioctl,
++};
++
++static struct miscdevice picogpio_dev = {
++	.minor	    = MISC_DYNAMIC_MINOR,
++	.name	    = "gpio",
++	.fops	    = &picogpio_fops,
++};
++
++struct picogpio_session {
++	struct list_head    list;
++	spinlock_t	    lock;
++};
++
++struct picogpio_pin {
++	struct list_head    list;
++	unsigned	    gpio;
++	int		    is_input;
++};
++
++static int picogpio_new_pin(struct file *filp, unsigned gpio)
++{
++	int ret;
++	struct picogpio_pin *pin = kmalloc(sizeof(*pin), GFP_KERNEL);
++	struct picogpio_session *session = filp->private_data;
++
++	if (!pin)
++		return -ENOMEM;
++
++	INIT_LIST_HEAD(&pin->list);
++	pin->gpio	= gpio;
++	pin->is_input	= 0;
++
++	ret = gpio_request(gpio, "picogpio/ioctl");
++	if (ret)
++		kfree(pin);
++	else
++		list_add(&pin->list, &session->list);
++
++	return ret;
++}
++
++static struct picogpio_pin *picogpio_find_pin(struct file *filp,
++					      unsigned gpio)
++{
++	struct picogpio_session *session = filp->private_data;
++	struct picogpio_pin *i, *ret = NULL;
++
++	list_for_each_entry(i, &session->list, list) {
++		if (gpio == i->gpio) {
++			ret = i;
++			break;
++		}
++	}
++
++	return ret;
++}
++
++static int picogpio_free_pin(struct file *filp, unsigned gpio)
++{
++	struct picogpio_pin *pin = picogpio_find_pin(filp, gpio);
++	if (!pin)
++		return -EINVAL;
++
++	list_del(&pin->list);
++	gpio_free(pin->gpio);
++	kfree(pin);
++
++	return 0;
++}
++
++static int picogpio_set_direction(struct file *filp, unsigned gpio,
++				  int direction, int value)
++{
++	struct picogpio_pin *pin = picogpio_find_pin(filp, gpio);
++	int ret;
++
++	if (!pin)
++		return -EINVAL;
++
++	if (PICOGPIO_INPUT == direction)
++		ret = gpio_direction_input(gpio);
++	else if (PICOGPIO_OUTPUT == direction)
++		ret = gpio_direction_output(gpio, value);
++	else
++		ret = -EINVAL;
++
++	if (!ret)
++		pin->is_input = (PICOGPIO_INPUT == direction);
++
++	return ret;
++}
++
++static long picogpio_ioctl(struct file *filp, unsigned int cmd,
++			   unsigned long arg)
++{
++	int ret;
++	picogpio_op_t op;
++	picogpio_analogue_config_t dac_cfg;
++	struct picogpio_session *session = filp->private_data;
++	struct picogpio_pin *pin;
++
++	if (_IOC_TYPE(cmd) != PICOGPIO_IOCTL_BASE) {
++		pr_debug("invalid command type (%u)\n", cmd);
++		return -ENOTTY;
++	}
++
++	if (_IOC_NR(cmd) >
++	    (PICOGPIO_IOCTL_START + PICOGPIO_IOCTL_NUM_IOCTL) ||
++	    _IOC_NR(cmd) < (PICOGPIO_IOCTL_START)) {
++		pr_debug("invalid command (%u)\n", cmd);
++		return -ENOTTY;
++	}
++
++	if (cmd != PICOGPIO_ANALOGUE_CONFIG)
++		ret = copy_from_user(&op, (void __user *)arg, sizeof(op));
++	else
++		ret = copy_from_user(&dac_cfg, (void __user *)arg,
++				     sizeof(dac_cfg));
++
++	if (ret) {
++		pr_debug("failed to copy structure\n");
++		return -EFAULT;
++	}
++
++	spin_lock(&session->lock);
++
++	switch (cmd) {
++	case PICOGPIO_ACQUIRE:
++		ret = picogpio_new_pin(filp, op.pin);
++		break;
++
++	case PICOGPIO_RELEASE:
++		ret = picogpio_free_pin(filp, op.pin);
++		break;
++
++	case PICOGPIO_SET_DIRECTION:
++		ret = picogpio_set_direction(filp, op.pin, op.value,
++					     op.def_value);
++		break;
++
++	case PICOGPIO_GET_DIRECTION:
++		pin = picogpio_find_pin(filp, op.pin);
++		if (pin) {
++			op.value =
++			    pin->is_input ? PICOGPIO_INPUT : PICOGPIO_OUTPUT;
++			ret = copy_to_user((void __user *)arg, &op, sizeof(op));
++		}
++		break;
++
++	case PICOGPIO_SET_VALUE:
++		gpio_set_value(op.pin, op.value);
++		ret = 0;
++		break;
++
++	case PICOGPIO_GET_VALUE:
++		ret = gpio_get_value(op.pin);
++		if (ret >= 0) {
++			op.value = ret;
++			ret = copy_to_user((void __user *)arg, &op, sizeof(op));
++		}
++		break;
++
++	case PICOGPIO_ANALOGUE_CONFIG:
++		ret = picoxcell_gpio_configure_dac(dac_cfg.pin,
++						   dac_cfg.converter_size,
++						   dac_cfg.analogue_rate);
++		break;
++
++	default:
++		pr_debug("invalid ioctl(), cmd=%d\n", cmd);
++		ret = -ENOTTY;
++		break;
++	}
++
++	spin_unlock(&session->lock);
++
++	return ret;
++}
++
++static int picogpio_open(struct inode *inode, struct file *filp)
++{
++	struct picogpio_session *session = kmalloc(sizeof(*session),
++						   GFP_KERNEL);
++	if (!session)
++		return -ENOMEM;
++	spin_lock_init(&session->lock);
++	INIT_LIST_HEAD(&session->list);
++	filp->private_data = session;
++
++	return 0;
++}
++
++static int picogpio_release(struct inode *inode, struct file *filp)
++{
++	struct picogpio_pin *pos, *tmp;
++	struct picogpio_session *session = filp->private_data;
++
++	list_for_each_entry_safe(pos, tmp, &session->list, list) {
++		gpio_free(pos->gpio);
++		kfree(pos);
++	}
++	kfree(session);
++
++	return 0;
++}
++
++static int picogpio_init(void)
++{
++	return misc_register(&picogpio_dev);
++}
++module_init(picogpio_init);
++
++static void picogpio_exit(void)
++{
++	misc_deregister(&picogpio_dev);
++}
++module_exit(picogpio_exit);
++
++MODULE_AUTHOR("Jamie Iles");
++MODULE_LICENSE("GPL");
++MODULE_DESCRIPTION("picogpio userspace GPIO interface");
+diff --git a/include/linux/picogpio_ioctl.h b/include/linux/picogpio_ioctl.h
+new file mode 100644
+index 0000000..e3e0c9a
+--- /dev/null
++++ b/include/linux/picogpio_ioctl.h
+@@ -0,0 +1,72 @@
++/*
++ * Copyright (c) 2006-2011 picoChip Designs Ltd
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ *
++ * This file defines the ioctl() calls used for picogpio configuration and any
++ * associated shared structures that are used to pass data from userspace into
++ * kernelspace.
++ */
++#ifndef __GPIO_IOCTL_H__
++#define __GPIO_IOCTL_H__
++
++#ifdef __KERNEL__
++#include <linux/ioctl.h>
++#include <linux/types.h>
++#endif /* __KERNEL__ */
++
++/*
++ * Data structure used for passing GPIO commands from userspace to
++ * kernel space.
++ */
++typedef struct {
++	unsigned pin;		/* Pin emumeration to use */
++	int value;		/* Value to read / write */
++	int def_value;		/* Optional default value for output pins. */
++} picogpio_op_t;
++
++/*
++ * Data structure used for passing SDGPIO commands from userspace to
++ * kernel space.
++ */
++typedef struct {
++	unsigned pin;		/* Pin emumeration to use */
++	__u8 converter_size;	/* The converter size in bits */
++	__u16 analogue_rate;	/* The analogue rate value of the DAC */
++} picogpio_analogue_config_t;
++
++/*
++ * Enumeration for specifing pin direction
++ */
++enum picogpio_pin_direction {
++	PICOGPIO_INPUT,		/* Pin is an input */
++	PICOGPIO_OUTPUT,	/* Pin is an output */
++};
++
++#define PICOGPIO_IOCTL_BASE   'g'
++
++#define PICOGPIO_IOCTL_START  (0x00)
++
++#define PICOGPIO_ACQUIRE	_IOR(PICOGPIO_IOCTL_BASE, \
++				     PICOGPIO_IOCTL_START + 0, picogpio_op_t)
++#define PICOGPIO_RELEASE        _IOR(PICOGPIO_IOCTL_BASE, \
++				     PICOGPIO_IOCTL_START + 1, picogpio_op_t)
++#define PICOGPIO_GET_DIRECTION	_IOWR(PICOGPIO_IOCTL_BASE, \
++				      PICOGPIO_IOCTL_START + 2, picogpio_op_t)
++
++#define PICOGPIO_SET_DIRECTION	_IOR(PICOGPIO_IOCTL_BASE, \
++				     PICOGPIO_IOCTL_START + 3, picogpio_op_t)
++#define PICOGPIO_GET_VALUE	_IOWR(PICOGPIO_IOCTL_BASE, \
++				      PICOGPIO_IOCTL_START + 4, picogpio_op_t)
++#define PICOGPIO_SET_VALUE	_IOR(PICOGPIO_IOCTL_BASE, \
++				     PICOGPIO_IOCTL_START + 5, picogpio_op_t)
++#define PICOGPIO_ANALOGUE_CONFIG	_IOR(PICOGPIO_IOCTL_BASE, \
++					     PICOGPIO_IOCTL_START + 6, \
++					     picogpio_analogue_config_t)
++#define PICOGPIO_IOCTL_NUM_IOCTL  7
++
++#endif /* !__GPIO_IOCTL_H__ */
+-- 
+1.7.0.4
+

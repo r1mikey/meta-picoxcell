@@ -1,0 +1,35 @@
+From da1c525995a31a8a592de45c39ac446289998ad1 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 21 Apr 2011 12:24:53 +0100
+Subject: [PATCH 106/228] picoxcell/pc3x3: register the EMAC
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x3.c |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index aa66104..ea94b62 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -611,6 +611,11 @@ static void pc3x3_add_fuse(void)
+ 	picoxcell_add_fuse(&pc3x3_fuse_map);
+ }
+ 
++static void pc3x3_add_emac(void)
++{
++	picoxcell_add_emac(PICOXCELL_EMAC_BASE, IRQ_EMAC, 0);
++}
++
+ static void __init pc3x3_init(void)
+ {
+ 	picoxcell_mux_register(pc3x3_mux, ARRAY_SIZE(pc3x3_mux));
+@@ -622,4 +627,5 @@ static void __init pc3x3_init(void)
+ 	pc3x3_add_spaccs();
+ 	pc3x3_add_trng();
+ 	pc3x3_add_fuse();
++	pc3x3_add_emac();
+ }
+-- 
+1.7.0.4
+

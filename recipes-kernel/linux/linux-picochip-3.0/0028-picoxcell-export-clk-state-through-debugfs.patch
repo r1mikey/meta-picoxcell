@@ -1,0 +1,125 @@
+From 9b82a5e71fba4730a5f6db0d35cfa99bcb8c9f98 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 24 Mar 2011 17:04:19 +0000
+Subject: [PATCH 028/228] picoxcell: export clk state through debugfs
+
+Add a clk subdirectory to the picoxcell debugfs directory where each
+clk is represented as a subdirectory with enable_count and rate
+attributes.  This can be extended with child clks when we have a
+fuller clock tree.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/clk.c            |   58 ++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/picoxcell_core.c |    1 +
+ arch/arm/mach-picoxcell/soc.h            |    2 +
+ 3 files changed, 61 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/clk.c b/arch/arm/mach-picoxcell/clk.c
+index b32e478..1241fe2 100644
+--- a/arch/arm/mach-picoxcell/clk.c
++++ b/arch/arm/mach-picoxcell/clk.c
+@@ -8,6 +8,7 @@
+  * All enquiries to support@picochip.com
+  */
+ #include <linux/clk.h>
++#include <linux/debugfs.h>
+ #include <linux/err.h>
+ #include <linux/module.h>
+ #include <linux/seq_file.h>
+@@ -15,6 +16,9 @@
+ 
+ #include <mach/clkdev.h>
+ 
++#include "soc.h"
++
++static struct dentry *clk_debugfs;
+ static DEFINE_SPINLOCK(clk_lock);
+ static LIST_HEAD(picoxcell_clks);
+ 
+@@ -77,7 +81,61 @@ void clk_disable(struct clk *clk)
+ }
+ EXPORT_SYMBOL(clk_disable);
+ 
++static ssize_t clk_rate_read(struct file *filp, char __user *buf, size_t size,
++			     loff_t *off)
++{
++	struct clk *c = filp->f_dentry->d_inode->i_private;
++	char rate_buf[128];
++	size_t len;
++
++	len = snprintf(rate_buf, sizeof(rate_buf) - 1, "%lu\n",
++		       clk_get_rate(c));
++
++	return simple_read_from_buffer(buf, size, off, rate_buf, len);
++}
++
++static const struct file_operations clk_rate_fops = {
++	.read	= clk_rate_read,
++};
++
++static void picoxcell_clk_debugfs_add(struct clk *c)
++{
++	struct dentry *dentry;
++
++	if (!clk_debugfs)
++		return;
++
++	dentry = debugfs_create_dir(c->name, clk_debugfs);
++
++	if (!IS_ERR(dentry)) {
++		if (c->rate > 0)
++			debugfs_create_u32("rate", S_IRUGO, dentry,
++					   (u32 *)&c->rate);
++		else
++			debugfs_create_file("rate", S_IRUGO, dentry, c,
++					    &clk_rate_fops);
++		debugfs_create_u32("enable_count", S_IRUGO, dentry,
++				   (u32 *)&c->enable_count);
++	}
++}
++
+ void picoxcell_clk_add(struct clk *clk)
+ {
+ 	list_add_tail(&clk->head, &picoxcell_clks);
++	picoxcell_clk_debugfs_add(clk);
++}
++
++void __init picoxcell_clk_debugfs_init(void)
++{
++	struct clk *c;
++
++	if (!picoxcell_debugfs)
++		return;
++
++	clk_debugfs = debugfs_create_dir("clk", picoxcell_debugfs);
++	if (IS_ERR(clk_debugfs))
++		return;
++
++	list_for_each_entry(c, &picoxcell_clks, head)
++		picoxcell_clk_debugfs_add(c);
+ }
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.c b/arch/arm/mach-picoxcell/picoxcell_core.c
+index 54abb96..17a4a4f 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.c
++++ b/arch/arm/mach-picoxcell/picoxcell_core.c
+@@ -116,4 +116,5 @@ void __init picoxcell_core_init(void)
+ 	picoxcell_debugfs_init();
+ 
+ 	soc->init();
++	picoxcell_clk_debugfs_init();
+ }
+diff --git a/arch/arm/mach-picoxcell/soc.h b/arch/arm/mach-picoxcell/soc.h
+index 2f6791d..109ec47 100644
+--- a/arch/arm/mach-picoxcell/soc.h
++++ b/arch/arm/mach-picoxcell/soc.h
+@@ -72,4 +72,6 @@ static inline int picoxcell_init_pm(void (*enter_lowpower)(void),
+ struct dentry;
+ extern struct dentry *picoxcell_debugfs;
+ 
++extern void picoxcell_clk_debugfs_init(void);
++
+ #endif /* __PICOXCELL_SOC_H__ */
+-- 
+1.7.0.4
+

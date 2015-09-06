@@ -1,0 +1,110 @@
+From ffa7a6fc9033d0018435d1fda41f94ea03312bd7 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 20 Jan 2012 13:35:22 +0000
+Subject: [PATCH 189/228] nand/denali: dma setup changes to run on picoxcell devices
+
+This commit forms part of the resolution of Mantis Issue #9922
+---
+ drivers/mtd/nand/denali.c |   44 ++++++++++++++++++++++++++++++++++----------
+ drivers/mtd/nand/denali.h |    5 +++--
+ 2 files changed, 37 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index 848d59b..167dc0c 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -88,6 +88,10 @@ MODULE_PARM_DESC(onfi_timing_mode, "Overrides default ONFI setting."
+  * format the bank into the proper bits for the controller */
+ #define BANK(x) ((x) << 24)
+ 
++/* DMA operation */
++#define DMA_INT_GENERATION  ( 1 << 24 )
++#define DMA_BURST_LENGTH    ( 8 << 16 )
++
+ /* forward declarations */
+ static void clear_interrupts(struct denali_nand_info *denali);
+ static uint32_t wait_for_irq(struct denali_nand_info *denali,
+@@ -159,7 +163,7 @@ static void reset_bank(struct denali_nand_info *denali)
+ 	irq_status = wait_for_irq(denali, irq_mask);
+ 
+ 	if (irq_status & INTR_STATUS__TIME_OUT)
+-		dev_err(denali->dev, "reset bank failed.\n");
++		dev_err(denali->dev, "reset bank (#%d) failed.\n", denali->flash_bank);
+ }
+ 
+ /* Reset the flash controller */
+@@ -994,19 +998,39 @@ static void denali_setup_dma(struct denali_nand_info *denali, int op)
+ 
+ 	mode = MODE_10 | BANK(denali->flash_bank);
+ 
+-	/* DMA is a four step process */
++        if (denali->platform == MMIO) {
++
++                /* DMA is a three step process on Picochip Hoyle3 devices */
++
++	        /* 1. setup transfer type (op) and # of pages */
++	        index_addr (denali, (uint32_t)(mode | denali->page),
++                            (uint32_t)(DMA_INT_GENERATION |
++                                       DMA_BURST_LENGTH |
++                                       0x2000 | op | page_count));
++
++	        /* 2. set memory address bits 31:0 */
++	        index_addr (denali, (uint32_t)(mode | denali->page),
++                             (uint32_t)(addr));
++
++	        /* 3. set memory address bits 64:32 */
++	        index_addr (denali, (uint32_t)(mode | denali->page),
++                             (uint32_t)(0));
++        }
++        else {
++        	/* DMA is a four step process */
+ 
+-	/* 1. setup transfer type and # of pages */
+-	index_addr(denali, mode | denali->page, 0x2000 | op | page_count);
++	        /* 1. setup transfer type and # of pages */
++	        index_addr(denali, mode | denali->page, 0x2000 | op | page_count);
+ 
+-	/* 2. set memory high address bits 23:8 */
+-	index_addr(denali, mode | ((uint16_t)(addr >> 16) << 8), 0x2200);
++	        /* 2. set memory high address bits 23:8 */
++	        index_addr(denali, mode | ((uint16_t)(addr >> 16) << 8), 0x2200);
+ 
+-	/* 3. set memory low address bits 23:8 */
+-	index_addr(denali, mode | ((uint16_t)addr << 8), 0x2300);
++	        /* 3. set memory low address bits 23:8 */
++	        index_addr(denali, mode | ((uint16_t)addr << 8), 0x2300);
+ 
+-	/* 4.  interrupt when complete, burst len = 64 bytes*/
+-	index_addr(denali, mode | 0x14000, 0x2400);
++	        /* 4.  interrupt when complete, burst len = 64 bytes*/
++	        index_addr(denali, mode | 0x14000, 0x2400);
++        }
+ }
+ 
+ /* writes a page. user specifies type, and this function handles the
+diff --git a/drivers/mtd/nand/denali.h b/drivers/mtd/nand/denali.h
+index 923a0a9..bf74027 100644
+--- a/drivers/mtd/nand/denali.h
++++ b/drivers/mtd/nand/denali.h
+@@ -468,7 +468,8 @@
+ struct nand_buf {
+ 	int head;
+ 	int tail;
+-	uint8_t buf[DENALI_BUF_SIZE];
++__attribute__ ((aligned(64)))   /* required for 8 byte burst from dma */  
++        uint8_t buf[DENALI_BUF_SIZE];
+ 	dma_addr_t dma_buf;
+ };
+ 
+@@ -486,7 +487,7 @@ struct denali_nand_info {
+ 	struct device *dev;
+ 	int total_used_banks;
+ 	uint32_t block;  /* stored for future use */
+-	uint16_t page;
++	uint32_t page;
+ 	void __iomem *flash_reg;  /* Mapped io reg base address */
+ 	void __iomem *flash_mem;  /* Mapped io reg base address */
+ 
+-- 
+1.7.0.4
+

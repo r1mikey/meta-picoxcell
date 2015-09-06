@@ -1,0 +1,26 @@
+From 97f9cc76805ea9a69f4c6b242fd71d5a7c5e1a20 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 16:40:36 +0100
+Subject: [PATCH 078/228] picoxcell/pc30x: define the interrupts for pc30xx
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/include/mach/irqs.h |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/include/mach/irqs.h b/arch/arm/mach-picoxcell/include/mach/irqs.h
+index 0fe84ff..ea41687 100644
+--- a/arch/arm/mach-picoxcell/include/mach/irqs.h
++++ b/arch/arm/mach-picoxcell/include/mach/irqs.h
+@@ -86,4 +86,8 @@
+ 
+ #define NR_IRQS		    72
+ 
++#define IRQ_PC30XX_BUS_ERR  40
++#define IRQ_PC30XX_UART3    59
++#define IRQ_PC30XX_NAND	    41
++
+ #endif /* __IRQS_H__ */
+-- 
+1.7.0.4
+

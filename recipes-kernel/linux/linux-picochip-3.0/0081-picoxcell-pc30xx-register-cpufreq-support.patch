@@ -1,0 +1,37 @@
+From bb1db8b64a380bb495b37e4e55acb97c2ee22673 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 16:48:35 +0100
+Subject: [PATCH 081/228] picoxcell/pc30xx: register cpufreq support
+
+pc30xx may run the ARM CPU from 140MHz-1GHz.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc30xx.c |    7 +++++++
+ 1 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 765550c..b93869f 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -478,10 +478,17 @@ static void pc30xx_add_spaccs(void)
+ 			    IRQ_AES, -1);
+ }
+ 
++static void pc30xx_init_cpufreq(void)
++{
++	if (picoxcell_cpufreq_init(140000, 1000000))
++		pr_err("failed to init cpufreq for pc30xx\n");
++}
++
+ static void __init pc30xx_init(void)
+ {
+ 	pc30xx_init_bus_snoopers();
+ 	pc30xx_add_spaccs();
++	pc30xx_init_cpufreq();
+ }
+ 
+ const struct picoxcell_soc pc30xx_soc __initconst = {
+-- 
+1.7.0.4
+

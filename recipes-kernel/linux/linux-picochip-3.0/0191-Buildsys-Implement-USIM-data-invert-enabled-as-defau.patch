@@ -1,0 +1,39 @@
+From 2aba4f4d60517863b16f7861377ead33e0502307 Mon Sep 17 00:00:00 2001
+From: Andrew Watkins <Andrew.Watkins@picochip.com>
+Date: Wed, 8 Feb 2012 15:06:12 +0000
+Subject: [PATCH 191/228] Buildsys: Implement USIM data invert enabled as default in the manner intended
+
+---
+ arch/arm/mach-picoxcell/board_pc7308.c |    2 +-
+ arch/arm/mach-picoxcell/device_uicc.c  |    2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7308.c b/arch/arm/mach-picoxcell/board_pc7308.c
+index 02f5a32..778c1cb 100644
+--- a/arch/arm/mach-picoxcell/board_pc7308.c
++++ b/arch/arm/mach-picoxcell/board_pc7308.c
+@@ -117,7 +117,7 @@ static void pc7308_register_uarts(void)
+ 		pr_err("failed to add uart0\n");
+ 
+ 	err = picoxcell_add_uicc(PC30XX_UART3_BASE, IRQ_PC30XX_UART3, 2,
+-				 false);
++				 true);
+ 	if (err)
+ 		pr_err("failed to add uart based uicc controller\n");
+ }
+diff --git a/arch/arm/mach-picoxcell/device_uicc.c b/arch/arm/mach-picoxcell/device_uicc.c
+index 0f640d8..8a6e068 100644
+--- a/arch/arm/mach-picoxcell/device_uicc.c
++++ b/arch/arm/mach-picoxcell/device_uicc.c
+@@ -96,7 +96,7 @@ int __init picoxcell_add_uicc(unsigned long addr, int irq, int id,
+ 
+ 	uicc_cfg = axi2cfg_readl(AXI2CFG_UICC_CFG_REG_OFFSET);
+ 	uicc_cfg |= UICC_DATA_EN_MASK;
+-	uicc_cfg |= UICC_DATA_INVERT_MASK;
++	uicc_cfg &= ~UICC_DATA_INVERT_MASK;
+ 	if (data_invert)
+ 		uicc_cfg |= UICC_DATA_INVERT_MASK;
+ 	axi2cfg_writel(uicc_cfg, AXI2CFG_UICC_CFG_REG_OFFSET);
+-- 
+1.7.0.4
+

@@ -1,0 +1,46 @@
+From 003fba3ef9acc82009d0afe8ee96cc8a60c34297 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 26 May 2011 14:36:18 +0100
+Subject: [PATCH 140/228] picoxcell: register the watchdog
+
+We have a Synopsys DesignWare watchdog in all picoxcell devices.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/devices.c |   14 ++++++++++++++
+ 1 files changed, 14 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/devices.c b/arch/arm/mach-picoxcell/devices.c
+index 9600e85..6b317b9 100644
+--- a/arch/arm/mach-picoxcell/devices.c
++++ b/arch/arm/mach-picoxcell/devices.c
+@@ -165,12 +165,26 @@ static struct platform_device spi_device = {
+ 	.num_resources		= ARRAY_SIZE(spi_resources),
+ };
+ 
++static struct resource wdt_resource = {
++	.start		= PICOXCELL_WDOG_BASE,
++	.end		= PICOXCELL_WDOG_BASE + 0xFFFF,
++	.flags		= IORESOURCE_MEM,
++};
++
++static struct platform_device wdt_device = {
++	.name			= "dw_wdt",
++	.id			= -1,
++	.resource		= &wdt_resource,
++	.num_resources		= 1,
++};
++
+ static struct platform_device *common_devices[] __initdata = {
+ 	&pmu_device,
+ 	&dmac0_device,
+ 	&dmac1_device,
+ 	&pa0,
+ 	&spi_device,
++	&wdt_device,
+ };
+ 
+ static int __init picoxcell_add_devices(void)
+-- 
+1.7.0.4
+

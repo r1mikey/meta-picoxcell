@@ -1,0 +1,28 @@
+From 15a2600a051bcd73e98f2548fba653fb9f10c669 Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Thu, 4 Jul 2013 12:08:06 +0100
+Subject: [PATCH 215/228] pc73032: modify a work round for the pc30xx 1Gbit rgmii transmit issue
+ to extend the work round for all PC3032 silicon variants.
+
+This commit forms part of the resolution of Mantis Issue #11106
+---
+ arch/arm/mach-picoxcell/board_pc73032.c |    3 +--
+ 1 files changed, 1 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc73032.c b/arch/arm/mach-picoxcell/board_pc73032.c
+index 1e9871a..7724423 100644
+--- a/arch/arm/mach-picoxcell/board_pc73032.c
++++ b/arch/arm/mach-picoxcell/board_pc73032.c
+@@ -252,8 +252,7 @@ static int picoxcell_rgmii_fixup(struct phy_device *phydev)
+ {
+ 	unsigned long revision = axi2cfg_readl(AXI2CFG_REVISION_ID_REG_OFFSET);
+ 
+-	if (picoxcell_is_pc30xx() && (revision == PC30XX_REV_A) &&
+-            is_link_speed_1000mbps(phydev)) {
++	if (picoxcell_is_pc30xx() && is_link_speed_1000mbps(phydev)) {
+                 disable_1000mpbs_advertisment(phydev);
+                 genphy_restart_aneg(phydev);
+                 printk ("picoxcell rgmii fixup being applied\n");
+-- 
+1.7.0.4
+

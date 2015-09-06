@@ -1,0 +1,37 @@
+From 4fb3221e1e0f95e5a903fd784f42d91fc9e2c538 Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Tue, 6 Nov 2012 15:48:18 +0000
+Subject: [PATCH 212/228] picoif/pc3xx: Changed kmalloc flags in pc3xx.x
+
+In kernel drivers/picochip/pc3xx.c, the kmalloc flags GFP_KERNEL were changed to GFP_ATOMIC to prevent the chance of a sleep operation occuring.
+
+Mantis Issue 10571
+---
+ drivers/picochip/pc3xx.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/picochip/pc3xx.c b/drivers/picochip/pc3xx.c
+index 16bc0b1..4cae24a 100644
+--- a/drivers/picochip/pc3xx.c
++++ b/drivers/picochip/pc3xx.c
+@@ -1277,7 +1277,7 @@ pc3xx_probe( struct platform_device *pdev )
+ {
+     struct resource *res;
+     int ret;
+-    struct pc3xx *newdev = kzalloc( sizeof( *newdev ), GFP_KERNEL );
++    struct pc3xx *newdev = kzalloc( sizeof( *newdev ), GFP_ATOMIC );
+     struct pc3xx_pdata *pc3xx_dmacs = pdev->dev.platform_data;
+ 
+     if ( !newdev )
+@@ -1297,7 +1297,7 @@ pc3xx_probe( struct platform_device *pdev )
+     device_init_wakeup( &pdev->dev, 1 );
+ 
+     ret = -ENOMEM;
+-    newdev->pa.resources = kmalloc( sizeof( pc3xx_resources ), GFP_KERNEL );
++    newdev->pa.resources = kmalloc( sizeof( pc3xx_resources ), GFP_ATOMIC );
+     if ( !newdev->pa.resources )
+         goto out_disable_clk;
+     memcpy( newdev->pa.resources, pc3xx_resources, sizeof( pc3xx_resources ) );
+-- 
+1.7.0.4
+

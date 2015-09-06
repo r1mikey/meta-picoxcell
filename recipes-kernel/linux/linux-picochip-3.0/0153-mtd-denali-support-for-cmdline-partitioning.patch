@@ -1,0 +1,45 @@
+From a6a168308272a498c4007b46bc1f44efb431d39c Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 26 May 2011 17:05:02 +0100
+Subject: [PATCH 153/228] mtd/denali: support for cmdline partitioning
+
+Add support for command line partitioning.  This is favoured over
+platform data based partitions.
+
+Cc: David Woodhouse <dwmw2@infradead.org>
+Cc: Chuanxiao Dong <chuanxiao.dong@intel.com>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/mtd/nand/denali.c |    9 ++++++++-
+ 1 files changed, 8 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index 4c7e2d5..4086eb9 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -1433,6 +1433,9 @@ static int denali_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
+ 	struct denali_nand_info *denali;
+ 	int ret;
+ 	struct denali_nand_pdata *pdata;
++	struct mtd_partition *partitions = NULL;
++	int nr_parts = 0;
++	const char *part_probes[] = { "cmdlinepart", NULL };
+ 
+ 	denali = kzalloc(sizeof(*denali), GFP_KERNEL);
+ 	if (!denali)
+@@ -1659,7 +1662,11 @@ static int denali_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
+ 		goto failed_req_irq;
+ 	}
+ 
+-	if (pdata && pdata->parts)
++	nr_parts = parse_mtd_partitions(&denali->mtd, part_probes,
++					&partitions, 0);
++	if (partitions && nr_parts > 0)
++		ret = mtd_device_register(&denali->mtd, partitions, nr_parts);
++	else if (pdata && pdata->parts)
+ 		ret = mtd_device_register(&denali->mtd, pdata->parts,
+ 					 pdata->nr_parts);
+ 	else
+-- 
+1.7.0.4
+

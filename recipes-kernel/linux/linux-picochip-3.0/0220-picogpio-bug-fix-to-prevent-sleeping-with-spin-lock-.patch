@@ -1,0 +1,109 @@
+From c507ae457c2d98de065b1ab393895494c98bfe30 Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Tue, 31 Dec 2013 21:29:08 +0000
+Subject: [PATCH 220/228] picogpio: bug fix to prevent sleeping with spin lock acquired
+
+This commit forms part of Mantis Issue #11118
+---
+ drivers/gpio/gpiolib.c         |   25 +++++++++++++++++++------
+ drivers/misc/picogpio.c        |    6 ++++--
+ include/linux/picogpio_ioctl.h |    2 ++
+ 3 files changed, 25 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpio/gpiolib.c b/drivers/gpio/gpiolib.c
+index a971e3d..efef6a1 100644
+--- a/drivers/gpio/gpiolib.c
++++ b/drivers/gpio/gpiolib.c
+@@ -1227,7 +1227,8 @@ done:
+ }
+ EXPORT_SYMBOL_GPL(gpio_request);
+ 
+-void gpio_free(unsigned gpio)
++
++extern void gpio_free_optional_spinlock(unsigned gpio, bool spinlockHeld)
+ {
+ 	unsigned long		flags;
+ 	struct gpio_desc	*desc;
+@@ -1242,16 +1243,19 @@ void gpio_free(unsigned gpio)
+ 
+ 	gpio_unexport(gpio);
+ 
+-	spin_lock_irqsave(&gpio_lock, flags);
++        if (!spinlockHeld)
++          spin_lock_irqsave(&gpio_lock, flags);
+ 
+ 	desc = &gpio_desc[gpio];
+ 	chip = desc->chip;
+ 	if (chip && test_bit(FLAG_REQUESTED, &desc->flags)) {
+ 		if (chip->free) {
+-			spin_unlock_irqrestore(&gpio_lock, flags);
+-			might_sleep_if(chip->can_sleep);
++                        if(!spinlockHeld)
++		  	  spin_unlock_irqrestore(&gpio_lock, flags);
++			might_sleep_if(extra_checks && chip->can_sleep);
+ 			chip->free(chip, gpio - chip->base);
+-			spin_lock_irqsave(&gpio_lock, flags);
++                        if(!spinlockHeld)
++			  spin_lock_irqsave(&gpio_lock, flags);
+ 		}
+ 		desc_set_label(desc, NULL);
+ 		module_put(desc->chip->owner);
+@@ -1260,10 +1264,19 @@ void gpio_free(unsigned gpio)
+ 	} else
+ 		WARN_ON(extra_checks);
+ 
+-	spin_unlock_irqrestore(&gpio_lock, flags);
++        if(!spinlockHeld)
++	  spin_unlock_irqrestore(&gpio_lock, flags);
++}
++EXPORT_SYMBOL_GPL(gpio_free_optional_spinlock);
++
++
++void gpio_free(unsigned gpio)
++{
++        gpio_free_optional_spinlock(gpio, false);
+ }
+ EXPORT_SYMBOL_GPL(gpio_free);
+ 
++
+ /**
+  * gpio_request_one - request a single GPIO with initial configuration
+  * @gpio:	the GPIO number
+diff --git a/drivers/misc/picogpio.c b/drivers/misc/picogpio.c
+index 886bacc..5805403 100644
+--- a/drivers/misc/picogpio.c
++++ b/drivers/misc/picogpio.c
+@@ -55,7 +55,8 @@ struct picogpio_pin {
+ static int picogpio_new_pin(struct file *filp, unsigned gpio)
+ {
+ 	int ret;
+-	struct picogpio_pin *pin = kmalloc(sizeof(*pin), GFP_KERNEL);
++//	struct picogpio_pin *pin = kmalloc(sizeof(*pin), GFP_KERNEL);
++	struct picogpio_pin *pin = kmalloc(sizeof(*pin), GFP_ATOMIC);
+ 	struct picogpio_session *session = filp->private_data;
+ 
+ 	if (!pin)
+@@ -97,7 +98,8 @@ static int picogpio_free_pin(struct file *filp, unsigned gpio)
+ 		return -EINVAL;
+ 
+ 	list_del(&pin->list);
+-	gpio_free(pin->gpio);
++//	gpio_free(pin->gpio);
++	gpio_free_optional_spinlock(pin->gpio, true);
+ 	kfree(pin);
+ 
+ 	return 0;
+diff --git a/include/linux/picogpio_ioctl.h b/include/linux/picogpio_ioctl.h
+index e3e0c9a..85671d1 100644
+--- a/include/linux/picogpio_ioctl.h
++++ b/include/linux/picogpio_ioctl.h
+@@ -69,4 +69,6 @@ enum picogpio_pin_direction {
+ 					     picogpio_analogue_config_t)
+ #define PICOGPIO_IOCTL_NUM_IOCTL  7
+ 
++void gpio_free_optional_spinlock(unsigned, bool);
++
+ #endif /* !__GPIO_IOCTL_H__ */
+-- 
+1.7.0.4
+

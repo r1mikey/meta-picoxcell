@@ -1,0 +1,129 @@
+From ae6dc35d98a69230b29003860850920c0c3a09b6 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 7 Mar 2011 15:22:14 +0000
+Subject: [PATCH 006/228] picoxcell: allow for soc family specialization
+
+picoxcell currently has two device families (PC3X2 and PC3X3) that
+have different clk setups, different peripherals and capabilities.
+Provide a mechanism to get the soc specific options based on the
+device ID rather than using common definitions.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Kconfig          |    2 +
+ arch/arm/mach-picoxcell/picoxcell_core.c |   40 +++++++++--------------------
+ arch/arm/mach-picoxcell/soc.h            |   16 ++++++++++++
+ 3 files changed, 31 insertions(+), 27 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index 9e08542..b2f393a 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -1,5 +1,7 @@
+ if ARCH_PICOXCELL
+ 
++comment "Picochip SoC device support"
++
+ comment "Picochip picoXcell board selection"
+ 
+ config BOARD_PC7302
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.c b/arch/arm/mach-picoxcell/picoxcell_core.c
+index 3716d03..1fe663c 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.c
++++ b/arch/arm/mach-picoxcell/picoxcell_core.c
+@@ -20,35 +20,15 @@
+ #include "picoxcell_core.h"
+ #include "soc.h"
+ 
+-static const struct picoxcell_timer picoxcell_timers[] = {
+-	{
+-		.name	= "timer0",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 0 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER0,
+-	},
+-	{
+-		.name	= "timer1",
+-		.type	= TIMER_TYPE_TIMER,
+-		.base	= PICOXCELL_TIMER_BASE + 1 * TIMER_SPACING,
+-		.irq	= IRQ_TIMER1,
+-	},
+-	{
+-		.name	= "rtc",
+-		.type	= TIMER_TYPE_RTC,
+-		.base	= PICOXCELL_RTCLK_BASE,
+-		.irq	= IRQ_RTC,
+-	},
+-};
+-
+-static struct picoxcell_soc generic_soc = {
+-	.timers		= picoxcell_timers,
+-	.nr_timers	= ARRAY_SIZE(picoxcell_timers),
+-};
+-
+ struct picoxcell_soc *picoxcell_get_soc(void)
+ {
+-	return &generic_soc;
++	unsigned long device_id =
++		__raw_readl(IO_ADDRESS(PICOXCELL_AXI2CFG_BASE +
++				       AXI2CFG_DEVICE_ID_REG_OFFSET));
++	switch (device_id) {
++	default:
++		panic("unsupported device type %lx", device_id);
++	}
+ }
+ 
+ void __init picoxcell_init_irq(void)
+@@ -97,11 +77,17 @@ static void report_chipinfo(void)
+ 
+ void __init picoxcell_init_early(void)
+ {
++	struct picoxcell_soc *soc = picoxcell_get_soc();
++
+ 	axi2cfg_init();
+ 	picoxcell_sched_clock_init();
++	soc->init_clocks();
+ }
+ 
+ void __init picoxcell_core_init(void)
+ {
++	struct picoxcell_soc *soc = picoxcell_get_soc();
++
+ 	report_chipinfo();
++	soc->init();
+ }
+diff --git a/arch/arm/mach-picoxcell/soc.h b/arch/arm/mach-picoxcell/soc.h
+index 1422216..0921cf3 100644
+--- a/arch/arm/mach-picoxcell/soc.h
++++ b/arch/arm/mach-picoxcell/soc.h
+@@ -22,11 +22,27 @@ struct picoxcell_timer {
+ 	int				irq;
+ };
+ 
++enum picoxcell_features {
++	PICOXCELL_FEATURE_PM,
++	PICOXCELL_FEATURE_CPUFREQ,
++	NR_FEAT_BITS
++};
++
+ struct picoxcell_soc {
++	void				(*init)(void);
++	void				(*init_clocks)(void);
+ 	const struct picoxcell_timer	*timers;
+ 	int				nr_timers;
++	unsigned long			features[BITS_TO_LONGS(NR_FEAT_BITS)];
+ };
+ 
+ extern struct picoxcell_soc *picoxcell_get_soc(void);
+ 
++static inline int picoxcell_has_feature(enum picoxcell_features feat)
++{
++	struct picoxcell_soc *soc = picoxcell_get_soc();
++
++	return test_bit(feat, soc->features);
++}
++
+ #endif /* __PICOXCELL_SOC_H__ */
+-- 
+1.7.0.4
+

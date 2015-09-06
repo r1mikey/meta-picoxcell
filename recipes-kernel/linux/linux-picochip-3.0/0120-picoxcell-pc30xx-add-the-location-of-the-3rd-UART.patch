@@ -1,0 +1,27 @@
+From a0a447f821412e2e7e002f47ea39a4fcf80a0a65 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 12 May 2011 14:47:18 +0100
+Subject: [PATCH 120/228] picoxcell/pc30xx: add the location of the 3rd UART
+
+The 3rd UART is used to provide a UICC controller capability.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ .../include/mach/picoxcell/picoxcell.h             |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h b/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
+index 8a22f99..93ac21f 100644
+--- a/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
++++ b/arch/arm/mach-picoxcell/include/mach/picoxcell/picoxcell.h
+@@ -45,6 +45,7 @@
+ #define PICOXCELL_UART1_BASE		0x80230000
+ #define PICOXCELL_UART2_BASE		0x80240000
+ #define PICOXCELL_WDOG_BASE		0x80250000
++#define PC30XX_UART3_BASE		0x80270000
+ #define PC3X3_RNG_BASE			0x800B0000
+ #define PC30XX_NAND_BASE		0x800C0000
+ #define PC3X3_TIMER2_BASE		0x80260000
+-- 
+1.7.0.4
+

@@ -1,0 +1,41 @@
+From 9beb50b3144c0999a91360726dca6a0bb4cbb709 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 20 Apr 2011 17:26:34 +0100
+Subject: [PATCH 100/228] picoxcell/pc7302: setup the muxing correctly
+
+Rather than relying on the bootloader, make sure that we setup the
+muxing correctly.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |    7 +++++++
+ 1 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index d871a24..8cec09c 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -26,6 +26,7 @@
+ #include <asm/mach-types.h>
+ #include <asm/mach/arch.h>
+ 
++#include "mux.h"
+ #include "picoxcell_core.h"
+ 
+ static long pc7302_panic_blink(int state)
+@@ -172,6 +173,12 @@ static void pc7302_init_nand(void)
+ {
+ 	struct clk *ebi_clk = clk_get(NULL, "ebi");
+ 
++	if (mux_configure_one(picoxcell_is_pc3x3() ? "ebi_addr22" : "arm4",
++			      MUX_ARM)) {
++		pr_err("unable to set ebi_addr22 for use as gpio-nand cle\n");
++		return;
++	}
++
+ 	if (IS_ERR(ebi_clk)) {
+ 		pr_err("failed to get EBI clk, unable to register NAND flash\n");
+ 		return;
+-- 
+1.7.0.4
+

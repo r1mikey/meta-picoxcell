@@ -1,0 +1,41 @@
+From 929494a8ab4b39201a6492a892ce43c52a7de94d Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 6 Jun 2011 17:11:34 +0100
+Subject: [PATCH 157/228] mtd: denali: detect the number of banks before resetting NAND
+
+Commit c89eeda810f0ec4f0eee0206ebb79e476df9f83e (mtd: denali: detect the
+number of banks) introduced runtime detection of the number of banks.
+
+However, denali_nand_reset() uses uses denanli_nand_info::max_banks so
+we need to detect the maximum number of banks before doing the reset.
+
+Cc: Artem Bityutskiy <Artem.Bityutskiy@nokia.com>
+Cc: David Woodhouse <David.Woodhouse@intel.com>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/mtd/nand/denali.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index c0165fc..848d59b 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -1328,6 +1328,7 @@ static void denali_hw_init(struct denali_nand_info *denali)
+ 	 * */
+ 	denali->bbtskipbytes = ioread32(denali->flash_reg +
+ 						SPARE_AREA_SKIP_BYTES);
++	detect_max_banks(denali);
+ 	denali_nand_reset(denali);
+ 	iowrite32(0x0F, denali->flash_reg + RB_PIN_ENABLED);
+ 	iowrite32(CHIP_EN_DONT_CARE__FLAG,
+@@ -1338,7 +1339,6 @@ static void denali_hw_init(struct denali_nand_info *denali)
+ 	/* Should set value for these registers when init */
+ 	iowrite32(0, denali->flash_reg + TWO_ROW_ADDR_CYCLES);
+ 	iowrite32(1, denali->flash_reg + ECC_ENABLE);
+-	detect_max_banks(denali);
+ 	denali_nand_timing_set(denali);
+ 	denali_irq_init(denali);
+ }
+-- 
+1.7.0.4
+

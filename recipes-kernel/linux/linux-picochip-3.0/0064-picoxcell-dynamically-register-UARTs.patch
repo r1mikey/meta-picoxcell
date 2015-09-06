@@ -1,0 +1,235 @@
+From fd64c340ebd15d8dc6ede9e104ea65708b5df8d4 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 6 Apr 2011 15:46:49 +0100
+Subject: [PATCH 064/228] picoxcell: dynamically register UARTs
+
+Rather than always registering the UARTs in the system, provide a
+mechanism to dynamically register them.  This saves memory if the
+UARTs aren't used and also allows us to get the clock frequency at
+runtime (useful for PC30XX where they run at a different rate to PC3XX).
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Makefile         |    3 +-
+ arch/arm/mach-picoxcell/device_uart.c    |   80 ++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/devices.c        |   77 ----------------------------
+ arch/arm/mach-picoxcell/picoxcell_core.h |    1 +
+ 4 files changed, 83 insertions(+), 78 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/device_uart.c
+
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index 05906cc..fe2d212 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -6,7 +6,8 @@ obj-y				:= picoxcell_core.o io.o axi2cfg.o \
+ 				   device_armgpio.o \
+ 				   gpio.o \
+ 				   bus_err.o \
+-				   gpioirq.o
++				   gpioirq.o \
++				   device_uart.o
+ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+diff --git a/arch/arm/mach-picoxcell/device_uart.c b/arch/arm/mach-picoxcell/device_uart.c
+new file mode 100644
+index 0000000..98f19e4
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/device_uart.c
+@@ -0,0 +1,80 @@
++/*
++ * Copyright (c) 2010 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#include <linux/clk.h>
++#include <linux/platform_device.h>
++#include <linux/serial_8250.h>
++#include <linux/serial_reg.h>
++
++#include <mach/hardware.h>
++#include <mach/io.h>
++
++#include "picoxcell_core.h"
++
++#define UART_USR_REG_OFFSET			0x7C
++
++int __init picoxcell_add_uart(unsigned long addr, int irq, int id)
++{
++	struct plat_serial8250_port pdata[] = {
++		{
++			.membase	= IO_ADDRESS(addr),
++			.mapbase	= addr,
++			.irq		= irq,
++			.flags		= UPF_BOOT_AUTOCONF,
++			.iotype		= UPIO_DWAPB32,
++			.regshift	= 2,
++			.uartclk	= PICOXCELL_BASE_BAUD,
++			.private_data	=
++				(void *)(PHYS_TO_IO(PICOXCELL_UART1_BASE +
++						    UART_USR_REG_OFFSET)),
++		},
++		{},
++	};
++	struct resource res[] = {
++		{
++			.start		= addr,
++			.end		= addr + 0xFFFF,
++			.flags		= IORESOURCE_MEM,
++		},
++		{
++			.start		= irq,
++			.end		= irq,
++			.flags		= IORESOURCE_IRQ,
++		},
++	};
++	struct clk *uart_clk = clk_get(NULL, "uart");
++	struct platform_device *pdev;
++	int err;
++
++	if (IS_ERR(uart_clk))
++		return PTR_ERR(uart_clk);
++
++	err = clk_enable(uart_clk);
++	if (err)
++		goto out_put_clk;
++
++	pdata[0].uartclk = clk_get_rate(uart_clk);
++	pdev = platform_device_register_resndata(NULL, "serial8250",
++		id + PLAT8250_DEV_PLATFORM1, res, ARRAY_SIZE(res), pdata,
++		sizeof(pdata));
++	if (IS_ERR(pdev)) {
++		err = PTR_ERR(pdev);
++		goto out_disable_clk;
++	}
++
++	return 0;
++
++out_disable_clk:
++	clk_disable(uart_clk);
++out_put_clk:
++	clk_put(uart_clk);
++
++	return err;
++}
++
+diff --git a/arch/arm/mach-picoxcell/devices.c b/arch/arm/mach-picoxcell/devices.c
+index 8ffd799..11444a7 100644
+--- a/arch/arm/mach-picoxcell/devices.c
++++ b/arch/arm/mach-picoxcell/devices.c
+@@ -9,8 +9,6 @@
+  */
+ #include <linux/dma-mapping.h>
+ #include <linux/dw_dmac.h>
+-#include <linux/serial_8250.h>
+-#include <linux/serial_reg.h>
+ #include <linux/platform_device.h>
+ #include <linux/platform_data/macb.h>
+ #include <linux/init.h>
+@@ -24,79 +22,6 @@
+ #include "picoxcell_core.h"
+ #include "soc.h"
+ 
+-#define UART_USR_REG_OFFSET			0x7C
+-static struct plat_serial8250_port serial1_platform_data[] = {
+-	{
+-		.membase	= IO_ADDRESS(PICOXCELL_UART1_BASE),
+-		.mapbase	= PICOXCELL_UART1_BASE,
+-		.irq		= IRQ_UART1,
+-		.flags		= UPF_BOOT_AUTOCONF,
+-		.iotype		= UPIO_DWAPB32,
+-		.regshift	= 2,
+-		.uartclk	= PICOXCELL_BASE_BAUD,
+-		.private_data	= (void *)(PHYS_TO_IO(PICOXCELL_UART1_BASE +
+-						      UART_USR_REG_OFFSET)),
+-	},
+-	{},
+-};
+-
+-static struct resource serial1_resources[] = {
+-	{
+-		.start		= PICOXCELL_UART1_BASE,
+-		.end		= PICOXCELL_UART1_BASE + 0xFFFF,
+-		.flags		= IORESOURCE_MEM,
+-	},
+-	{
+-		.start		= IRQ_UART1,
+-		.end		= IRQ_UART2,
+-		.flags		= IORESOURCE_IRQ,
+-	},
+-};
+-
+-static struct platform_device serial1_device = {
+-	.name			= "serial8250",
+-	.id			= PLAT8250_DEV_PLATFORM1,
+-	.dev.platform_data	= serial1_platform_data,
+-	.resource		= serial1_resources,
+-	.num_resources		= ARRAY_SIZE(serial1_resources),
+-};
+-
+-static struct plat_serial8250_port serial2_platform_data[] = {
+-	{
+-		.membase	= IO_ADDRESS(PICOXCELL_UART2_BASE),
+-		.mapbase	= PICOXCELL_UART2_BASE,
+-		.irq		= IRQ_UART2,
+-		.flags		= UPF_BOOT_AUTOCONF,
+-		.iotype		= UPIO_DWAPB32,
+-		.regshift	= 2,
+-		.uartclk	= PICOXCELL_BASE_BAUD,
+-		.private_data	= (void *)(PHYS_TO_IO(PICOXCELL_UART2_BASE +
+-						      UART_USR_REG_OFFSET)),
+-	},
+-	{},
+-};
+-
+-static struct resource serial2_resources[] = {
+-	{
+-		.start		= PICOXCELL_UART2_BASE,
+-		.end		= PICOXCELL_UART2_BASE + 0xFFFF,
+-		.flags		= IORESOURCE_MEM,
+-	},
+-	{
+-		.start		= IRQ_UART2,
+-		.end		= IRQ_UART2,
+-		.flags		= IORESOURCE_IRQ,
+-	},
+-};
+-
+-static struct platform_device serial2_device = {
+-	.name			= "serial8250",
+-	.id			= PLAT8250_DEV_PLATFORM2,
+-	.dev.platform_data	= serial2_platform_data,
+-	.resource		= serial2_resources,
+-	.num_resources		= ARRAY_SIZE(serial2_resources),
+-};
+-
+ static struct resource pmu_resource = {
+ 	.start			= IRQ_NPMUIRQ,
+ 	.end			= IRQ_NPMUIRQ,
+@@ -202,8 +127,6 @@ static struct platform_device dmac1_device = {
+ };
+ 
+ static struct platform_device *common_devices[] __initdata = {
+-	&serial1_device,
+-	&serial2_device,
+ 	&pmu_device,
+ 	&eth_device,
+ 	&dmac0_device,
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index 57ff544..ab8a57c 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -31,5 +31,6 @@ static inline void picoxcell_tsu_init(unsigned long rate) {}
+ #endif /* CONFIG_PICOXCELL_HAVE_TSU */
+ 
+ extern void __init armgpio_irq_init(void);
++extern int picoxcell_add_uart(unsigned long addr, int irq, int id);
+ 
+ #endif /* __ASM_ARCH_PICOXCELL_CORE_H__ */
+-- 
+1.7.0.4
+

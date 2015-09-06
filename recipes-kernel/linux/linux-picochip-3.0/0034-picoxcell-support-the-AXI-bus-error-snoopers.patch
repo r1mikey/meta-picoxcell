@@ -1,0 +1,148 @@
+From 053bab5bac31a664fc3c4a207bdfa10e15122667 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 30 Mar 2011 16:33:46 +0100
+Subject: [PATCH 034/228] picoxcell: support the AXI bus error snoopers
+
+The picoXcell devices have a number of peripherals that may perform
+master accesses to the AXI bus, but if incorrectly programmed can
+generate a bus error. The AXI2CFG block has bus snoopers that monitor
+the bus for errors from other masters and raises an interrupt if
+detected. These errors are typically irrecoverable so panic if we see
+them.
+
+Some devices have separate read and write error interrupts and each
+device variant has a different mapping of bits so represent this as a
+platform device.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Makefile  |    3 +-
+ arch/arm/mach-picoxcell/bus_err.c |  102 +++++++++++++++++++++++++++++++++++++
+ 2 files changed, 104 insertions(+), 1 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/bus_err.c
+
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index 2d8de66..79602ca 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -4,7 +4,8 @@ obj-y				:= picoxcell_core.o io.o axi2cfg.o \
+ 				   clk.o \
+ 				   mux.o \
+ 				   device_armgpio.o \
+-				   gpio.o
++				   gpio.o \
++				   bus_err.o
+ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+diff --git a/arch/arm/mach-picoxcell/bus_err.c b/arch/arm/mach-picoxcell/bus_err.c
+new file mode 100644
+index 0000000..d5f24b4
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/bus_err.c
+@@ -0,0 +1,102 @@
++/*
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#define pr_fmt(fmt) "bus_err: " fmt
++#include <linux/interrupt.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++
++#include <mach/picoxcell/axi2cfg.h>
++
++/*
++ * AXI Bus Read / Write Error Handling
++ *
++ * Some of the peripherals on the AXI bus can generate aborts. For example, a
++ * DMAC trying to DMA from the EBI. This isn't supported and will generate an
++ * error response. This can't be recovered from so we report the error and
++ * panic.
++ *
++ * Given a bit number in the AXI2Cfg snoop AXI error IRQ post mask register,
++ * give the textual name of the operation that generated the error.
++ */
++static const char **snoop_err_names;
++static const char *axi_bus_error_name(int bit)
++{
++	return snoop_err_names[bit] ?: "<INVALID SNOOP ERROR>";
++}
++
++/* AXI Bus write errors */
++static irqreturn_t picoxcell_axi_bus_error_interrupt(int irq, void *dev_id)
++{
++	/*
++	 * If we ever get one of these interrupts then we are in big trouble,
++	 * they should never happen. The error condition is non recoverable.
++	 */
++	unsigned long axi_error =
++		axi2cfg_readl(AXI2CFG_AXI_ERR_STATE_REG_OFFSET);
++	int bit;
++
++	for_each_set_bit(bit, &axi_error, 32) {
++		pr_emerg("AXI bus error [%s] detected\n",
++			 axi_bus_error_name(bit));
++	}
++	panic("unable to handle AXI bus error");
++
++	return IRQ_HANDLED;
++}
++
++/* Initialise AXI Bus error handling */
++static int __init picoxcell_axi_bus_error_probe(struct platform_device *pdev)
++{
++	int i = 0, err, irq;
++
++	snoop_err_names = pdev->dev.platform_data;
++	if (!snoop_err_names) {
++		dev_warn(&pdev->dev, "no bus error names\n");
++		err = -EINVAL;
++		goto out;
++	}
++
++	while ((irq = platform_get_irq(pdev, i++)) >= 0) {
++		err = request_irq(irq, picoxcell_axi_bus_error_interrupt, 0,
++				  "axi_bus_error", NULL);
++		if (err) {
++			dev_warn(&pdev->dev,
++				 "unable to get axi bus error irq %d\n", irq);
++			for (i = i - 1; i >= 0; --i)
++				free_irq(irq, NULL);
++			goto out;
++		}
++	}
++
++	/* Make sure no AXI errors are masked */
++	axi2cfg_writel(AXI2CFG_AXI_ERR_MASK_NONE,
++		       AXI2CFG_AXI_ERR_MASK_REG_OFFSET);
++
++	/* Enable interrupts for all AXI Read & Write errors */
++	axi2cfg_writel(AXI2CFG_AXI_ERR_ENABLE_ALL,
++		       AXI2CFG_AXI_ERR_ENABLE_REG_OFFSET);
++
++out:
++	return err;
++}
++
++static struct platform_driver picoxcell_bus_err = {
++	.driver		= {
++		.owner	= THIS_MODULE,
++		.name	= "picoxcell-bus-error",
++	},
++};
++
++static int __init picoxcell_bus_err_init(void)
++{
++	return platform_driver_probe(&picoxcell_bus_err,
++				     picoxcell_axi_bus_error_probe);
++}
++module_init(picoxcell_bus_err_init);
+-- 
+1.7.0.4
+

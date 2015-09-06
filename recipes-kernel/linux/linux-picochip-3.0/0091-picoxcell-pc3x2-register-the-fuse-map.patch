@@ -1,0 +1,72 @@
+From a1cc0689c754b72cc71863531ee778deee1f32e4 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 12 Apr 2011 14:55:32 +0100
+Subject: [PATCH 091/228] picoxcell/pc3x2: register the fuse map
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x2.c |   36 ++++++++++++++++++++++++++++++++++++
+ 1 files changed, 36 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index 1c4fc03..c8dfd20 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -14,6 +14,7 @@
+ #include <linux/kernel.h>
+ #include <linux/platform_device.h>
+ #include <linux/timex.h>
++#include <linux/platform_data/picoxcell_fuse.h>
+ 
+ #include <mach/clkdev.h>
+ #include <mach/hardware.h>
+@@ -130,6 +131,40 @@ static void pc3x2_add_gpio(void)
+ 		sizeof(pc3x2_sdgpio));
+ }
+ 
++static struct picoxcell_fuse_map pc3x2_fuse_map = {
++	.nr_fuses	= 4096,
++	.ltp_fuse	= 994,
++	.ranges		= {
++		FUSE_RANGE_PROTECTED(secure_bootstrap, 0, 127, 928, 938, 948),
++		FUSE_RANGE_PROTECTED(counter_iv, 128, 255, 929, 939, 949),
++		FUSE_RANGE_PROTECTED(key2, 256, 383, 930, 940, 950),
++		FUSE_RANGE_PROTECTED(key3, 384, 511, 931, 941, 951),
++		FUSE_RANGE_PROTECTED(key4, 512, 639, 932, 942, 952),
++		FUSE_RANGE_PROTECTED(key5, 640, 767, 933, 943, 953),
++		FUSE_RANGE_PROTECTED(die_ident, 768, 895, 934, 944, 954),
++		FUSE_RANGE_PROTECTED(partition1, 1024, 2047, 935, 945, 955),
++		FUSE_RANGE_PROTECTED(partition2, 2048, 3071, 936, 946, 956),
++		FUSE_RANGE_PROTECTED(partition3, 3072, 4095, 937, 947, 957),
++		FUSE_RANGE(secure_boot, 992, 992),
++		FUSE_RANGE(disable_tz, 993, 993),
++		FUSE_RANGE(global_ltp, 994, 994),
++		FUSE_RANGE(disable_debug, 995, 995),
++		FUSE_RANGE(disable_isc, 996, 996),
++		FUSE_RANGE(disable_jtag, 997, 997),
++		FUSE_RANGE(disable_invasive_debug, 998, 998),
++		FUSE_RANGE(disable_noninvasive_debug, 999, 999),
++		FUSE_RANGE(disable_cp15, 1000, 1000),
++		FUSE_RANGE(disable_memif_arm, 1001, 1001),
++		FUSE_RANGE(disable_nonsecure_parallel_flash, 1002, 1002),
++		FUSE_RANGE_NULL,
++	},
++};
++
++static void pc3x2_add_fuse(void)
++{
++	picoxcell_add_fuse(&pc3x2_fuse_map);
++}
++
+ static void pc3x2_init_bus_snoopers(void)
+ {
+ 	static const char *pc3x2_snoop_err_names[32] = {
+@@ -192,4 +227,5 @@ static void __init pc3x2_init(void)
+ 	pc3x2_add_gpio();
+ 	pc3x2_init_bus_snoopers();
+ 	pc3x2_add_spaccs();
++	pc3x2_add_fuse();
+ }
+-- 
+1.7.0.4
+

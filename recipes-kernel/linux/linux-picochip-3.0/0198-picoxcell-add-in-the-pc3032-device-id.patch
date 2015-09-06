@@ -1,0 +1,33 @@
+From e373a515d06918e8c281ecf64347aa3ccd3164ab Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Thu, 2 Aug 2012 17:18:04 +0100
+Subject: [PATCH 198/228] picoxcell: add in the pc3032 device id
+
+This commit forms part of the resolution of Mantis Issue #10607
+---
+ arch/arm/mach-picoxcell/picoxcell_core.c |    4 +++-
+ 1 files changed, 3 insertions(+), 1 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.c b/arch/arm/mach-picoxcell/picoxcell_core.c
+index 0517ef2..50bec21 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.c
++++ b/arch/arm/mach-picoxcell/picoxcell_core.c
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 2010-2011 Picochip Ltd., Jamie Iles
++ * Copyright (c) 2010-2012 Picochip Ltd., Jamie Iles
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -124,6 +124,8 @@ static const char *picoxcell_get_partname(void)
+ 		part = "pc333";
+ 	else if (dev_id == 0x30)
+ 		part = "pc3008";
++	else if (dev_id == 0x31)
++		part = "pc3032";
+ 
+ 	return part;
+ }
+-- 
+1.7.0.4
+

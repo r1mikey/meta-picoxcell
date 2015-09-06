@@ -1,0 +1,235 @@
+From a12d43ef7e91c1b9ca7ee73b101ec8170e30e8de Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Tue, 25 Mar 2014 16:07:25 +0000
+Subject: [PATCH 226/228] crypto: picoxcell: Removed Performance Enhancement of picoxcell_crypto module
+ due to regression test failures (mistakenly recorded as mantis 11385)
+ Mantis Issue #11387
+
+---
+ drivers/crypto/picoxcell_crypto.c |  117 ++----------------------------------
+ 1 files changed, 7 insertions(+), 110 deletions(-)
+
+diff --git a/drivers/crypto/picoxcell_crypto.c b/drivers/crypto/picoxcell_crypto.c
+index ab4bbce..0b74b2d 100644
+--- a/drivers/crypto/picoxcell_crypto.c
++++ b/drivers/crypto/picoxcell_crypto.c
+@@ -45,7 +45,6 @@
+ 
+ #include "picoxcell_crypto_regs.h"
+ 
+-
+ /*
+  * The threshold for the number of entries in the CMD FIFO available before
+  * the CMD0_CNT interrupt is raised. Increasing this value will reduce the
+@@ -78,16 +77,6 @@
+ 
+ #define MAX_DDT_LEN			16
+ 
+-//#define LOCAL_DDT
+-
+-#ifdef LOCAL_DDT
+-#define DDT_POOL_SIZE           (SZ_64K * 4)
+-#define DDT_POOL_ENTRY_SIZE     (MAX_DDT_LEN * 8)
+-#define DDT_POOL_MAX_ENTRIES    (DDT_POOL_SIZE / DDT_POOL_ENTRY_SIZE)
+-#define DDT_POOL_TRACK_LOAD     // track current state of DDT pool
+-#endif
+-
+-
+ /* DDT format. This must match the hardware DDT format exactly. */
+ struct spacc_ddt {
+ 	dma_addr_t	p;
+@@ -154,12 +143,6 @@ struct spacc_engine {
+ 	struct timer_list		packet_timeout;
+ 	unsigned			stat_irq_thresh;
+ 	struct dma_pool			*req_pool;
+-
+-    unsigned int       ddt_pool_base_virt;     // virtual BA of DDT pool
+-    unsigned int       ddt_pool_base_phys;     // physical BA of DDT pool
+-    unsigned int       ddt_pool_size;  
+-    unsigned int       ddt_pool_offset;                
+-    unsigned int       ddt_pool_alloc_cnt;     // number of currently allocated entries
+ };
+ 
+ /* Algorithm type mask. */
+@@ -208,71 +191,6 @@ struct spacc_aead_ctx {
+ 	u8				salt[AES_BLOCK_SIZE];
+ };
+ 
+-
+-
+-#ifdef LOCAL_DDT
+-    //
+-    // AG 
+-    // Get DDT from the local pool, no allocation and MM manipulation. 
+-    // Pull sould be large enough to keep all DDTs allocate in all queues
+-    // E.g. we have 64K pool, each DDT is 16*8=128 bytes, maximum of 512 DDTs (or 256 packets in the queues)
+-    //
+-    static struct spacc_ddt * get_ddt(struct spacc_engine *engine, dma_addr_t *ddt_phys)
+-    {
+-        struct spacc_ddt *next = 0;
+-        unsigned long flags;
+-
+-        local_irq_save(flags);
+-
+-#ifdef DDT_POOL_TRACK_LOAD
+-        if(engine->ddt_pool_alloc_cnt >= DDT_POOL_MAX_ENTRIES)
+-        {
+-            printk("DDT pool: no entry available. %u in use\n", engine->ddt_pool_alloc_cnt);
+-            local_irq_restore(flags);
+-            return next;
+-        }
+-        engine->ddt_pool_offset += DDT_POOL_ENTRY_SIZE;
+-#endif
+-        
+-        if(engine->ddt_pool_offset + DDT_POOL_ENTRY_SIZE > engine->ddt_pool_size)
+-            engine->ddt_pool_offset = 0;
+-        next = (struct spacc_ddt *)(engine->ddt_pool_offset + engine->ddt_pool_base_virt);
+-        if(ddt_phys)
+-        {
+-            *ddt_phys = (dma_addr_t)(engine->ddt_pool_offset + engine->ddt_pool_base_phys);  
+-        }
+-        local_irq_restore(flags);
+-
+-        return next;
+-    }
+-
+-#ifdef DDT_POOL_TRACK_LOAD
+-    static void free_ddt(struct spacc_engine *engine)
+-    {
+-        unsigned long flags;
+-        
+-        local_irq_save(flags);
+-        if(engine->ddt_pool_alloc_cnt) 
+-            --engine->ddt_pool_alloc_cnt;
+-        local_irq_restore(flags);
+-    }
+-#define xxx_pool_free(p1,p2,p3) free_ddt(p1);
+-#else
+-#define xxx_pool_free(p1,p2,p3) {};
+-#endif //ifdef DDT_POOL_TRACK_LOAD
+-    
+-#define xxx_pool_alloc(p1,p2,p3) get_ddt(p1, p3);
+-
+-#else
+-
+-#define xxx_pool_alloc(p1,p2,p3) dma_pool_alloc((p1)->req_pool, p2,p3)
+-#define xxx_pool_free(p1,p2,p3) dma_pool_free((p1)->req_pool, p2,p3)
+-
+-#endif  //ifdef LOCAL_DDT
+-
+-
+-
+-
+ static int spacc_ablk_submit(struct spacc_req *req);
+ 
+ static inline struct spacc_alg *to_spacc_alg(struct crypto_alg *alg)
+@@ -399,7 +317,7 @@ static struct spacc_ddt *spacc_sg_to_ddt(struct spacc_engine *engine,
+ 	if (mapped_ents + 1 > MAX_DDT_LEN)
+ 		goto out;
+ 
+-	ddt = xxx_pool_alloc(engine, GFP_ATOMIC, ddt_phys);
++	ddt = dma_pool_alloc(engine->req_pool, GFP_ATOMIC, ddt_phys);
+ 	if (!ddt)
+ 		goto out;
+ 
+@@ -427,13 +345,13 @@ static int spacc_aead_make_ddts(struct spacc_req *req, u8 *giv)
+ 	int i, dst_ents, src_ents, assoc_ents;
+ 	u8 *iv = giv ? giv : areq->iv;
+ 
+-	src_ddt = xxx_pool_alloc(engine, GFP_ATOMIC, &req->src_addr);
++	src_ddt = dma_pool_alloc(engine->req_pool, GFP_ATOMIC, &req->src_addr);
+ 	if (!src_ddt)
+ 		return -ENOMEM;
+ 
+-	dst_ddt = xxx_pool_alloc(engine, GFP_ATOMIC, &req->dst_addr);
++	dst_ddt = dma_pool_alloc(engine->req_pool, GFP_ATOMIC, &req->dst_addr);
+ 	if (!dst_ddt) {
+-		xxx_pool_free(engine, src_ddt, req->src_addr);
++		dma_pool_free(engine->req_pool, src_ddt, req->src_addr);
+ 		return -ENOMEM;
+ 	}
+ 
+@@ -520,8 +438,8 @@ static void spacc_aead_free_ddts(struct spacc_req *req)
+ 
+ 	dma_unmap_single(engine->dev, req->giv_pa, ivsize, DMA_BIDIRECTIONAL);
+ 
+-	xxx_pool_free(engine, req->src_ddt, req->src_addr);
+-	xxx_pool_free(engine, req->dst_ddt, req->dst_addr);
++	dma_pool_free(engine->req_pool, req->src_ddt, req->src_addr);
++	dma_pool_free(engine->req_pool, req->dst_ddt, req->dst_addr);
+ }
+ 
+ static void spacc_free_ddt(struct spacc_req *req, struct spacc_ddt *ddt,
+@@ -531,7 +449,7 @@ static void spacc_free_ddt(struct spacc_req *req, struct spacc_ddt *ddt,
+ 	unsigned nents = sg_count(payload, nbytes);
+ 
+ 	dma_unmap_sg(req->engine->dev, payload, nents, dir);
+-	xxx_pool_free(req->engine, ddt, ddt_addr);
++	dma_pool_free(req->engine->req_pool, ddt, ddt_addr);
+ }
+ 
+ /*
+@@ -1259,7 +1177,6 @@ static void spacc_process_done(struct spacc_engine *engine)
+ {
+ 	struct spacc_req *req;
+ 	unsigned long flags;
+-    unsigned long extracted = 0;
+ 
+ 	spin_lock_irqsave(&engine->hw_lock, flags);
+ 
+@@ -1268,7 +1185,6 @@ static void spacc_process_done(struct spacc_engine *engine)
+ 				       list);
+ 		list_move_tail(&req->list, &engine->completed);
+ 		--engine->in_flight;
+-        extracted++;
+ 
+ 		/* POP the status register. */
+ 		writel(~0, engine->regs + SPA_STAT_POP_REG_OFFSET);
+@@ -1301,7 +1217,6 @@ static void spacc_process_done(struct spacc_engine *engine)
+ 	}
+ 
+ 	tasklet_schedule(&engine->complete);
+-    //printk("-%d-", extracted);
+ 
+ 	spin_unlock_irqrestore(&engine->hw_lock, flags);
+ }
+@@ -1313,7 +1228,6 @@ static irqreturn_t spacc_spacc_irq(int irq, void *dev)
+ 
+ 	writel(spacc_irq_stat, engine->regs + SPA_IRQ_STAT_REG_OFFSET);
+ 	spacc_process_done(engine);
+-    //writel(spacc_irq_stat, engine->regs + SPA_IRQ_STAT_REG_OFFSET);
+ 
+ 	return IRQ_HANDLED;
+ }
+@@ -1900,28 +1814,11 @@ static int __devinit spacc_probe(struct platform_device *pdev)
+ 	engine->cipher_ctx_base = engine->regs + SPA_CIPH_KEY_BASE_REG_OFFSET;
+ 	engine->hash_key_base	= engine->regs + SPA_HASH_KEY_BASE_REG_OFFSET;
+ 
+-
+-#ifndef LOCAL_DDT
+ 	engine->req_pool = dmam_pool_create(engine->name, engine->dev,
+ 		MAX_DDT_LEN * sizeof(struct spacc_ddt), 8, SZ_64K);
+ 	if (!engine->req_pool)
+ 		return -ENOMEM;
+-#else
+ 
+-    engine->req_pool = dmam_pool_create(engine->name, engine->dev, SZ_64K*4, 8, SZ_64K*4);
+-	if (!engine->req_pool)
+-		return -ENOMEM;
+-    engine->ddt_pool_size = DDT_POOL_SIZE;
+-    engine->ddt_pool_base_virt = (unsigned int)dma_pool_alloc(engine->req_pool, GFP_ATOMIC, (void*)&engine->ddt_pool_base_phys);
+-    if (!engine->ddt_pool_base_virt)
+-		return -ENOMEM;
+-    engine->ddt_pool_offset = 0;
+-    engine->ddt_pool_alloc_cnt = 0;
+-    printk("DDT pool: va 0x%08X, pa: 0x%08X, sz %dK, max entries: %d", 
+-            engine->ddt_pool_base_virt, engine->ddt_pool_base_phys, 
+-            engine->ddt_pool_size >> 10, DDT_POOL_MAX_ENTRIES);
+-#endif    
+-   
+ 	spin_lock_init(&engine->hw_lock);
+ 
+ 	engine->clk = clk_get(&pdev->dev, NULL);
+-- 
+1.7.0.4
+

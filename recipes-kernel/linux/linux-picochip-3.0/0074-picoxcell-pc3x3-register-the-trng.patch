@@ -1,0 +1,35 @@
+From f2769e1f076e1c77531fa9170d3a325f0c79dbde Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 12:10:06 +0100
+Subject: [PATCH 074/228] picoxcell/pc3x3: register the trng
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x3.c |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index e11eb34..22be921 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -589,6 +589,11 @@ static void pc3x3_add_spaccs(void)
+ 			    IRQ_AES, -1);
+ }
+ 
++static void pc3x3_add_trng(void)
++{
++	picoxcell_add_trng(PC3X3_RNG_BASE);
++}
++
+ static void __init pc3x3_init(void)
+ {
+ 	picoxcell_mux_register(pc3x3_mux, ARRAY_SIZE(pc3x3_mux));
+@@ -598,4 +603,5 @@ static void __init pc3x3_init(void)
+ 	pc3x3_add_otp();
+ 	pc3x3_init_bus_snoopers();
+ 	pc3x3_add_spaccs();
++	pc3x3_add_trng();
+ }
+-- 
+1.7.0.4
+

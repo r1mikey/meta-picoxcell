@@ -1,0 +1,60 @@
+From 3d214c81f7c539deb25df4f7788b3c15732b41e3 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 3 Jun 2011 12:40:19 +0100
+Subject: [PATCH 148/228] picoxcell/pc30xx: round PLL output rate to nearest MHz
+
+The PLL sense value can output a resoultion of Hz due to the input clock
+division but the sensing is not actually that accurate.  Round to the
+nearest MHz.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc30xx.c |   23 ++++++++++++++++++++---
+ 1 files changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 162a599..e35c305 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -176,10 +176,27 @@ static unsigned long pll_calc_params(unsigned long target,
+ 	return rate;
+ }
+ 
++static long pc30xx_pll_round_freq(long freq)
++{
++	long error;
++
++	/*
++	 * Round to the nearest MHz to account for small error in the PLL.  We
++	 * don't set any PLL's to a sub 1MHz division.
++	 */
++	error = freq % 1000000;
++	if (error < 500000)
++		return freq - error;
++	else
++		return freq + 1000000 - error;
++}
++
+ static long pc30xx_pll_round_rate(struct clk *clk, unsigned long rate)
+ {
+-	return (long)pll_calc_params(rate, clk_get_rate(clk->parent),
+-				     NULL, NULL);
++	long freq = (long)pll_calc_params(rate, clk_get_rate(clk->parent),
++					  NULL, NULL);
++
++	return pc30xx_pll_round_freq(freq);
+ }
+ 
+ static int pc30xx_pll_set_rate(struct clk *clk, unsigned long target)
+@@ -234,7 +251,7 @@ static int pc30xx_pll_get_rate(struct clk *clk)
+ 	rate64 = (u64)rate * parent_rate;
+ 	do_div(rate64, 20000000LLU);
+ 
+-	return (int)rate64;
++	return (int)pc30xx_pll_round_freq((long)rate64);
+ }
+ 
+ /*
+-- 
+1.7.0.4
+

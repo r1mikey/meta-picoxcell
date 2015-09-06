@@ -1,0 +1,56 @@
+From c8aea3d98d0cd7eddf7ea4928b563cc46598fecb Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 25 Nov 2011 15:19:33 +0000
+Subject: [PATCH 185/228] picoxcell/pc7308: Add support for flashing an led when kernel panics
+
+When the kernel panics the PC7308 boot error led will flash. This
+commit addresses Mantis Issue #9600
+---
+ arch/arm/mach-picoxcell/board_pc7308.c |   24 ++++++++++++++++++++++++
+ 1 files changed, 24 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7308.c b/arch/arm/mach-picoxcell/board_pc7308.c
+index e8a04d0..02f5a32 100644
+--- a/arch/arm/mach-picoxcell/board_pc7308.c
++++ b/arch/arm/mach-picoxcell/board_pc7308.c
+@@ -23,6 +23,29 @@
+ #include "mux.h"
+ #include "picoxcell_core.h"
+ 
++static long pc7308_panic_blink(int state)
++{
++	__raw_writel(state ? 0x01 : 0, IO_ADDRESS(PICOXCELL_GPIO_BASE +
++					    GPIO_SW_PORT_D_DR_REG_OFFSET));
++	return 0;
++}
++
++static void pc7308_panic_init(void)
++{
++	/*
++	 * We have a BOOT_ERROR pin on PC7308. Reuse that for signalling when
++	 * the kernel panics.
++	 *
++	 * Note: There is only 1 bit wired up to port D
++	 */
++	__raw_writel(0x01, IO_ADDRESS(PICOXCELL_GPIO_BASE +
++			       GPIO_SW_PORT_D_DDR_REG_OFFSET));
++	__raw_writel(0x00, IO_ADDRESS(PICOXCELL_GPIO_BASE +
++			       GPIO_SW_PORT_D_CTL_REG_OFFSET));
++
++	panic_blink = pc7308_panic_blink;
++}
++
+ static struct mtd_partition pc7308_nand_parts[] = {
+ 	{
+ 		.name	= "Nand First Stage 0",
+@@ -106,6 +129,7 @@ static void __init pc7308_init(void)
+ 
+ 	pc7308_register_uarts();
+ 	pc7308_init_nand();
++	pc7308_panic_init();
+ }
+ 
+ MACHINE_START(PC7308, "PC7308")
+-- 
+1.7.0.4
+

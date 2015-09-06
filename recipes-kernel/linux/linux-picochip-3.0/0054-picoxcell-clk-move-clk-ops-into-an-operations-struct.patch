@@ -1,0 +1,131 @@
+From de3a58f53b5d99e367d9e1c2c48214206f3b810c Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 4 Apr 2011 13:55:21 +0100
+Subject: [PATCH 054/228] picoxcell/clk: move clk ops into an operations structure
+
+Have a clk_ops pointer in struct clk so the operations can be set in
+a single assignment at compile time.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/clk.c                 |   17 ++++++++++-------
+ arch/arm/mach-picoxcell/include/mach/clkdev.h |   24 ++++++++++++++++--------
+ 2 files changed, 26 insertions(+), 15 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/clk.c b/arch/arm/mach-picoxcell/clk.c
+index 1241fe2..80c2276 100644
+--- a/arch/arm/mach-picoxcell/clk.c
++++ b/arch/arm/mach-picoxcell/clk.c
+@@ -24,27 +24,30 @@ static LIST_HEAD(picoxcell_clks);
+ 
+ unsigned long clk_get_rate(struct clk *clk)
+ {
+-	return clk->get_rate ? clk->get_rate(clk) : clk->rate;
++	return clk->ops && clk->ops->get_rate ? clk->ops->get_rate(clk) :
++		clk->rate;
+ }
+ EXPORT_SYMBOL(clk_get_rate);
+ 
+ long clk_round_rate(struct clk *clk, unsigned long rate)
+ {
+-	return clk->round_rate ? clk->round_rate(clk, rate) : -EOPNOTSUPP;
++	return clk->ops && clk->ops->round_rate ?
++		clk->ops->round_rate(clk, rate) : -EOPNOTSUPP;
+ }
+ EXPORT_SYMBOL(clk_round_rate);
+ 
+ int clk_set_rate(struct clk *clk, unsigned long rate)
+ {
+-	return clk->set_rate ? clk->set_rate(clk, rate) : 0;
++	return clk->ops && clk->ops->set_rate ?
++		clk->ops->set_rate(clk, rate) : -EOPNOTSUPP;
+ }
+ EXPORT_SYMBOL(clk_set_rate);
+ 
+ int __clk_enable(struct clk *clk)
+ {
+ 	if (++clk->enable_count > 0) {
+-		if (clk->enable)
+-			clk->enable(clk);
++		if (clk->ops && clk->ops->enable)
++			clk->ops->enable(clk);
+ 	}
+ 
+ 	return 0;
+@@ -66,8 +69,8 @@ EXPORT_SYMBOL(clk_enable);
+ void __clk_disable(struct clk *clk)
+ {
+ 	if (--clk->enable_count <= 0) {
+-		if (clk->disable)
+-			clk->disable(clk);
++		if (clk->ops && clk->ops->disable)
++			clk->ops->disable(clk);
+ 	}
+ }
+ 
+diff --git a/arch/arm/mach-picoxcell/include/mach/clkdev.h b/arch/arm/mach-picoxcell/include/mach/clkdev.h
+index 93c6058..f2dc3db 100644
+--- a/arch/arm/mach-picoxcell/include/mach/clkdev.h
++++ b/arch/arm/mach-picoxcell/include/mach/clkdev.h
+@@ -12,6 +12,17 @@
+ 
+ #include <linux/clkdev.h>
+ 
++struct clk;
++
++struct clk_ops {
++	void		    (*enable)(struct clk *clk);
++	void		    (*disable)(struct clk *clk);
++	int		    (*is_enabled)(struct clk *clk);
++	long		    (*round_rate)(struct clk *clk, unsigned long rate);
++	int		    (*set_rate)(struct clk *clk, unsigned long rate);
++	int		    (*get_rate)(struct clk *clk);
++};
++
+ struct clk {
+ 	const char	    *name;
+ 	struct list_head    head;
+@@ -20,12 +31,7 @@ struct clk {
+ 					       variable rate clocks in KHz. */
+ 	int		    enable_count;
+ 	int		    clk_num;
+-	void		    (*enable)(struct clk *clk);
+-	void		    (*disable)(struct clk *clk);
+-	int		    (*is_enabled)(struct clk *clk);
+-	long		    (*round_rate)(struct clk *clk, unsigned long rate);
+-	int		    (*set_rate)(struct clk *clk, unsigned long rate);
+-	int		    (*get_rate)(struct clk *clk);
++	struct clk_ops	    *ops;
+ };
+ 
+ static inline int __clk_get(struct clk *clk)
+@@ -45,15 +51,16 @@ extern void __clk_disable(struct clk *clk);
+  * Declare a new clock with a given rate and ID. All clocks are enabled by
+  * default.
+  */
+-#define FIXED_CLK(__name, __rate, __id)					\
++#define FIXED_CLK(__name, __rate, __id, __ops)				\
+ 	static struct clk __name ## _clk = {				\
+ 		.name		= #__name,				\
+ 		.rate		= __rate,				\
+ 		.clk_num	= __id,					\
+ 		.enable_count	= 1,					\
++		.ops		= (__ops),				\
+ 	}
+ 
+-#define VARIABLE_CLK(__name, __id, __min, __max, __step)		\
++#define VARIABLE_CLK(__name, __id, __min, __max, __step, __ops)		\
+ 	static struct clk __name ## _clk = {				\
+ 		.name		= #__name,				\
+ 		.clk_num	= __id,					\
+@@ -62,6 +69,7 @@ extern void __clk_disable(struct clk *clk);
+ 		.min		= __min,				\
+ 		.max		= __max,				\
+ 		.step		= __step,				\
++		.ops		= (__ops),				\
+ 	}
+ 
+ #define CLK_LOOKUP(__dev_id, __con_id, __clk) \
+-- 
+1.7.0.4
+

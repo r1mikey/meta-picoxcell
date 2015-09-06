@@ -1,0 +1,37 @@
+From 6b6ddd01da7ec2cb9f3a591597d072020adfcc66 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie.iles@picochip.com>
+Date: Fri, 19 Aug 2011 16:27:42 +0100
+Subject: [PATCH 178/228] picoxcell_fuse: fix unbalanced runtime pm
+
+When removing the device we need to disable the runtime pm so that it
+doesn't get unbalanced if the device is re-added.
+
+Signed-off-by: Jamie Iles <jamie.iles@picochip.com>
+---
+ drivers/misc/picoxcell_fuse.c |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/misc/picoxcell_fuse.c b/drivers/misc/picoxcell_fuse.c
+index b390159..f131a0a 100644
+--- a/drivers/misc/picoxcell_fuse.c
++++ b/drivers/misc/picoxcell_fuse.c
+@@ -657,7 +657,7 @@ static int picoxcell_fuse_hardware_init(struct platform_device *pdev)
+ 	}
+ 
+ 	pm_runtime_enable(&pdev->dev);
+-	pm_runtime_resume(&pdev->dev);
++	pm_runtime_suspend(&pdev->dev);
+ 
+ 	return 0;
+ }
+@@ -718,6 +718,7 @@ out:
+ 
+ static int __devexit picoxcell_fuse_remove(struct platform_device *pdev)
+ {
++	pm_runtime_disable(&pdev->dev);
+ 	picoxcell_fuse_attrs_free(&pdev->dev);
+ 	misc_deregister(&picoxcell_fuse_miscdev);
+ 	picoxcell_fuse_test_mode_cleanup();
+-- 
+1.7.0.4
+

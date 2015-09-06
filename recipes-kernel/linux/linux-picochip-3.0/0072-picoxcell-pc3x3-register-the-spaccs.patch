@@ -1,0 +1,38 @@
+From 89e927af9210caeb8dd44c6b3cfa0097563162d9 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 12:02:57 +0100
+Subject: [PATCH 072/228] picoxcell/pc3x3: register the spaccs
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x3.c |    9 +++++++++
+ 1 files changed, 9 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index 3a9a87e..e11eb34 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -581,6 +581,14 @@ static void pc3x3_init_bus_snoopers(void)
+ 					  sizeof(pc3x3_snoop_err_names));
+ }
+ 
++static void pc3x3_add_spaccs(void)
++{
++	picoxcell_add_spacc("picoxcell-ipsec", PICOXCELL_IPSEC_BASE,
++			    IRQ_IPSEC, -1);
++	picoxcell_add_spacc("picoxcell-l2", PICOXCELL_CIPHER_BASE,
++			    IRQ_AES, -1);
++}
++
+ static void __init pc3x3_init(void)
+ {
+ 	picoxcell_mux_register(pc3x3_mux, ARRAY_SIZE(pc3x3_mux));
+@@ -589,4 +597,5 @@ static void __init pc3x3_init(void)
+ 	pc3x3_init_pm();
+ 	pc3x3_add_otp();
+ 	pc3x3_init_bus_snoopers();
++	pc3x3_add_spaccs();
+ }
+-- 
+1.7.0.4
+

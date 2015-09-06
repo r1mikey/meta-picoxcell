@@ -1,0 +1,159 @@
+From 9ac2cdff7d22f98986bb409bbc2c0681ee418a17 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 2 Jun 2011 15:37:51 +0100
+Subject: [PATCH 146/228] crypto: picoxcell: add support for runtime PM
+
+Enable runtime power management for the picoxcell crypto engines.  We
+enable the engines when we have an active context rather than on a per
+request basis as this can become too expensive for lots of small
+ciphering operations.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/crypto/picoxcell_crypto.c |   37 +++++++++++++++++++++----------------
+ 1 files changed, 21 insertions(+), 16 deletions(-)
+
+diff --git a/drivers/crypto/picoxcell_crypto.c b/drivers/crypto/picoxcell_crypto.c
+index cc4c9fe..db7cb31 100644
+--- a/drivers/crypto/picoxcell_crypto.c
++++ b/drivers/crypto/picoxcell_crypto.c
+@@ -35,6 +35,7 @@
+ #include <linux/list.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_runtime.h>
+ #include <linux/pm.h>
+ #include <linux/rtnetlink.h>
+ #include <linux/scatterlist.h>
+@@ -821,6 +822,8 @@ static int spacc_aead_cra_init(struct crypto_tfm *tfm)
+ 
+ 	tfm->crt_aead.reqsize = sizeof(struct spacc_req);
+ 
++	pm_runtime_get_sync(engine->dev);
++
+ 	return 0;
+ }
+ 
+@@ -831,10 +834,13 @@ static int spacc_aead_cra_init(struct crypto_tfm *tfm)
+ static void spacc_aead_cra_exit(struct crypto_tfm *tfm)
+ {
+ 	struct spacc_aead_ctx *ctx = crypto_tfm_ctx(tfm);
++	struct spacc_engine *engine = ctx->generic.engine;
+ 
+ 	if (ctx->sw_cipher)
+ 		crypto_free_aead(ctx->sw_cipher);
+ 	ctx->sw_cipher = NULL;
++
++	pm_runtime_put_sync(engine->dev);
+ }
+ 
+ /*
+@@ -1126,16 +1132,21 @@ static int spacc_ablk_cra_init(struct crypto_tfm *tfm)
+ 
+ 	tfm->crt_ablkcipher.reqsize = sizeof(struct spacc_req);
+ 
++	pm_runtime_get_sync(engine->dev);
++
+ 	return 0;
+ }
+ 
+ static void spacc_ablk_cra_exit(struct crypto_tfm *tfm)
+ {
+ 	struct spacc_ablk_ctx *ctx = crypto_tfm_ctx(tfm);
++	struct spacc_engine *engine = ctx->generic.engine;
+ 
+ 	if (ctx->sw_cipher)
+ 		crypto_free_ablkcipher(ctx->sw_cipher);
+ 	ctx->sw_cipher = NULL;
++
++	pm_runtime_put_sync(engine->dev);
+ }
+ 
+ static int spacc_ablk_encrypt(struct ablkcipher_request *req)
+@@ -1225,7 +1236,8 @@ static void spacc_packet_timeout(unsigned long data)
+ {
+ 	struct spacc_engine *engine = (struct spacc_engine *)data;
+ 
+-	spacc_process_done(engine);
++	if (!pm_runtime_suspended(engine->dev))
++		spacc_process_done(engine);
+ }
+ 
+ static int spacc_req_submit(struct spacc_req *req)
+@@ -1260,7 +1272,6 @@ static void spacc_spacc_complete(unsigned long data)
+ 	}
+ }
+ 
+-#ifdef CONFIG_PM
+ static int spacc_suspend(struct device *dev)
+ {
+ 	struct platform_device *pdev = to_platform_device(dev);
+@@ -1285,10 +1296,11 @@ static int spacc_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops spacc_pm_ops = {
+-	.suspend	= spacc_suspend,
+-	.resume		= spacc_resume,
++	.suspend		= spacc_suspend,
++	.resume			= spacc_resume,
++	.runtime_suspend	= spacc_suspend,
++	.runtime_resume		= spacc_resume,
+ };
+-#endif /* CONFIG_PM */
+ 
+ static inline struct spacc_engine *spacc_dev_to_engine(struct device *dev)
+ {
+@@ -1816,11 +1828,10 @@ static int __devinit spacc_probe(struct platform_device *pdev)
+ 		return PTR_ERR(engine->clk);
+ 	}
+ 
+-	if (clk_enable(engine->clk)) {
+-		dev_info(&pdev->dev, "unable to enable clk\n");
+-		clk_put(engine->clk);
+-		return -EIO;
+-	}
++	platform_set_drvdata(pdev, engine);
++	pm_runtime_irq_safe(&pdev->dev);
++	pm_runtime_enable(&pdev->dev);
++	pm_runtime_resume(&pdev->dev);
+ 
+ 	err = device_create_file(&pdev->dev, &dev_attr_stat_irq_thresh);
+ 	if (err) {
+@@ -1829,7 +1840,6 @@ static int __devinit spacc_probe(struct platform_device *pdev)
+ 		return err;
+ 	}
+ 
+-
+ 	/*
+ 	 * Use an IRQ threshold of 50% as a default. This seems to be a
+ 	 * reasonable trade off of latency against throughput but can be
+@@ -1857,8 +1867,6 @@ static int __devinit spacc_probe(struct platform_device *pdev)
+ 	tasklet_init(&engine->complete, spacc_spacc_complete,
+ 		     (unsigned long)engine);
+ 
+-	platform_set_drvdata(pdev, engine);
+-
+ 	INIT_LIST_HEAD(&engine->registered_algs);
+ 	for (i = 0; i < engine->num_algs; ++i) {
+ 		engine->algs[i].engine = engine;
+@@ -1892,7 +1900,6 @@ static int __devexit spacc_remove(struct platform_device *pdev)
+ 		crypto_unregister_alg(&alg->alg);
+ 	}
+ 
+-	clk_disable(engine->clk);
+ 	clk_put(engine->clk);
+ 
+ 	return 0;
+@@ -1911,9 +1918,7 @@ static struct platform_driver spacc_driver = {
+ 	.remove		= __devexit_p(spacc_remove),
+ 	.driver		= {
+ 		.name	= "picoxcell-ipsec",
+-#ifdef CONFIG_PM
+ 		.pm	= &spacc_pm_ops,
+-#endif /* CONFIG_PM */
+ 	},
+ 	.id_table	= spacc_id_table,
+ };
+-- 
+1.7.0.4
+

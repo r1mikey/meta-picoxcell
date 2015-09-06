@@ -1,0 +1,162 @@
+From 75ab677c1e7814d7695bb549427c9ffc9a611527 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 24 May 2011 15:07:13 +0100
+Subject: [PATCH 132/228] picoxcell: add a fuse reading helper
+
+There are a few places where we need to read fuses early in the kernel
+boot.  Introduce a common helper to manage the clk and read the fuses to
+save doing it in place each time.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/device_fuse.c    |   40 ++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/pc30xx.c         |   22 ++--------------
+ arch/arm/mach-picoxcell/pc3x3.c          |   22 ++--------------
+ arch/arm/mach-picoxcell/picoxcell_core.h |    2 +
+ 4 files changed, 48 insertions(+), 38 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/device_fuse.c b/arch/arm/mach-picoxcell/device_fuse.c
+index bd4256f..b807dc7 100644
+--- a/arch/arm/mach-picoxcell/device_fuse.c
++++ b/arch/arm/mach-picoxcell/device_fuse.c
+@@ -7,6 +7,9 @@
+  *
+  * All enquiries to support@picochip.com
+  */
++#include <linux/clk.h>
++#include <linux/err.h>
++#include <linux/io.h>
+ #include <linux/platform_device.h>
+ #include <linux/slab.h>
+ 
+@@ -43,3 +46,40 @@ out_free_dev:
+ 	return err;
+ }
+ 
++/**
++ * picoxcell_fuse_read() - read a range of fuses.
++ *
++ * @addr: the byte address of the fuses to read from (offset from the start of
++ * the fuses.
++ * @buf: the buffer to store the fuse values in.
++ * @nr_bytes: the number of bytes to read.
++ */
++int picoxcell_fuse_read(unsigned long addr, char *buf, size_t nr_bytes)
++{
++	struct clk *fuse;
++	int err = 0;
++	size_t n;
++
++	fuse = clk_get_sys("picoxcell-fuse", NULL);
++	if (IS_ERR(fuse)) {
++		pr_warn("no fuse clk\n");
++		err = PTR_ERR(fuse);
++		goto out;
++	}
++
++	if (clk_enable(fuse)) {
++		pr_warn("unable to enable fuse clk\n");
++		err = PTR_ERR(fuse);
++		goto out_put;
++	}
++
++	for (n = 0; n < nr_bytes; ++n)
++		buf[n] = readb(IO_ADDRESS(PICOXCELL_FUSE_BASE) + addr + n);
++
++	clk_disable(fuse);
++
++out_put:
++	clk_put(fuse);
++out:
++	return err;
++}
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index d63ee8e..8cbee82 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -661,29 +661,13 @@ static void pc30xx_add_fuse(void)
+ static u8 pc30xx_temp_cal(void)
+ {
+ #define TEMP_CAL_FUSE	896
+-#define TEMP_CAL_REG	IO_ADDRESS(PICOXCELL_FUSE_BASE + TEMP_CAL_FUSE / 8)
+ 	u8 temp_cal;
+-	struct clk *fuse;
+ 
+-	fuse = clk_get_sys("picoxcell-fuse", NULL);
+-	if (IS_ERR(fuse)) {
+-		pr_warn("no fuse clk, unable to get temperature calibration data\n");
+-		temp_cal = 0;
+-		goto out;
++	if (picoxcell_fuse_read(TEMP_CAL_FUSE / 8, &temp_cal, 1)) {
++		pr_err("failed to read temperature calibration offset\n");
++		return 0;
+ 	}
+ 
+-	if (clk_enable(fuse)) {
+-		pr_warn("unable to enable fuse clk, unable to get temperature calibration data\n");
+-		temp_cal = 0;
+-		goto out_put;
+-	}
+-
+-	temp_cal = readb(TEMP_CAL_REG);
+-	clk_disable(fuse);
+-
+-out_put:
+-	clk_put(fuse);
+-out:
+ 	return temp_cal;
+ }
+ 
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index f909b90..338c86c 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -500,29 +500,13 @@ static void pc3x3_add_gpio(void)
+ static unsigned int picoxcell_cpufreq_max_speed(void)
+ {
+ #define MAX_CLKF_FUSE	904
+-#define MAX_CLKF_REG	IO_ADDRESS(PICOXCELL_FUSE_BASE + 904 / 8)
+ 	u8 max_clkf;
+-	struct clk *fuse;
+ 
+-	fuse = clk_get_sys("picoxcell-fuse", NULL);
+-	if (IS_ERR(fuse)) {
+-		pr_warn("no fuse clk, unable to get max cpu freq\n");
+-		max_clkf = 0;
+-		goto out;
+-	}
+-
+-	if (clk_enable(fuse)) {
+-		pr_warn("unable to enable fuse clk, unable to get max cpu freq\n");
+-		max_clkf = 0;
+-		goto out_put;
++	if (picoxcell_fuse_read(MAX_CLKF_FUSE / 8, &max_clkf, 1)) {
++		pr_err("failed to read max clkf value\n");
++		return 0;
+ 	}
+ 
+-	max_clkf = readb(MAX_CLKF_REG);
+-	clk_disable(fuse);
+-
+-out_put:
+-	clk_put(fuse);
+-out:
+ 	return max_clkf ? ((max_clkf + 1) * 5) * 1000 : 700000;
+ }
+ 
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index 1c4084f..a708b53 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -42,6 +42,8 @@ extern int __init picoxcell_add_emac(unsigned long addr, int irq,
+ 
+ struct picoxcell_fuse_map;
+ extern int __init picoxcell_add_fuse(struct picoxcell_fuse_map *map);
++extern int picoxcell_fuse_read(unsigned long addr, char *buf,
++			       size_t nr_bytes);
+ extern int __init picoxcell_add_uicc(unsigned long addr, int irq, int id,
+ 				     bool data_invert);
+ 
+-- 
+1.7.0.4
+

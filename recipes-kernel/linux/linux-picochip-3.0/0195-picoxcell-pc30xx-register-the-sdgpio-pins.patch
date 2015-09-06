@@ -1,0 +1,28 @@
+From 7deac12a8eecfd211ea8603d137e085e6c1c996e Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Fri, 23 Mar 2012 15:45:01 +0000
+Subject: [PATCH 195/228] picoxcell/pc30xx: register the sdgpio pins
+
+This commit forms part of the resolution of Mantis Issue #9985
+(cherry picked from commit e4536775e4de2a6dcf36c619eeace36f5e3a83eb)
+---
+ arch/arm/mach-picoxcell/pc30xx.c |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 7c96e9a..977741e 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -667,6 +667,9 @@ static void pc30xx_add_gpio(void)
+ 				pc30xx_portb_names);
+ 	picoxcell_add_gpio_port(2, 23, PC30XX_GPIO_PIN_ARM_40,
+ 				pc30xx_portc_names);
++        platform_device_register_data(NULL, "sdgpio", -1, &pc30xx_sdgpio,
++                sizeof(pc30xx_sdgpio));
++
+ }
+ 
+ static struct picoxcell_fuse_map pc30xx_fuse_map = {
+-- 
+1.7.0.4
+

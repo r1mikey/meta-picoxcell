@@ -1,0 +1,84 @@
+From 0ff0c54383ccd5e6ec3cc1f3bedd49f8e9280d6b Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 23 Mar 2011 23:41:31 +0000
+Subject: [PATCH 024/228] picoxcell/pc3x3: pm support
+
+pc3x3 does not allow the CPU or memory interface clks to be disabled,
+only the peripheral clks.  Enable low power mode where the peripheral
+clks are gated and we wait for an external interrupt.  Allow the
+watchdog to be paused when entering suspend mode so that long suspend
+periods don't trigger a watchdog reboot.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Kconfig |   10 ++++++++++
+ arch/arm/mach-picoxcell/pc3x3.c |   29 +++++++++++++++++++++++++++++
+ 2 files changed, 39 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/Kconfig b/arch/arm/mach-picoxcell/Kconfig
+index bbb0787..50268a5 100644
+--- a/arch/arm/mach-picoxcell/Kconfig
++++ b/arch/arm/mach-picoxcell/Kconfig
+@@ -16,6 +16,16 @@ config PICOXCELL_PC3X3
+ 	  Include support for picoChip PC3x3 family of devices. This includes
+ 	  PC313, PC323 and PC333.
+ 
++comment "Picochip picoXcell device configuration"
++
++config PC3X3_STOP_WDT_IN_SUSPEND
++	bool "Disable watchdog timer in suspend (PC3X3)"
++	depends on PICOXCELL_PC3X3
++	help
++	  Say yes to pause the watchdog timer when in suspend mode on PC3X3
++	  devices.  This will prevent the watchdog from rebooting the device
++	  when suspend is entered.
++
+ comment "Picochip picoXcell board selection"
+ 
+ config BOARD_PC7302
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index cd1cb02..5c0e6a4 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -478,9 +478,38 @@ static void pc3x3_init_cpufreq(void)
+ 		pr_err("failed to init cpufreq for pc3x3\n");
+ }
+ 
++#ifdef CONFIG_PC3X3_STOP_WDT_IN_SUSPEND
++static inline void pc3x3_pm_stop_wdt(void)
++{
++	unsigned long syscfg = axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET);
++
++	syscfg |= (1 << AXI2CFG_SYSCFG_WDG_PAUSE_IDX);
++
++	axi2cfg_writel(syscfg, AXI2CFG_SYSCFG_REG_OFFSET);
++}
++
++static inline void pc3x3_pm_restore_wdt(void)
++{
++	unsigned long syscfg = axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET);
++
++	syscfg &= ~(1 << AXI2CFG_SYSCFG_WDG_PAUSE_IDX);
++
++	axi2cfg_writel(syscfg, AXI2CFG_SYSCFG_REG_OFFSET);
++}
++#else /* CONFIG_PC3X3_STOP_WDT_IN_SUSPEND */
++static inline void pc3x3_pm_stop_wdt(void) {}
++static inline void pc3x3_pm_restore_wdt(void) {}
++#endif /* CONFIG_PC3X3_STOP_WDT_IN_SUSPEND */
++
++static void pc3x3_init_pm(void)
++{
++	picoxcell_init_pm(pc3x3_pm_stop_wdt, pc3x3_pm_restore_wdt);
++}
++
+ static void pc3x3_init(void)
+ {
+ 	picoxcell_mux_register(pc3x3_mux, ARRAY_SIZE(pc3x3_mux));
+ 	pc3x3_add_gpio();
+ 	pc3x3_init_cpufreq();
++	pc3x3_init_pm();
+ }
+-- 
+1.7.0.4
+

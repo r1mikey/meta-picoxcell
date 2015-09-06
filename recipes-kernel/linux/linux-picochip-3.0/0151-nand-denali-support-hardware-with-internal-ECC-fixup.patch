@@ -1,0 +1,112 @@
+From 4261dbbf5cb5677570d88e17bdeb61cc5c57be64 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Fri, 6 May 2011 11:33:25 +0100
+Subject: [PATCH 151/228] nand/denali: support hardware with internal ECC fixup
+
+Some versions of the IP have the ECC fixup handled in hardware.  For
+these devices we have a new interrupt status/enable mapping that tells
+us when we have an uncorrectable error.  Unfortunately this replaces
+existing interrupt bits and there is no way to probe for this capability
+so we have to do it through platform data.
+
+Cc: David Woodhouse <dwmw2@infradead.org>
+Cc: Chuanxiao Dong <chuanxiao.dong@intel.com>
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/mtd/nand/denali.c            |   18 +++++++++++++++---
+ drivers/mtd/nand/denali.h            |    9 +++++++++
+ include/linux/platform_data/denali.h |    1 +
+ 3 files changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index 663e5ce..01841fe 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -55,7 +55,8 @@ MODULE_PARM_DESC(onfi_timing_mode, "Overrides default ONFI setting."
+ 			INTR_STATUS__TIME_OUT | \
+ 			INTR_STATUS__ERASE_FAIL | \
+ 			INTR_STATUS__RST_COMP | \
+-			INTR_STATUS__ERASE_COMP)
++			INTR_STATUS__ERASE_COMP | \
++			INTR_STATUS__ECC_UNCOR_ERR)
+ 
+ /* indicates whether or not the internal value for the flash bank is
+  * valid or not */
+@@ -921,6 +922,14 @@ static bool handle_ecc(struct denali_nand_info *denali, uint8_t *buf,
+ {
+ 	bool check_erased_page = false;
+ 
++	if (denali->have_hw_ecc_fixup &&
++	    (irq_status & INTR_STATUS__ECC_UNCOR_ERR)) {
++		clear_interrupts(denali);
++		denali_set_intr_modes(denali, true);
++
++		return true;
++	}
++
+ 	if (irq_status & INTR_STATUS__ECC_ERR) {
+ 		/* read the ECC errors. we'll ignore them for now */
+ 		uint32_t err_address = 0, err_correction_info = 0;
+@@ -1120,8 +1129,9 @@ static int denali_read_page(struct mtd_info *mtd, struct nand_chip *chip,
+ 	size_t size = denali->mtd.writesize + denali->mtd.oobsize;
+ 
+ 	uint32_t irq_status = 0;
+-	uint32_t irq_mask = INTR_STATUS__ECC_TRANSACTION_DONE |
+-			    INTR_STATUS__ECC_ERR;
++	uint32_t irq_mask = denali->have_hw_ecc_fixup ?
++		(INTR_STATUS__ECC_TRANSACTION_DONE | INTR_STATUS__ECC_ERR) :
++		(INTR_STATUS__DMA_CMD_COMP | INTR_STATUS__ECC_UNCOR_ERR);
+ 	bool check_erased_page = false;
+ 
+ 	if (page != denali->page) {
+@@ -1441,6 +1451,8 @@ static int denali_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
+ 		goto failed_alloc_memery;
+ 	}
+ 
++	denali->have_hw_ecc_fixup = pdata ? pdata->have_hw_ecc_fixup : false;
++
+ 	if (id->driver_data == INTEL_CE4100) {
+ 		/* Due to a silicon limitation, we can only support
+ 		 * ONFI timing mode 1 and below.
+diff --git a/drivers/mtd/nand/denali.h b/drivers/mtd/nand/denali.h
+index b428ce3..f0b5e91 100644
+--- a/drivers/mtd/nand/denali.h
++++ b/drivers/mtd/nand/denali.h
+@@ -231,6 +231,14 @@
+ #define     INTR_STATUS__PIPE_CMD_ERR			0x4000
+ #define     INTR_STATUS__PAGE_XFER_INC			0x8000
+ 
++/*
++ * Some versions of the IP have the ECC fixup handled in hardware.  In this
++ * configuration we only get interrupted when the error is uncorrectable.
++ * Unfortunately this bit replaces INTR_STATUS__ECC_TRANSACTION_DONE from the
++ * old IP.
++ */
++#define     INTR_STATUS__ECC_UNCOR_ERR			0x0001
++
+ #define     INTR_EN__ECC_TRANSACTION_DONE		0x0001
+ #define     INTR_EN__ECC_ERR				0x0002
+ #define     INTR_EN__DMA_CMD_COMP			0x0004
+@@ -495,6 +503,7 @@ struct denali_nand_info {
+ 	uint32_t bbtskipbytes;
+ 	uint32_t max_banks;
+ 	int nr_ecc_bits;
++	bool have_hw_ecc_fixup;
+ };
+ 
+ #endif /*_LLD_NAND_*/
+diff --git a/include/linux/platform_data/denali.h b/include/linux/platform_data/denali.h
+index cfdb775..3767333 100644
+--- a/include/linux/platform_data/denali.h
++++ b/include/linux/platform_data/denali.h
+@@ -16,6 +16,7 @@
+ 
+ struct denali_nand_pdata {
+ 	int	nr_ecc_bits;
++	bool	have_hw_ecc_fixup;
+ };
+ 
+ #endif /* __DENALI_PDATA_H__ */
+-- 
+1.7.0.4
+

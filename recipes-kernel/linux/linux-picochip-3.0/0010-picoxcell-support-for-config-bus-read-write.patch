@@ -1,0 +1,190 @@
+From f986209f87a838cc6eaddc6a4d08426f2e4b3ecd Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 7 Mar 2011 15:49:28 +0000
+Subject: [PATCH 010/228] picoxcell: support for config bus read/write
+
+The config bus allows configuration of the picoArray DSP core.
+This is used to control some of the blocks in the picoArray such
+as the SDGPIO and some of the multiplexing in addition to running
+and configuring the array itself.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/axi2cfg.c                  |  113 ++++++++++++++++++++
+ .../include/mach/picoxcell/axi2cfg.h               |   34 ++++++
+ 2 files changed, 147 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/axi2cfg.c b/arch/arm/mach-picoxcell/axi2cfg.c
+index 258707b..a197154 100644
+--- a/arch/arm/mach-picoxcell/axi2cfg.c
++++ b/arch/arm/mach-picoxcell/axi2cfg.c
+@@ -17,8 +17,121 @@
+ 
+ #include <mach/hardware.h>
+ 
++/* Configuration port write bit positions. */
++#define CAEID_BIT_MASK	    (1 << 19)	/* AE ID signal. */
++#define CADDR_BIT_MASK	    (1 << 18)	/* AE ADDR signal. */
++#define CREAD_BIT_MASK	    (1 << 17)	/* READ data signal. */
++#define CWRITE_BIT_MASK     (1 << 16)	/* WRITE data signal. */
++
++#define RB_FAIL_MASK	    (1 << 17)	/* Readback failed. */
++#define RB_VALID_MASK	    (1 << 16)	/* Readback valid. */
++
++#define NR_RETRIES	    16		/* The number of retries for an
++					 * AXI2Cfg config read. */
++
++static DEFINE_SPINLOCK(axi2cfg_lock);
+ static void __iomem *axi2cfg;
+ 
++#define CFG_WRITE_PORT	    0x100	/* Write port offset. */
++#define CFG_READ_PORT	    0x200	/* Read port offset. */
++
++int axi2cfg_config_read(u16 aeid, u16 ae_addr, u16 *buf, u16 count)
++{
++	u32 val;
++	void __iomem *write_p = axi2cfg + CFG_WRITE_PORT;
++	void __iomem *read_p = axi2cfg + CFG_READ_PORT;
++	u16 rc, to_read = count;
++	unsigned i, retries;
++	unsigned long flags;
++
++	spin_lock_irqsave(&axi2cfg_lock, flags);
++
++	val = aeid | CAEID_BIT_MASK;
++	writel(val, write_p);
++
++	while (to_read) {
++		/* Output the address to read from. */
++		val = (ae_addr + (count - to_read)) | CADDR_BIT_MASK;
++		writel(val, write_p);
++
++		/* Dispatch the read requests. We have a 64 entry FIFO. */
++		rc = min_t(u16, to_read, 64);
++		val = CREAD_BIT_MASK | rc;
++		writel(val, write_p);
++
++		/* Now read the values. */
++		for (i = 0; i < rc; ++i) {
++			retries = NR_RETRIES;
++			while (retries) {
++				val = readl(read_p);
++				if (val & (RB_VALID_MASK | RB_FAIL_MASK))
++					break;
++				--retries;
++				cpu_relax();
++			}
++
++			if (!retries || (val & RB_FAIL_MASK)) {
++				pr_warning("config read %04x@%04x failed\n",
++					   aeid,
++					   (ae_addr + (count - to_read) + i));
++				break;
++			} else
++				buf[(count - to_read) + i] = val & 0xFFFF;
++		}
++
++		if (val & RB_FAIL_MASK)
++			break;
++
++		to_read -= rc;
++	}
++
++	spin_unlock_irqrestore(&axi2cfg_lock, flags);
++
++	return !(val & RB_FAIL_MASK) ? count : -EIO;
++}
++EXPORT_SYMBOL_GPL(axi2cfg_config_read);
++
++void axi2cfg_config_write(u16 aeid, u16 ae_addr, const u16 *buf, u16 count)
++{
++	u32 val;
++	void __iomem *write_p = axi2cfg + CFG_WRITE_PORT;
++	unsigned i;
++	unsigned long flags;
++
++	spin_lock_irqsave(&axi2cfg_lock, flags);
++
++	/* Output the AEID to read from. */
++	val = aeid | CAEID_BIT_MASK;
++	writel(val, write_p);
++
++	/* Output the address to read from. */
++	val = ae_addr | CADDR_BIT_MASK;
++	writel(val, write_p);
++
++	for (i = 0; i < count; ++i) {
++		val = buf[i] | CWRITE_BIT_MASK;
++		writel(val, write_p);
++	}
++
++	spin_unlock_irqrestore(&axi2cfg_lock, flags);
++}
++EXPORT_SYMBOL_GPL(axi2cfg_config_write);
++
++void axi2cfg_write_buf(const u32 *buf, unsigned nr_words)
++{
++	void __iomem *write_p = axi2cfg + CFG_WRITE_PORT;
++	unsigned i;
++	unsigned long flags;
++
++	spin_lock_irqsave(&axi2cfg_lock, flags);
++
++	for (i = 0; i < nr_words; ++i)
++		writel(*buf++, write_p);
++
++	spin_unlock_irqrestore(&axi2cfg_lock, flags);
++}
++EXPORT_SYMBOL_GPL(axi2cfg_write_buf);
++
+ unsigned long axi2cfg_readl(unsigned long offs)
+ {
+ 	return readl(axi2cfg + offs);
+diff --git a/arch/arm/mach-picoxcell/include/mach/picoxcell/axi2cfg.h b/arch/arm/mach-picoxcell/include/mach/picoxcell/axi2cfg.h
+index 94c9800..7ef7e7f 100644
+--- a/arch/arm/mach-picoxcell/include/mach/picoxcell/axi2cfg.h
++++ b/arch/arm/mach-picoxcell/include/mach/picoxcell/axi2cfg.h
+@@ -96,6 +96,40 @@
+ #ifndef __ASSEMBLY__
+ 
+ /*
++ * axi2cfg_config_read - Read a number of 16 bit words from a picoArray axi2cfg.
++ *
++ * Returns the number of words read on success, negative errno on failure.
++ *
++ * @axi2cfg_base: The base address of the upper axi2cfg.
++ * @aeid: The CAEID of the AE to read from.
++ * @ae_addr: The address to begin reading from within the AE.
++ * @buf: The buffer to store the results in.
++ * @count: The number of 16 bit words to read.
++ */
++extern int axi2cfg_config_read(u16 aeid, u16 ae_addr, u16 *buf, u16 count);
++
++/*
++ * axi2cfg_config_write - Write a number of 16 bit words to a picoArray axi2cfg.
++ *
++ * @axi2cfg_base: The base address of the upper axi2cfg.
++ * @aeid: The CAEID of the AE to write to.
++ * @ae_addr: The address to begin writing to within the AE.
++ * @buf: The buffer to read the words from.
++ * @count: The number of 16 bit words to write.
++ */
++extern void axi2cfg_config_write(u16 aeid, u16 ae_addr, const u16 *buf,
++				 u16 count);
++
++/*
++ * ax2cfg_write_buf - Write a series of configuration words to the AXI2CFG
++ *	config write port.
++ *
++ * @buf: The buffer to write.
++ * @nr_words: The number of 32 bit words to write.
++ */
++extern void axi2cfg_write_buf(const u32 *buf, unsigned nr_words);
++
++/*
+  * axi2cfg_init - initialize the AXI2CFG hardware.
+  */
+ extern void axi2cfg_init(void);
+-- 
+1.7.0.4
+

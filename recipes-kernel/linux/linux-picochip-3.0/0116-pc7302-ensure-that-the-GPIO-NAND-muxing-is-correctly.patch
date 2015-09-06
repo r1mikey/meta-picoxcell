@@ -1,0 +1,45 @@
+From 55e64ed16f717994a223bf84fc228efc5f14d8c2 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 10 May 2011 13:52:59 +0100
+Subject: [PATCH 116/228] pc7302: ensure that the GPIO NAND muxing is correctly configured
+
+When we use GPIO NAND on pc3x3 devices we need ARM GPIO 4, but to get
+this coming out of ebi_addr22 we need to ensure that pai_tx_data0 is
+being used by the PAI and not ARM GPIO 4.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |   17 ++++++++++++++---
+ 1 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index 8cec09c..b4b59d8 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -172,9 +172,20 @@ static struct platform_device pc7302_nand = {
+ static void pc7302_init_nand(void)
+ {
+ 	struct clk *ebi_clk = clk_get(NULL, "ebi");
+-
+-	if (mux_configure_one(picoxcell_is_pc3x3() ? "ebi_addr22" : "arm4",
+-			      MUX_ARM)) {
++	int err;
++	const struct mux_cfg pc3x2_cfg[] = {
++		MUXCFG("arm4", MUX_ARM),
++	};
++	const struct mux_cfg pc3x3_cfg[] = {
++		MUXCFG("pai_tx_data0", MUX_PERIPHERAL_PAI),
++		MUXCFG("ebi_addr22", MUX_ARM),
++	};
++
++	if (picoxcell_is_pc3x3())
++		err = mux_configure_table(pc3x3_cfg, ARRAY_SIZE(pc3x3_cfg));
++	else
++		err = mux_configure_table(pc3x2_cfg, ARRAY_SIZE(pc3x2_cfg));
++	if (err) {
+ 		pr_err("unable to set ebi_addr22 for use as gpio-nand cle\n");
+ 		return;
+ 	}
+-- 
+1.7.0.4
+

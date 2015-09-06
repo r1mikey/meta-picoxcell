@@ -1,0 +1,114 @@
+From eb02fcb28aa774f7ac913103e95c9af4c25d022c Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 7 Apr 2011 12:02:37 +0100
+Subject: [PATCH 070/228] picoxcell: provide a mechanism to register the spaccs
+
+The spaccs (security protocol accelerator) devices are hardware crypto
+offload.  pc30xx has a different version spacc with different register
+offsets and supported algorithms so provide a mechanism to register them
+dynamically.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Makefile         |    3 +-
+ arch/arm/mach-picoxcell/device_spacc.c   |   61 ++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/picoxcell_core.h |    2 +
+ 3 files changed, 65 insertions(+), 1 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/device_spacc.c
+
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index fe2d212..7fce320 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -7,7 +7,8 @@ obj-y				:= picoxcell_core.o io.o axi2cfg.o \
+ 				   gpio.o \
+ 				   bus_err.o \
+ 				   gpioirq.o \
+-				   device_uart.o
++				   device_uart.o \
++				   device_spacc.o
+ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+diff --git a/arch/arm/mach-picoxcell/device_spacc.c b/arch/arm/mach-picoxcell/device_spacc.c
+new file mode 100644
+index 0000000..0f4dcee
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/device_spacc.c
+@@ -0,0 +1,61 @@
++/*
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#include <linux/clk.h>
++#include <linux/dma-mapping.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++
++#include <mach/hardware.h>
++
++#include "picoxcell_core.h"
++
++int __init picoxcell_add_spacc(const char *name, unsigned long addr, int irq,
++			       int id)
++{
++	struct resource res[] = {
++		{
++			.start		= addr,
++			.end		= addr + 0xFFFF,
++			.flags		= IORESOURCE_MEM,
++		},
++		{
++			.start		= irq,
++			.end		= irq,
++			.flags		= IORESOURCE_IRQ,
++		},
++	};
++	struct platform_device *pdev = platform_device_alloc(name, id);
++	int err = -ENOMEM;
++
++	if (!pdev)
++		return -ENOMEM;
++
++	pdev->dev.dma_mask = kmalloc(sizeof(*pdev->dev.dma_mask), GFP_KERNEL);
++	if (!pdev->dev.dma_mask)
++		goto out_free_dev;
++	*pdev->dev.dma_mask = DMA_BIT_MASK(32);
++	pdev->dev.coherent_dma_mask = *pdev->dev.dma_mask;
++
++	err = platform_device_add_resources(pdev, res, ARRAY_SIZE(res));
++	if (err)
++		goto out_free_mask;
++
++	err = platform_device_add(pdev);
++	if (pdev)
++		return 0;
++
++out_free_mask:
++	kfree(pdev->dev.dma_mask);
++out_free_dev:
++	platform_device_put(pdev);
++
++	return err;
++}
++
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index ab8a57c..960edbb 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -32,5 +32,7 @@ static inline void picoxcell_tsu_init(unsigned long rate) {}
+ 
+ extern void __init armgpio_irq_init(void);
+ extern int picoxcell_add_uart(unsigned long addr, int irq, int id);
++int __init picoxcell_add_spacc(const char *name, unsigned long addr, int irq,
++			       int id);
+ 
+ #endif /* __ASM_ARCH_PICOXCELL_CORE_H__ */
+-- 
+1.7.0.4
+

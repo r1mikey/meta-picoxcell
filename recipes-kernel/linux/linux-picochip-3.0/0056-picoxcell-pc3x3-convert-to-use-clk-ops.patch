@@ -1,0 +1,164 @@
+From 58b9fa342b18a394335c6fb2a740915e5496e79d Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 4 Apr 2011 13:55:56 +0100
+Subject: [PATCH 056/228] picoxcell/pc3x3: convert to use clk ops
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x3.c |  123 +++++++++++++++++++++------------------
+ 1 files changed, 66 insertions(+), 57 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index d8919b9..ea45db1 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -27,52 +27,42 @@
+ 
+ static DEFINE_SPINLOCK(pc3x3_clk_lock);
+ 
+-FIXED_CLK(tzprot,	CLOCK_TICK_RATE, 0);
+-FIXED_CLK(spi,		CLOCK_TICK_RATE, 1);
+-FIXED_CLK(dmac0,	CLOCK_TICK_RATE, 2);
+-FIXED_CLK(dmac1,	CLOCK_TICK_RATE, 3);
+-FIXED_CLK(ebi,		CLOCK_TICK_RATE, 4);
+-FIXED_CLK(ipsec,	CLOCK_TICK_RATE, 5);
+-FIXED_CLK(l2_engine,	CLOCK_TICK_RATE, 6);
+-FIXED_CLK(trng,		CLOCK_TICK_RATE, 7);
+-FIXED_CLK(fuse,		CLOCK_TICK_RATE, 8);
+-FIXED_CLK(otp,		CLOCK_TICK_RATE, 9);
+-FIXED_CLK(wdt,		CLOCK_TICK_RATE, -1);
+-FIXED_CLK(dummy,	CLOCK_TICK_RATE, -1);
+-VARIABLE_CLK(arm,			 -1, 140000, 700000, 5000);
+-
+-static struct clk *pc3x3_clks[] = {
+-	&tzprot_clk,
+-	&spi_clk,
+-	&dmac0_clk,
+-	&dmac1_clk,
+-	&ebi_clk,
+-	&ipsec_clk,
+-	&l2_engine_clk,
+-	&trng_clk,
+-	&fuse_clk,
+-	&otp_clk,
+-	&wdt_clk,
+-	&arm_clk,
++static int pc3x3_clk_is_enabled(struct clk *clk);
++static void pc3x3_clk_disable(struct clk *clk);
++static inline void pc3x3_clk_enable(struct clk *clk);
++static long pc3x3_clk_round_rate(struct clk *clk, unsigned long rate);
++static int pc3x3_clk_get_rate(struct clk *clk);
++static int pc3x3_clk_set_rate(struct clk *clk, unsigned long target);
++
++static struct clk_ops pc3x3_fixed_clk_ops = {
++	.enable		= pc3x3_clk_enable,
++	.disable	= pc3x3_clk_disable,
++	.is_enabled	= pc3x3_clk_is_enabled,
+ };
+ 
+-static struct clk_lookup pc3x3_clk_lookup[] = {
+-	CLK_LOOKUP(NULL,		"tzprot_ctl",	&tzprot_clk),
+-	CLK_LOOKUP("dw_spi_mmio.0",	NULL,		&spi_clk),
+-	CLK_LOOKUP("dw_dmac.0",		NULL,		&dmac0_clk),
+-	CLK_LOOKUP("dw_dmac.1",		NULL,		&dmac1_clk),
+-	CLK_LOOKUP(NULL,		"ebi",		&ebi_clk),
+-	CLK_LOOKUP("picoxcell-ipsec",	NULL,		&ipsec_clk),
+-	CLK_LOOKUP("picoxcell-l2",	NULL,		&l2_engine_clk),
+-	CLK_LOOKUP("picoxcell-trng",	NULL,		&trng_clk),
+-	CLK_LOOKUP("picoxcell-fuse",	NULL,		&fuse_clk),
+-	CLK_LOOKUP("picoxcell-otp-pc3x3", NULL,		&otp_clk),
+-	CLK_LOOKUP("dw_wdt",		NULL,		&wdt_clk),
+-	CLK_LOOKUP(NULL,		"arm",		&arm_clk),
+-	CLK_LOOKUP("macb",		"pclk",		&dummy_clk),
+-	CLK_LOOKUP("macb",		"hclk",		&dummy_clk),
++static struct clk_ops pc3x3_variable_clk_ops = {
++	.enable		= pc3x3_clk_enable,
++	.disable	= pc3x3_clk_disable,
++	.is_enabled	= pc3x3_clk_is_enabled,
++	.round_rate	= pc3x3_clk_round_rate,
++	.set_rate	= pc3x3_clk_set_rate,
++	.get_rate	= pc3x3_clk_get_rate,
+ };
+ 
++FIXED_CLK(tzprot,	CLOCK_TICK_RATE, 0, &pc3x3_fixed_clk_ops);
++FIXED_CLK(spi,		CLOCK_TICK_RATE, 1, &pc3x3_fixed_clk_ops);
++FIXED_CLK(dmac0,	CLOCK_TICK_RATE, 2, &pc3x3_fixed_clk_ops);
++FIXED_CLK(dmac1,	CLOCK_TICK_RATE, 3, &pc3x3_fixed_clk_ops);
++FIXED_CLK(ebi,		CLOCK_TICK_RATE, 4, &pc3x3_fixed_clk_ops);
++FIXED_CLK(ipsec,	CLOCK_TICK_RATE, 5, &pc3x3_fixed_clk_ops);
++FIXED_CLK(l2_engine,	CLOCK_TICK_RATE, 6, &pc3x3_fixed_clk_ops);
++FIXED_CLK(trng,		CLOCK_TICK_RATE, 7, &pc3x3_fixed_clk_ops);
++FIXED_CLK(fuse,		CLOCK_TICK_RATE, 8, &pc3x3_fixed_clk_ops);
++FIXED_CLK(otp,		CLOCK_TICK_RATE, 9, &pc3x3_fixed_clk_ops);
++FIXED_CLK(wdt,		CLOCK_TICK_RATE, -1, &pc3x3_fixed_clk_ops);
++FIXED_CLK(dummy,	CLOCK_TICK_RATE, -1, &pc3x3_fixed_clk_ops);
++VARIABLE_CLK(arm,			 -1, 140000, 700000, 5000, &pc3x3_variable_clk_ops);
++
+ static int pc3x3_clk_is_enabled(struct clk *clk)
+ {
+ 	unsigned long clk_gate =
+@@ -241,27 +231,46 @@ out:
+ 	return ret;
+ }
+ 
++static struct clk *pc3x3_clks[] = {
++	&tzprot_clk,
++	&spi_clk,
++	&dmac0_clk,
++	&dmac1_clk,
++	&ebi_clk,
++	&ipsec_clk,
++	&l2_engine_clk,
++	&trng_clk,
++	&fuse_clk,
++	&otp_clk,
++	&wdt_clk,
++	&arm_clk,
++};
++
++static struct clk_lookup pc3x3_clk_lookup[] = {
++	CLK_LOOKUP(NULL,		"tzprot_ctl",	&tzprot_clk),
++	CLK_LOOKUP("dw_spi_mmio.0",	NULL,		&spi_clk),
++	CLK_LOOKUP("dw_dmac.0",		NULL,		&dmac0_clk),
++	CLK_LOOKUP("dw_dmac.1",		NULL,		&dmac1_clk),
++	CLK_LOOKUP(NULL,		"ebi",		&ebi_clk),
++	CLK_LOOKUP("picoxcell-ipsec",	NULL,		&ipsec_clk),
++	CLK_LOOKUP("picoxcell-l2",	NULL,		&l2_engine_clk),
++	CLK_LOOKUP("picoxcell-trng",	NULL,		&trng_clk),
++	CLK_LOOKUP("picoxcell-fuse",	NULL,		&fuse_clk),
++	CLK_LOOKUP("picoxcell-otp-pc3x3", NULL,		&otp_clk),
++	CLK_LOOKUP("dw_wdt",		NULL,		&wdt_clk),
++	CLK_LOOKUP(NULL,		"arm",		&arm_clk),
++	CLK_LOOKUP("macb",		"pclk",		&dummy_clk),
++	CLK_LOOKUP("macb",		"hclk",		&dummy_clk),
++};
++
+ static void pc3x3_clk_init(void)
+ {
+ 	int i;
+ 
+ 	clkdev_add_table(pc3x3_clk_lookup, ARRAY_SIZE(pc3x3_clk_lookup));
+ 
+-	for (i = 0; i < ARRAY_SIZE(pc3x3_clks); ++i) {
+-		struct clk *clk = pc3x3_clks[i];
+-
+-		clk->enable	= pc3x3_clk_enable;
+-		clk->disable	= pc3x3_clk_disable;
+-		clk->is_enabled	= pc3x3_clk_is_enabled;
+-
+-		if (clk->rate < 0) {
+-			clk->round_rate	= pc3x3_clk_round_rate;
+-			clk->set_rate	= pc3x3_clk_set_rate;
+-			clk->get_rate	= pc3x3_clk_get_rate;
+-		}
+-
+-		picoxcell_clk_add(clk);
+-	}
++	for (i = 0; i < ARRAY_SIZE(pc3x3_clks); ++i)
++		picoxcell_clk_add(pc3x3_clks[i]);
+ 
+ 	/*
+ 	 * For PC3x3, disable the clocks that aren't required in the core
+-- 
+1.7.0.4
+

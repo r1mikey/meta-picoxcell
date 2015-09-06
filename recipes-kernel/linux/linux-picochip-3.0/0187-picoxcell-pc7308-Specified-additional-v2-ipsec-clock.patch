@@ -1,0 +1,25 @@
+From 4b8b7c7800a8cc56babcdf8435a56c8ab70803c8 Mon Sep 17 00:00:00 2001
+From: Andrew Watkins <Andrew.Watkins@picochip.com>
+Date: Tue, 10 Jan 2012 17:25:00 +0000
+Subject: [PATCH 187/228] picoxcell/pc7308: Specified additional v2 ipsec clocks in clock lookup table
+
+---
+ arch/arm/mach-picoxcell/pc30xx.c |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index f5353bf..53155ad 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -364,6 +364,8 @@ static struct clk_lookup pc30xx_clk_lookup[] = {
+ 	CLK_LOOKUP(NULL,		"ebi",		&ebi_clk),
+ 	CLK_LOOKUP("picoxcell-ipsec",	NULL,		&ipsec_clk),
+ 	CLK_LOOKUP("picoxcell-l2",	NULL,		&l2_engine_clk),
++	CLK_LOOKUP("picoxcell-ipsec-v2",NULL,		&ipsec_clk),
++	CLK_LOOKUP("picoxcell-l2-v2",	NULL,		&l2_engine_clk),
+ 	CLK_LOOKUP("picoxcell-trng",	NULL,		&trng_clk),
+ 	CLK_LOOKUP("picoxcell-fuse",	NULL,		&fuse_clk),
+ 	CLK_LOOKUP("picoxcell-otp-pc30xx", NULL,	&otp_clk),
+-- 
+1.7.0.4
+

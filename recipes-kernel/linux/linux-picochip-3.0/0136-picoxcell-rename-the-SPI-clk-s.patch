@@ -1,0 +1,57 @@
+From 2ef7c9c4b12e77e90d095e070bfd18805e299c91 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 26 May 2011 14:25:27 +0100
+Subject: [PATCH 136/228] picoxcell: rename the SPI clk's
+
+We aren't using the designware driver - we use a picoxcell specific one
+to cope with chip select quirks.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc30xx.c |    2 +-
+ arch/arm/mach-picoxcell/pc3x2.c  |    2 +-
+ arch/arm/mach-picoxcell/pc3x3.c  |    2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 8cbee82..162a599 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -341,7 +341,7 @@ static struct clk *pc30xx_clks[] = {
+ 
+ static struct clk_lookup pc30xx_clk_lookup[] = {
+ 	CLK_LOOKUP(NULL,		"tzprot_ctl",	&tzprot_clk),
+-	CLK_LOOKUP("dw_spi_mmio.0",	NULL,		&spi_clk),
++	CLK_LOOKUP("picoxcell-spi.0",	NULL,		&spi_clk),
+ 	CLK_LOOKUP("dw_dmac.0",		NULL,		&dmac0_clk),
+ 	CLK_LOOKUP("dw_dmac.1",		NULL,		&dmac1_clk),
+ 	CLK_LOOKUP(NULL,		"ebi",		&ebi_clk),
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index 21245f6..744d65f 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -28,7 +28,7 @@ FIXED_CLK(dummy,	CLOCK_TICK_RATE, -1, NULL);
+ FIXED_CLK(ref,		20000000, -1, NULL);
+ 
+ static struct clk_lookup pc3x2_clk_lookup[] = {
+-	CLK_LOOKUP("dw_spi_mmio.0",	NULL,		&dummy_clk),
++	CLK_LOOKUP("picoxcell-spi.0",	NULL,		&dummy_clk),
+ 	CLK_LOOKUP("dw_dmac.0",		NULL,		&dummy_clk),
+ 	CLK_LOOKUP("dw_dmac.1",		NULL,		&dummy_clk),
+ 	CLK_LOOKUP(NULL,		"ebi",		&dummy_clk),
+diff --git a/arch/arm/mach-picoxcell/pc3x3.c b/arch/arm/mach-picoxcell/pc3x3.c
+index 338c86c..75adbe9 100644
+--- a/arch/arm/mach-picoxcell/pc3x3.c
++++ b/arch/arm/mach-picoxcell/pc3x3.c
+@@ -251,7 +251,7 @@ static struct clk *pc3x3_clks[] = {
+ 
+ static struct clk_lookup pc3x3_clk_lookup[] = {
+ 	CLK_LOOKUP(NULL,		"tzprot_ctl",	&tzprot_clk),
+-	CLK_LOOKUP("dw_spi_mmio.0",	NULL,		&spi_clk),
++	CLK_LOOKUP("picoxcell-spi.0",	NULL,		&spi_clk),
+ 	CLK_LOOKUP("dw_dmac.0",		NULL,		&dmac0_clk),
+ 	CLK_LOOKUP("dw_dmac.1",		NULL,		&dmac1_clk),
+ 	CLK_LOOKUP(NULL,		"ebi",		&ebi_clk),
+-- 
+1.7.0.4
+

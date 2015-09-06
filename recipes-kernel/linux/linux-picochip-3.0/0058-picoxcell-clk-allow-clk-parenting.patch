@@ -1,0 +1,144 @@
+From cc9f8fbd7d88a583d1b13838cd2b708abe7cbbe4 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 4 Apr 2011 13:56:41 +0100
+Subject: [PATCH 058/228] picoxcell/clk: allow clk parenting
+
+PC30xx has a nested clock tree so allow a struct clk to have a parent.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/clk.c                 |   49 +++++++++++++++++++++----
+ arch/arm/mach-picoxcell/include/mach/clkdev.h |    6 +++
+ 2 files changed, 48 insertions(+), 7 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/clk.c b/arch/arm/mach-picoxcell/clk.c
+index 80c2276..4111851 100644
+--- a/arch/arm/mach-picoxcell/clk.c
++++ b/arch/arm/mach-picoxcell/clk.c
+@@ -22,6 +22,8 @@ static struct dentry *clk_debugfs;
+ static DEFINE_SPINLOCK(clk_lock);
+ static LIST_HEAD(picoxcell_clks);
+ 
++static void picoxcell_clk_debugfs_add(struct clk *c);
++
+ unsigned long clk_get_rate(struct clk *clk)
+ {
+ 	return clk->ops && clk->ops->get_rate ? clk->ops->get_rate(clk) :
+@@ -46,6 +48,8 @@ EXPORT_SYMBOL(clk_set_rate);
+ int __clk_enable(struct clk *clk)
+ {
+ 	if (++clk->enable_count > 0) {
++		if (clk->parent)
++			__clk_enable(clk->parent);
+ 		if (clk->ops && clk->ops->enable)
+ 			clk->ops->enable(clk);
+ 	}
+@@ -69,6 +73,8 @@ EXPORT_SYMBOL(clk_enable);
+ void __clk_disable(struct clk *clk)
+ {
+ 	if (--clk->enable_count <= 0) {
++		if (clk->parent)
++			__clk_disable(clk->parent);
+ 		if (clk->ops && clk->ops->disable)
+ 			clk->ops->disable(clk);
+ 	}
+@@ -84,6 +90,28 @@ void clk_disable(struct clk *clk)
+ }
+ EXPORT_SYMBOL(clk_disable);
+ 
++int clk_set_parent(struct clk *clk, struct clk *parent)
++{
++	unsigned long flags;
++	int err = -EINVAL;
++
++	spin_lock_irqsave(&clk_lock, flags);
++	if (!clk->parent) {
++		clk->parent = parent;
++		if (clk->debug) {
++			debugfs_remove(clk->debug);
++			clk->debug = NULL;
++			picoxcell_clk_debugfs_add(clk);
++		}
++		clk->parent->enable_count += clk->enable_count;
++		err = 0;
++	}
++	spin_unlock_irqrestore(&clk_lock, flags);
++
++	return err;
++}
++EXPORT_SYMBOL(clk_set_parent);
++
+ static ssize_t clk_rate_read(struct file *filp, char __user *buf, size_t size,
+ 			     loff_t *off)
+ {
+@@ -103,22 +131,29 @@ static const struct file_operations clk_rate_fops = {
+ 
+ static void picoxcell_clk_debugfs_add(struct clk *c)
+ {
+-	struct dentry *dentry;
++	struct dentry *parent_dentry;
+ 
+-	if (!clk_debugfs)
++	if (!clk_debugfs || c->debug)
+ 		return;
+ 
+-	dentry = debugfs_create_dir(c->name, clk_debugfs);
++	if (c->parent) {
++		picoxcell_clk_debugfs_add(c->parent);
++		parent_dentry = c->parent->debug;
++	} else
++		parent_dentry = clk_debugfs;
+ 
+-	if (!IS_ERR(dentry)) {
++	c->debug = debugfs_create_dir(c->name, parent_dentry);
++	if (!IS_ERR(c->debug)) {
+ 		if (c->rate > 0)
+-			debugfs_create_u32("rate", S_IRUGO, dentry,
++			debugfs_create_u32("rate", S_IRUGO, c->debug,
+ 					   (u32 *)&c->rate);
+ 		else
+-			debugfs_create_file("rate", S_IRUGO, dentry, c,
++			debugfs_create_file("rate", S_IRUGO, c->debug, c,
+ 					    &clk_rate_fops);
+-		debugfs_create_u32("enable_count", S_IRUGO, dentry,
++		debugfs_create_u32("enable_count", S_IRUGO, c->debug,
+ 				   (u32 *)&c->enable_count);
++	} else {
++		c->debug = NULL;
+ 	}
+ }
+ 
+diff --git a/arch/arm/mach-picoxcell/include/mach/clkdev.h b/arch/arm/mach-picoxcell/include/mach/clkdev.h
+index f2dc3db..53593e3 100644
+--- a/arch/arm/mach-picoxcell/include/mach/clkdev.h
++++ b/arch/arm/mach-picoxcell/include/mach/clkdev.h
+@@ -11,6 +11,7 @@
+ #define __PICOXCELL_CLKDEV_H__
+ 
+ #include <linux/clkdev.h>
++#include <linux/fs.h>
+ 
+ struct clk;
+ 
+@@ -25,6 +26,7 @@ struct clk_ops {
+ 
+ struct clk {
+ 	const char	    *name;
++	struct clk	    *parent;
+ 	struct list_head    head;
+ 	int		    rate;
+ 	unsigned	    min, max, step; /* min, max and frequency steps for
+@@ -32,6 +34,10 @@ struct clk {
+ 	int		    enable_count;
+ 	int		    clk_num;
+ 	struct clk_ops	    *ops;
++
++#ifdef CONFIG_DEBUG_FS
++	struct dentry	    *debug;
++#endif /* CONFIG_DEBUG_FS */
+ };
+ 
+ static inline int __clk_get(struct clk *clk)
+-- 
+1.7.0.4
+

@@ -1,0 +1,35 @@
+From 098834dc7e73291b4e7c6478f74ba71921509fd0 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Thu, 3 May 2012 14:44:41 +0100
+Subject: [PATCH 196/228] crypto: picoxcell: fix invalid pointer dereference
+
+The completion callback will free the request so we must remove it from
+the completion list before calling the callback.
+---
+ drivers/crypto/picoxcell_crypto.c |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/crypto/picoxcell_crypto.c b/drivers/crypto/picoxcell_crypto.c
+index 234280b..0b74b2d 100644
+--- a/drivers/crypto/picoxcell_crypto.c
++++ b/drivers/crypto/picoxcell_crypto.c
+@@ -1,5 +1,5 @@
+ /*
+- * Copyright (c) 2010-2011 Picochip Ltd., Jamie Iles
++ * Copyright (c) 2010-2012 Picochip Ltd., Jamie Iles
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+@@ -1267,8 +1267,8 @@ static void spacc_spacc_complete(unsigned long data)
+ 	spin_unlock_irqrestore(&engine->hw_lock, flags);
+ 
+ 	list_for_each_entry_safe(req, tmp, &completed, list) {
+-		req->complete(req);
+ 		list_del(&req->list);
++		req->complete(req);
+ 	}
+ }
+ 
+-- 
+1.7.0.4
+

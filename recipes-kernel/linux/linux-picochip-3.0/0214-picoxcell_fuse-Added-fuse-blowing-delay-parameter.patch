@@ -1,0 +1,68 @@
+From 244368bb2d2cac2d1e2429871cd1bbd2ec785e53 Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Fri, 31 May 2013 12:26:17 +0100
+Subject: [PATCH 214/228] picoxcell_fuse: Added fuse blowing delay parameter.
+
+The sysfs parameter vddq_delay_usec delays the time between VDDQ being asserted and the fuse actually being blown.
+
+Mantis Issue #11052
+---
+ drivers/misc/picoxcell_fuse.c |   21 +++++++++++++++++++++
+ 1 files changed, 21 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/misc/picoxcell_fuse.c b/drivers/misc/picoxcell_fuse.c
+index f131a0a..a1804f3 100644
+--- a/drivers/misc/picoxcell_fuse.c
++++ b/drivers/misc/picoxcell_fuse.c
+@@ -37,6 +37,11 @@ static int test_mode;
+ module_param(test_mode, bool, 0600);
+ MODULE_PARM_DESC(test_mode, "Enable test mode to allow prototyping without actually blowing fuses (0=use hardware, 1=use test mode)");
+ 
++static int vddq_delay_usec;
++module_param(vddq_delay_usec, int, 0600);
++MODULE_PARM_DESC(vddq_delay_usec, "Value controls a delay from rasing the VDDQ voltage to the fuse being blown.");
++
++
+ /*
+  * A note on reading fuses: some of the fuses such as the keys and customer
+  * partitions have read once per boot bits and these allow each word in that
+@@ -148,6 +153,10 @@ static int blow_fuse_hardware(int idx)
+ {
+ 	unsigned long control;
+ 
++        /* Setup vddq rise time from vddq_delay_usec sysfs */
++        /* parameter, passed into this driver */
++        picoxcell_fuse.map->vddq_rise_usec = vddq_delay_usec;
++
+ 	pm_runtime_get_sync(picoxcell_fuse.dev);
+ 
+ 	/*
+@@ -500,6 +509,12 @@ out:
+ static ssize_t vddq_show(struct device *dev, struct device_attribute *attr,
+ 			 char *buf)
+ {
++        /* Setup vddq rise time from vddq_delay_usec sysfs */
++        /* parameter, passed into this driver */
++        picoxcell_fuse.map->vddq_rise_usec = vddq_delay_usec;
++        printk( KERN_INFO "\nfile: picoxcell_fuse.c  func: vddq_show()\n" );
++        printk( KERN_INFO "vddq_rise_usec: %d\n", picoxcell_fuse.map->vddq_rise_usec);
++
+ 	return sprintf(buf, "%d\n", picoxcell_fuse.map->nr_fuses *
+ 		       (PICOXCELL_FUSE_PROG_TIME_USEC +
+ 			picoxcell_fuse.map->vddq_rise_usec +
+@@ -677,6 +692,12 @@ static int __devinit picoxcell_fuse_probe(struct platform_device *pdev)
+ 	picoxcell_fuse.map = map;
+ 	picoxcell_fuse.write_enable = false;
+ 
++
++        /* Setup vddq rise time from vddq_delay_usec sysfs */
++        /* parameter, passed into this driver */
++        picoxcell_fuse.map->vddq_rise_usec = vddq_delay_usec;
++
++
+ 	if (!picoxcell_fuse.map) {
+ 		dev_err(&pdev->dev, "no fuse map supplied\n");
+ 		return -EINVAL;
+-- 
+1.7.0.4
+

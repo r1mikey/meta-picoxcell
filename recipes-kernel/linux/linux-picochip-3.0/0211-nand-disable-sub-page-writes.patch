@@ -1,0 +1,28 @@
+From d874df6a304bf8f936a88982890d354e40e96453 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Wed, 31 Oct 2012 13:56:21 +0000
+Subject: [PATCH 211/228] nand: disable sub page writes
+
+This commit forms part of the resolution of Mantis Issue #10834
+---
+ drivers/mtd/nand/denali.c |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/mtd/nand/denali.c b/drivers/mtd/nand/denali.c
+index dcc50e9..7c4a3b0 100644
+--- a/drivers/mtd/nand/denali.c
++++ b/drivers/mtd/nand/denali.c
+@@ -1559,6 +1559,10 @@ int denali_init(struct denali_nand_info *denali)
+ 	denali->nand.bbt_td = &bbt_main_descr;
+ 	denali->nand.bbt_md = &bbt_mirror_descr;
+ 
++	/* make sure we do not allow sub page writes */
++	denali->nand.options |= NAND_NO_SUBPAGE_WRITE;
++
++	/* we do our own hardware ecc */
+ 	denali->nand.ecc.mode = NAND_ECC_HW_SYNDROME;
+ 
+ 	/* Denali Controller only support 15bit and 8bit ECC in MRST,
+-- 
+1.7.0.4
+

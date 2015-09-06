@@ -1,0 +1,54 @@
+From e6dd7aaf8de734b49aa7e4304716871b48bb79e1 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 6 Apr 2011 15:47:22 +0100
+Subject: [PATCH 065/228] picoxcell/pc7302: register the UARTs
+
+The UARTs are no longer registered in the SoC code so register the
+ones that are wired up on the board.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/board_pc7302.c |   15 +++++++++++++++
+ 1 files changed, 15 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/board_pc7302.c b/arch/arm/mach-picoxcell/board_pc7302.c
+index 6e2566f..d871a24 100644
+--- a/arch/arm/mach-picoxcell/board_pc7302.c
++++ b/arch/arm/mach-picoxcell/board_pc7302.c
+@@ -10,6 +10,7 @@
+  * All enquiries to support@picochip.com
+  */
+ #include <linux/clk.h>
++#include <linux/clkdev.h>
+ #include <linux/err.h>
+ #include <linux/gpio.h>
+ #include <linux/interrupt.h>
+@@ -185,11 +186,25 @@ static void pc7302_init_nand(void)
+ 	platform_device_register(&pc7302_nand);
+ }
+ 
++FIXED_CLK(pc7302_uart,	3686400, -1, NULL);
++static struct clk_lookup pc7302_uart_lookup = CLK_LOOKUP(NULL, "uart",
++							 &pc7302_uart_clk);
++
++static void pc7302_register_uarts(void)
++{
++	picoxcell_clk_add(&pc7302_uart_clk);
++	clkdev_add(&pc7302_uart_lookup);
++	picoxcell_add_uart(PICOXCELL_UART1_BASE, IRQ_UART1, 0);
++	picoxcell_add_uart(PICOXCELL_UART2_BASE, IRQ_UART2, 1);
++}
++
+ static void __init pc7302_init(void)
+ {
+ 	picoxcell_tsu_init(20000000);
+ 	picoxcell_core_init();
+ 
++	pc7302_register_uarts();
++
+ 	if ((axi2cfg_readl(AXI2CFG_SYSCFG_REG_OFFSET) & 0x3) == 0)
+ 		pc7302_init_nor();
+ 	else
+-- 
+1.7.0.4
+

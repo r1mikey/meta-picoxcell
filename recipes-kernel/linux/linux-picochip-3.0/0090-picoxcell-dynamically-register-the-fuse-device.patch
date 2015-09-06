@@ -1,0 +1,97 @@
+From a3dc8e6b18504ff24af3ca08615a0fc6e7cc3850 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 12 Apr 2011 14:55:13 +0100
+Subject: [PATCH 090/228] picoxcell: dynamically register the fuse device
+
+Provide a mechanism to dynamically register the fuse device.  Note that
+we don't dynamically allocate the fuse map as it contains
+device_attributes which must be in the .data section of the image.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/Makefile         |    3 +-
+ arch/arm/mach-picoxcell/device_fuse.c    |   45 ++++++++++++++++++++++++++++++
+ arch/arm/mach-picoxcell/picoxcell_core.h |    3 ++
+ 3 files changed, 50 insertions(+), 1 deletions(-)
+ create mode 100644 arch/arm/mach-picoxcell/device_fuse.c
+
+diff --git a/arch/arm/mach-picoxcell/Makefile b/arch/arm/mach-picoxcell/Makefile
+index 561a0b7..1c83596 100644
+--- a/arch/arm/mach-picoxcell/Makefile
++++ b/arch/arm/mach-picoxcell/Makefile
+@@ -9,7 +9,8 @@ obj-y				:= picoxcell_core.o io.o axi2cfg.o \
+ 				   gpioirq.o \
+ 				   device_uart.o \
+ 				   device_spacc.o \
+-				   device_trng.o
++				   device_trng.o \
++				   device_fuse.o
+ obj-$(CONFIG_BOARD_PC7302)	+= board_pc7302.o
+ obj-$(CONFIG_PICOXCELL_PC3X2)	+= pc3x2.o
+ obj-$(CONFIG_PICOXCELL_PC3X3)	+= pc3x3.o
+diff --git a/arch/arm/mach-picoxcell/device_fuse.c b/arch/arm/mach-picoxcell/device_fuse.c
+new file mode 100644
+index 0000000..bd4256f
+--- /dev/null
++++ b/arch/arm/mach-picoxcell/device_fuse.c
+@@ -0,0 +1,45 @@
++/*
++ * Copyright (c) 2011 Picochip Ltd., Jamie Iles
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ *
++ * All enquiries to support@picochip.com
++ */
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++
++#include <mach/hardware.h>
++
++#include "picoxcell_core.h"
++
++int __init picoxcell_add_fuse(struct picoxcell_fuse_map *map)
++{
++	struct resource res = {
++		.start		= PICOXCELL_FUSE_BASE,
++		.end		= PICOXCELL_FUSE_BASE + 0xFFFF,
++		.flags		= IORESOURCE_MEM,
++	};
++	struct platform_device *pdev =
++		platform_device_alloc("picoxcell-fuse", -1);
++	int err = -ENOMEM;
++
++	if (!pdev)
++		return -ENOMEM;
++
++	err = platform_device_add_resources(pdev, &res, 1);
++	if (err)
++		goto out_free_dev;
++
++	pdev->dev.platform_data = map;
++	err = platform_device_add(pdev);
++	if (pdev)
++		return 0;
++
++out_free_dev:
++	platform_device_put(pdev);
++
++	return err;
++}
++
+diff --git a/arch/arm/mach-picoxcell/picoxcell_core.h b/arch/arm/mach-picoxcell/picoxcell_core.h
+index a762a1d..eea2813 100644
+--- a/arch/arm/mach-picoxcell/picoxcell_core.h
++++ b/arch/arm/mach-picoxcell/picoxcell_core.h
+@@ -36,4 +36,7 @@ int __init picoxcell_add_spacc(const char *name, unsigned long addr, int irq,
+ 			       int id);
+ int __init picoxcell_add_trng(unsigned long addr);
+ 
++struct picoxcell_fuse_map;
++extern int __init picoxcell_add_fuse(struct picoxcell_fuse_map *map);
++
+ #endif /* __ASM_ARCH_PICOXCELL_CORE_H__ */
+-- 
+1.7.0.4
+

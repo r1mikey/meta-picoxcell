@@ -1,0 +1,124 @@
+From d7dcd7cd8a5b7308fdd570251df81e0f43341311 Mon Sep 17 00:00:00 2001
+From: Dave Aldridge <david.aldridge@picochip.com>
+Date: Tue, 13 Mar 2012 09:21:01 +0000
+Subject: [PATCH 192/228] picoxcell/pc30xx: change the way the arm pll frequency is obtained
+
+This commit addresses Mantis Issue #9820.
+---
+ arch/arm/mach-picoxcell/pc30xx.c |   55 +++++++++++++++++++++++++------------
+ 1 files changed, 37 insertions(+), 18 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index 53155ad..bf66389 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -55,6 +55,7 @@ struct pc30xx_pll {
+ 	struct clk		clk;
+ 	unsigned long		set_base;
+ 	unsigned long		sense_reg;
++	unsigned long           current_freq;
+ };
+ 
+ static inline struct pc30xx_pll *to_pc30xx_pll(struct clk *clk)
+@@ -62,12 +63,13 @@ static inline struct pc30xx_pll *to_pc30xx_pll(struct clk *clk)
+ 	return container_of(clk, struct pc30xx_pll, clk);
+ }
+ 
+-#define PC30XX_PLL(__name, __min, __max, __set_base, __sense_reg)	\
++#define PC30XX_PLL(__name, __min, __max, __set_base, __sense_reg, __default_freq)   \
+ 	static struct pc30xx_pll __name ## _clk = {			\
+ 		.clk = VARIABLE_CLK_INIT(__name, -1, __min, __max, 1000,\
+ 					 &pc30xx_variable_clk_ops),	\
+ 		.set_base = __set_base,					\
+ 		.sense_reg = __sense_reg,				\
++		.current_freq = __default_freq,                         \
+ 	}
+ 
+ static DEFINE_SPINLOCK(pc30xx_clk_lock);
+@@ -113,6 +115,14 @@ static inline void pc30xx_clk_enable(struct clk *clk)
+ 	spin_unlock_irqrestore(&pc30xx_clk_lock, flags);
+ }
+ 
++static int is_arm_pll (struct clk *clk) {
++
++	int rc = strncmp(clk->name, "arm", 3);
++
++	return !rc;
++}
++
++
+ /*
+  * pll_calc_params() - calculate divf and divq for a given target rate.
+  *
+@@ -216,6 +226,10 @@ static int pc30xx_pll_set_rate(struct clk *clk, unsigned long target)
+ 	       PLL_CHANGE_ACTIVE_MASK)
+ 		cpu_relax();
+ 
++	if (is_arm_pll(clk)) {
++		pll->current_freq = target;
++	}
++
+ 	spin_unlock_irqrestore(&pc30xx_clk_lock, flags);
+ 
+ 	return 0;
+@@ -233,23 +247,28 @@ static int pc30xx_pll_get_rate(struct clk *clk)
+ 	unsigned long rate = 0;
+ 	u64 rate64;
+ 
+-	spin_lock_irqsave(&pc30xx_clk_lock, flags);
+-	while (rate == 0) {
+-		axi2cfg_writel(PLL_SENSE_START_MASK, pll->sense_reg);
+-
+-		while ((sense = axi2cfg_readl(pll->sense_reg)) &
+-		       PLL_SENSE_ACTIVE_MASK)
+-			cpu_relax();
+-
+-		if (sense & PLL_SENSE_FREQ_VALID_MASK) {
+-			rate = (sense & PLL_SENSE_FREQ_MASK) * 1000000;
+-			break;
+-		}
++	if (is_arm_pll(clk)) {
++		rate64 = (u64)pll->current_freq;
+ 	}
++        else {
++	        spin_lock_irqsave(&pc30xx_clk_lock, flags);
++	        while (rate == 0) {
++		        axi2cfg_writel(PLL_SENSE_START_MASK, pll->sense_reg);
++
++		        while ((sense = axi2cfg_readl(pll->sense_reg)) &
++		            PLL_SENSE_ACTIVE_MASK)
++			        cpu_relax();
++
++		        if (sense & PLL_SENSE_FREQ_VALID_MASK) {
++			        rate = (sense & PLL_SENSE_FREQ_MASK) * 1000000;
++			        break;
++		        }
++	        }
+ 	spin_unlock_irqrestore(&pc30xx_clk_lock, flags);
+ 
+ 	rate64 = (u64)rate * parent_rate;
+ 	do_div(rate64, 20000000LLU);
++        }
+ 
+ 	return (int)pc30xx_pll_round_freq((long)rate64);
+ }
+@@ -325,11 +344,11 @@ PC30XX_CLK(axi2pico,	15);
+ PC30XX_CLK(dummy,	-1);
+ VARIABLE_CLK(ref,			 -1, 10000000, 30000000, 100000, &pc30xx_ref_clk_ops);
+ 
+-/*	   Name		Min (Hz)   (Max Hz)    Set   Sense */
+-PC30XX_PLL(arm,		140000000, 1000000000, 0x70, 0x50);
+-PC30XX_PLL(amba,	200000000, 200000000,  0x80, 0x54);
+-PC30XX_PLL(ddr,		533000000, 533000000,  0x90, 0x58);
+-PC30XX_PLL(pico,	160000000, 160000000,  0xa0, 0x5c);
++/*	   Name		Min (Hz)   (Max Hz)    Set   Sense  Default Freq (MHz) */
++PC30XX_PLL(arm,		140000000, 1000000000, 0x70, 0x50,  600000000);
++PC30XX_PLL(amba,	200000000, 200000000,  0x80, 0x54,  200000000);
++PC30XX_PLL(ddr,		533000000, 533000000,  0x90, 0x58,  400000000);
++PC30XX_PLL(pico,	160000000, 160000000,  0xa0, 0x5c,  160000000);
+ 
+ static struct clk *pc30xx_clks[] = {
+ 	&tzprot_clk,
+-- 
+1.7.0.4
+

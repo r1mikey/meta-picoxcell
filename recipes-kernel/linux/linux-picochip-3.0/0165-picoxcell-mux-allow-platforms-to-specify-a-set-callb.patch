@@ -1,0 +1,98 @@
+From 3cbe10af05b91955d9d62c021da2470ead6273c6 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 20 Jun 2011 13:49:59 +0100
+Subject: [PATCH 165/228] picoxcell/mux: allow platforms to specify a set callback
+
+Some pins are more complex and support multiple peripherals.   For
+these, allow a .set_setting callback to be used rather than trying to
+work out complicated masks and shifts.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/mux.c    |    3 +++
+ arch/arm/mach-picoxcell/mux.h    |   14 ++++++++++++--
+ arch/arm/mach-picoxcell/pc30xx.c |   14 +++++++-------
+ 3 files changed, 22 insertions(+), 9 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/mux.c b/arch/arm/mach-picoxcell/mux.c
+index 6514e08..edcbe11 100644
+--- a/arch/arm/mach-picoxcell/mux.c
++++ b/arch/arm/mach-picoxcell/mux.c
+@@ -166,6 +166,9 @@ static int mux_configure(struct mux_def *def, enum mux_setting setting)
+ 	if (def->flags & MUX_RO)
+ 		return -EPERM;
+ 
++	if (def->set_setting)
++		return def->set_setting(def, setting);
++
+ 	if (def->flags & MUX_CONFIG_BUS)
+ 		return mux_set_config_bus(def, setting);
+ 
+diff --git a/arch/arm/mach-picoxcell/mux.h b/arch/arm/mach-picoxcell/mux.h
+index 0f9e219..30c8dce 100644
+--- a/arch/arm/mach-picoxcell/mux.h
++++ b/arch/arm/mach-picoxcell/mux.h
+@@ -61,6 +61,8 @@ struct mux_def {
+ 	unsigned		flags;
+ 	struct list_head	head;
+ 	enum mux_setting	(*get_setting)(const struct mux_def *def);
++	int			(*set_setting)(const struct mux_def *def,
++					       enum mux_setting setting);
+ };
+ 
+ struct mux_cfg {
+@@ -115,16 +117,24 @@ extern int mux_configure_table(const struct mux_cfg *cfg,
+ 	.periph_b	= -1, \
+ }
+ 
+-#define MUXGPIOFUNC(__name, __arm, __sd, __periph, __get_func) { \
++#define __MUXGPIOFUNC(__name, __arm, __sd, __periph, __get_func, __set_func, \
++		      __flags) { \
+ 	.name		= #__name, \
+ 	.armgpio	= __arm, \
+ 	.sdgpio		= __sd, \
+ 	.periph		= MUX_PERIPHERAL_ ## __periph, \
+ 	.get_setting	= __get_func, \
++	.set_setting	= __set_func, \
+ 	.attr		= _SYSDEV_ATTR(__name, 0644, pin_show, pin_store), \
+-	.flags		= MUX_RO, \
++	.flags		= __flags, \
+ }
+ 
++#define MUXGPIOFUNC(__name, __arm, __sd, __periph, __get_func, __set_func) \
++	__MUXGPIOFUNC(__name, __arm, __sd, __periph, __get_func, __set_func, 0)
++
++#define MUXGPIOFUNC_RO(__name, __arm, __sd, __periph, __get_func) \
++	__MUXGPIOFUNC(__name, __arm, __sd, __periph, __get_func, NULL, MUX_RO)
++
+ extern void picoxcell_mux_register(struct mux_def *defs, int nr_defs);
+ 
+ #endif /* __MUX_H__ */
+diff --git a/arch/arm/mach-picoxcell/pc30xx.c b/arch/arm/mach-picoxcell/pc30xx.c
+index e35c305..edc4024 100644
+--- a/arch/arm/mach-picoxcell/pc30xx.c
++++ b/arch/arm/mach-picoxcell/pc30xx.c
+@@ -795,13 +795,13 @@ static struct mux_def pc30xx_labs_mux[] __used = {
+ 	MUXGPIO(ebi_addr23,	39,	-1,	EBI,	-1,	-1,	0x3c,	9,	0),
+ 
+ 	/*	    Name,		ARM,	SD,	PERIPH,	get */
+-	MUXGPIOFUNC(mii_tx_data2,	40,	-1,	MII,	mii_get_mux),
+-	MUXGPIOFUNC(mii_tx_data3,	41,	-1,	MII,	mii_get_mux),
+-	MUXGPIOFUNC(mii_rx_data2,	42,	-1,	MII,	mii_get_mux),
+-	MUXGPIOFUNC(mii_rx_data3,	43,	-1,	MII,	mii_get_mux),
+-	MUXGPIOFUNC(mii_col,		44,	-1,	MII,	mii_get_mux),
+-	MUXGPIOFUNC(mii_crs,		45,	-1,	MII,	mii_get_mux),
+-	MUXGPIOFUNC(mii_tx_clk,		46,	-1,	MII,	mii_get_mux),
++	MUXGPIOFUNC_RO(mii_tx_data2,	40,	-1,	MII,	mii_get_mux),
++	MUXGPIOFUNC_RO(mii_tx_data3,	41,	-1,	MII,	mii_get_mux),
++	MUXGPIOFUNC_RO(mii_rx_data2,	42,	-1,	MII,	mii_get_mux),
++	MUXGPIOFUNC_RO(mii_rx_data3,	43,	-1,	MII,	mii_get_mux),
++	MUXGPIOFUNC_RO(mii_col,		44,	-1,	MII,	mii_get_mux),
++	MUXGPIOFUNC_RO(mii_crs,		45,	-1,	MII,	mii_get_mux),
++	MUXGPIOFUNC_RO(mii_tx_clk,	46,	-1,	MII,	mii_get_mux),
+ };
+ 
+ static void pc30xx_add_trng(void)
+-- 
+1.7.0.4
+

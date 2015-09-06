@@ -1,0 +1,131 @@
+From 66a8c82312781cdf47cb51d63f094cebfe309e0d Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Thu, 2 Jun 2011 14:43:56 +0100
+Subject: [PATCH 145/228] hw_random/picoxcell-trng: convert to runtime pm
+
+Allow the TRNG to be suspended using the runtime pm framework.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/char/hw_random/picoxcell-rng.c |   39 +++++++++++++++++--------------
+ 1 files changed, 21 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/char/hw_random/picoxcell-rng.c b/drivers/char/hw_random/picoxcell-rng.c
+index 990d55a..ff3e5ac 100644
+--- a/drivers/char/hw_random/picoxcell-rng.c
++++ b/drivers/char/hw_random/picoxcell-rng.c
+@@ -15,6 +15,7 @@
+ #include <linux/kernel.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/pm_runtime.h>
+ 
+ #define DATA_REG_OFFSET		0x0200
+ #define CSR_REG_OFFSET		0x0278
+@@ -71,12 +72,14 @@ static void picoxcell_trng_reset(void)
+ static int picoxcell_trng_read(struct hwrng *rng, void *buf, size_t max,
+ 			       bool wait)
+ {
+-	int i;
++	int i, err = 0;
++
++	pm_runtime_get_sync(rng_dev);
+ 
+ 	/* Wait for some data to become available. */
+ 	for (i = 0; i < PICO_TRNG_TIMEOUT && picoxcell_trng_is_empty(); ++i) {
+ 		if (!wait)
+-			return 0;
++			goto out;
+ 
+ 		udelay(1);
+ 	}
+@@ -84,14 +87,22 @@ static int picoxcell_trng_read(struct hwrng *rng, void *buf, size_t max,
+ 	if (picoxcell_trng_read_csr() & CSR_FAULT_MASK) {
+ 		dev_err(rng_dev, "fault detected, resetting TRNG\n");
+ 		picoxcell_trng_reset();
+-		return -EIO;
++		err = -EIO;
++		goto out;
+ 	}
+ 
+ 	if (i == PICO_TRNG_TIMEOUT)
+-		return 0;
++		goto out;
+ 
+ 	*(u32 *)buf = __raw_readl(rng_base + DATA_REG_OFFSET);
++	pm_runtime_put_sync(rng_dev);
++
+ 	return sizeof(u32);
++
++out:
++	pm_runtime_put_sync(rng_dev);
++
++	return err;
+ }
+ 
+ static struct hwrng picoxcell_trng = {
+@@ -127,11 +138,8 @@ static int picoxcell_trng_probe(struct platform_device *pdev)
+ 		return PTR_ERR(rng_clk);
+ 	}
+ 
+-	ret = clk_enable(rng_clk);
+-	if (ret) {
+-		dev_warn(&pdev->dev, "unable to enable clk\n");
+-		goto err_enable;
+-	}
++	pm_runtime_enable(&pdev->dev);
++	pm_runtime_resume(&pdev->dev);
+ 
+ 	picoxcell_trng_start();
+ 	ret = hwrng_register(&picoxcell_trng);
+@@ -144,8 +152,6 @@ static int picoxcell_trng_probe(struct platform_device *pdev)
+ 	return 0;
+ 
+ err_register:
+-	clk_disable(rng_clk);
+-err_enable:
+ 	clk_put(rng_clk);
+ 
+ 	return ret;
+@@ -154,13 +160,11 @@ err_enable:
+ static int __devexit picoxcell_trng_remove(struct platform_device *pdev)
+ {
+ 	hwrng_unregister(&picoxcell_trng);
+-	clk_disable(rng_clk);
+ 	clk_put(rng_clk);
+ 
+ 	return 0;
+ }
+ 
+-#ifdef CONFIG_PM
+ static int picoxcell_trng_suspend(struct device *dev)
+ {
+ 	clk_disable(rng_clk);
+@@ -174,10 +178,11 @@ static int picoxcell_trng_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops picoxcell_trng_pm_ops = {
+-	.suspend	= picoxcell_trng_suspend,
+-	.resume		= picoxcell_trng_resume,
++	.suspend		= picoxcell_trng_suspend,
++	.resume			= picoxcell_trng_resume,
++	.runtime_suspend	= picoxcell_trng_suspend,
++	.runtime_resume		= picoxcell_trng_resume,
+ };
+-#endif /* CONFIG_PM */
+ 
+ static struct platform_driver picoxcell_trng_driver = {
+ 	.probe		= picoxcell_trng_probe,
+@@ -185,9 +190,7 @@ static struct platform_driver picoxcell_trng_driver = {
+ 	.driver		= {
+ 		.name	= "picoxcell-trng",
+ 		.owner	= THIS_MODULE,
+-#ifdef CONFIG_PM
+ 		.pm	= &picoxcell_trng_pm_ops,
+-#endif /* CONFIG_PM */
+ 	},
+ };
+ 
+-- 
+1.7.0.4
+

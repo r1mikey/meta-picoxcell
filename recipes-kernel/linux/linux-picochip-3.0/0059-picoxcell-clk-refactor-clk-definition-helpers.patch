@@ -1,0 +1,65 @@
+From 183b0fd77efd5a8ec3c091fecbfba78874ee352f Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Tue, 5 Apr 2011 14:07:46 +0100
+Subject: [PATCH 059/228] picoxcell/clk: refactor clk definition helpers
+
+Refactor the clock definition helpers to use a separate initializer.
+This initializer can then be reused when embedding a struct clk in a
+different structure for representing a more complicated clk.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/include/mach/clkdev.h |   23 +++++++++++++++--------
+ 1 files changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/include/mach/clkdev.h b/arch/arm/mach-picoxcell/include/mach/clkdev.h
+index 53593e3..9bff78b 100644
+--- a/arch/arm/mach-picoxcell/include/mach/clkdev.h
++++ b/arch/arm/mach-picoxcell/include/mach/clkdev.h
+@@ -53,21 +53,24 @@ extern void picoxcell_clk_add(struct clk *clk);
+ extern int __clk_enable(struct clk *clk);
+ extern void __clk_disable(struct clk *clk);
+ 
+-/*
+- * Declare a new clock with a given rate and ID. All clocks are enabled by
+- * default.
+- */
+-#define FIXED_CLK(__name, __rate, __id, __ops)				\
+-	static struct clk __name ## _clk = {				\
++#define FIXED_CLK_INIT(__name, __rate, __id, __ops) \
++	{								\
+ 		.name		= #__name,				\
+ 		.rate		= __rate,				\
+ 		.clk_num	= __id,					\
+ 		.enable_count	= 1,					\
+ 		.ops		= (__ops),				\
+ 	}
++/*
++ * Declare a new clock with a given rate and ID. All clocks are enabled by
++ * default.
++ */
++#define FIXED_CLK(__name, __rate, __id, __ops) \
++	static struct clk __name ## _clk = \
++		FIXED_CLK_INIT(__name, __rate, __id, __ops)
+ 
+-#define VARIABLE_CLK(__name, __id, __min, __max, __step, __ops)		\
+-	static struct clk __name ## _clk = {				\
++#define VARIABLE_CLK_INIT(__name, __id, __min, __max, __step, __ops)	\
++	{								\
+ 		.name		= #__name,				\
+ 		.clk_num	= __id,					\
+ 		.enable_count	= 1,					\
+@@ -78,6 +81,10 @@ extern void __clk_disable(struct clk *clk);
+ 		.ops		= (__ops),				\
+ 	}
+ 
++#define VARIABLE_CLK(__name, __id, __min, __max, __step, __ops)		\
++	static struct clk __name ## _clk =				\
++		VARIABLE_CLK_INIT(__name, __id, __min, __max, __step, __ops)
++
+ #define CLK_LOOKUP(__dev_id, __con_id, __clk) \
+ 	{ .dev_id = __dev_id, .con_id = __con_id, .clk = __clk }
+ 
+-- 
+1.7.0.4
+

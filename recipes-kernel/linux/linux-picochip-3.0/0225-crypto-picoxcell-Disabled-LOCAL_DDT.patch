@@ -1,0 +1,26 @@
+From 4fc163fdace674861ad3dc2f746ef1306432f4b1 Mon Sep 17 00:00:00 2001
+From: Paul Richardson <paulr@picochip.com>
+Date: Mon, 24 Mar 2014 22:30:56 +0000
+Subject: [PATCH 225/228] crypto: picoxcell: Disabled LOCAL_DDT
+ Mantis Issue #11385
+
+---
+ drivers/crypto/picoxcell_crypto.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/crypto/picoxcell_crypto.c b/drivers/crypto/picoxcell_crypto.c
+index ce1722c..ab4bbce 100644
+--- a/drivers/crypto/picoxcell_crypto.c
++++ b/drivers/crypto/picoxcell_crypto.c
+@@ -78,7 +78,7 @@
+ 
+ #define MAX_DDT_LEN			16
+ 
+-#define LOCAL_DDT
++//#define LOCAL_DDT
+ 
+ #ifdef LOCAL_DDT
+ #define DDT_POOL_SIZE           (SZ_64K * 4)
+-- 
+1.7.0.4
+

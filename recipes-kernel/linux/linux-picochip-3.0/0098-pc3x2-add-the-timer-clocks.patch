@@ -1,0 +1,29 @@
+From 2b9688b8c5c09cec0796140731ffe98235154270 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Wed, 20 Apr 2011 17:21:54 +0100
+Subject: [PATCH 098/228] pc3x2: add the timer clocks
+
+Add the DW_APB timer clocks so that the dw_apb_timer_platform driver
+can be used for the clock event and clocksource timers.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ arch/arm/mach-picoxcell/pc3x2.c |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-picoxcell/pc3x2.c b/arch/arm/mach-picoxcell/pc3x2.c
+index c8dfd20..5d3ce93 100644
+--- a/arch/arm/mach-picoxcell/pc3x2.c
++++ b/arch/arm/mach-picoxcell/pc3x2.c
+@@ -39,6 +39,8 @@ static struct clk_lookup pc3x2_clk_lookup[] = {
+ 	CLK_LOOKUP("macb",		"pclk",		&dummy_clk),
+ 	CLK_LOOKUP("macb",		"hclk",		&dummy_clk),
+ 	CLK_LOOKUP(NULL,		"ref",		&ref_clk),
++	CLK_LOOKUP("dw_apb_timer.0",	NULL,		&dummy_clk),
++	CLK_LOOKUP("dw_apb_timer.1",	NULL,		&dummy_clk),
+ };
+ 
+ static void __init pc3x2_clk_init(void)
+-- 
+1.7.0.4
+

@@ -1,0 +1,103 @@
+From e81d586bbc45c8975fd6bdebb91fa7feda0e10e1 Mon Sep 17 00:00:00 2001
+From: Jamie Iles <jamie@jamieiles.com>
+Date: Mon, 28 Mar 2011 11:14:06 +0100
+Subject: [PATCH 047/228] macb: support checksum offloading for GEM
+
+GEM supports validation and generation of the IP, TCP and UDP checksums.
+
+Signed-off-by: Jamie Iles <jamie@jamieiles.com>
+---
+ drivers/net/macb.c |   16 +++++++++++++++-
+ drivers/net/macb.h |    7 +++++++
+ 2 files changed, 22 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/net/macb.c b/drivers/net/macb.c
+index 7a9719c..32bd768 100644
+--- a/drivers/net/macb.c
++++ b/drivers/net/macb.c
+@@ -404,7 +404,11 @@ static int macb_rx_frame(struct macb *bp, unsigned int first_frag,
+ 	}
+ 
+ 	skb_reserve(skb, RX_OFFSET);
+-	skb_checksum_none_assert(skb);
++	if (bp->is_gem && (bp->rx_ring[last_frag].ctrl & GEM_BF(CSUM, 0x3)))
++		skb->ip_summed = CHECKSUM_UNNECESSARY;
++	else
++		skb_checksum_none_assert(skb);
++
+ 	skb_put(skb, len);
+ 
+ 	for (frag = first_frag; ; frag = NEXT_RX(frag)) {
+@@ -853,6 +857,9 @@ static u32 macb_dbw(struct macb *bp)
+ /*
+  * Configure the receive DMA engine to use the correct receive buffer size.
+  * This is a configurable parameter for GEM.
++ *
++ * GEM also supports TX checksum offloading in the DMA engine so enable that
++ * here.
+  */
+ static void macb_configure_dma(struct macb *bp)
+ {
+@@ -861,6 +868,7 @@ static void macb_configure_dma(struct macb *bp)
+ 	if (bp->is_gem) {
+ 		dmacfg = gem_readl(bp, DMACFG) & ~GEM_BF(RXBS, -1L);
+ 		dmacfg |= GEM_BF(RXBS, RX_BUFFER_SIZE / 64);
++		dmacfg |= GEM_BF(TXCSUM, 1);
+ 		gem_writel(bp, DMACFG, dmacfg);
+ 	}
+ }
+@@ -881,6 +889,8 @@ static void macb_init_hw(struct macb *bp)
+ 	if (!(bp->dev->flags & IFF_BROADCAST))
+ 		config |= MACB_BIT(NBC);	/* No BroadCast */
+ 	config |= macb_dbw(bp);
++	if (bp->is_gem)
++		config |= GEM_BIT(CSUMEN);
+ 	macb_writel(bp, NCFGR, config);
+ 
+ 	macb_configure_dma(bp);
+@@ -1314,6 +1324,10 @@ static int __init macb_probe(struct platform_device *pdev)
+ 	/* Set MII management clock divider */
+ 	config = macb_mdc_clk_div(bp);
+ 	config |= macb_dbw(bp);
++	if (bp->is_gem) {
++		config |= GEM_BIT(CSUMEN);
++		dev->features |= NETIF_F_IP_CSUM;
++	}
+ 	macb_writel(bp, NCFGR, config);
+ 
+ 	macb_get_hwaddr(bp);
+diff --git a/drivers/net/macb.h b/drivers/net/macb.h
+index d743d3e..1e2dfa3 100644
+--- a/drivers/net/macb.h
++++ b/drivers/net/macb.h
+@@ -149,6 +149,8 @@
+ #define GEM_CLK_SIZE				3
+ #define GEM_DBW_OFFSET				21
+ #define GEM_DBW_SIZE				2
++#define GEM_CSUMEN_OFFSET			24
++#define GEM_CSUMEN_SIZE				1
+ 
+ /* Constants for data bus width. */
+ #define GEM_DBW32				0
+@@ -158,6 +160,8 @@
+ /* Bitfields in DMACFG. */
+ #define GEM_RXBS_OFFSET				16
+ #define GEM_RXBS_SIZE				8
++#define GEM_TXCSUM_OFFSET			11
++#define GEM_TXCSUM_SIZE				1
+ 
+ /* Bitfields in NSR */
+ #define MACB_NSR_LINK_OFFSET			0
+@@ -365,6 +369,9 @@ struct dma_desc {
+ #define MACB_RX_WADDR_OFFSET			2
+ #define MACB_RX_WADDR_SIZE			30
+ 
++#define GEM_CSUM_OFFSET				22
++#define GEM_CSUM_SIZE				2
++
+ #define MACB_RX_FRMLEN_OFFSET			0
+ #define MACB_RX_FRMLEN_SIZE			12
+ #define MACB_RX_OFFSET_OFFSET			12
+-- 
+1.7.0.4
+
