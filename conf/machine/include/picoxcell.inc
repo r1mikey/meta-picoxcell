@@ -19,7 +19,10 @@ UBOOT_CONFIG[nand] = "picochippc7302nand picochippc73032nand picochippc7308"
 UBOOT_CONFIG[nor] = "picochippc7302nor picochippc73032nor"
 
 KERNEL_IMAGETYPE ?= "uImage"
+# KERNEL_IMAGETYPE ?= "Image"
+# KERNEL_CLASSES_append = " kernel-fitimage"
 PREFERRED_PROVIDER_virtual/kernel ?= "linux-picochip"
+# PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-dev"
 PREFERRED_PROVIDER_u-boot = "u-boot-picochip"
 PREFERRED_PROVIDER_virtual/bootloader = "u-boot-picochip"
 
@@ -31,15 +34,11 @@ MKUBIFS_ARGS ?= "-m 2048 -e 126976 -c 528 "
 UBINIZE_ARGS ?= "-m 2048 -p 128KiB"
 JFFS2_ERASEBLOCK ?= "0x20000"
 
-# PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-dev"
-# KERNEL_IMAGETYPE ?= "Image"
-# KERNEL_CLASSES_append = " kernel-fitimage"
-
 MACHINE_FEATURES ?= "serial"
 MACHINE_FEATURES_BACKFILL_CONSIDERED ?= "rtc"
 MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
 DISTRO_FEATURES_BACKFILL_CONSIDERED ?= "pulseaudio bluez5"
-DEPENDS_pn-packagegroup-core-boot += "virtual/bootloader"
+# DEPENDS_pn-packagegroup-core-boot += "virtual/bootloader"
 
 KERNEL_MODULE_AUTOLOAD = " \
     picoif \
