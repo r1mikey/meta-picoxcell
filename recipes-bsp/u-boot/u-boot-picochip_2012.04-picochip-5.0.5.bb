@@ -82,6 +82,15 @@ SRC_URI += " \
     file://0070-pc7308-u-boot-supports-multiple-DDR3-devices.patch \
     "
 
+# fix up the BSP mess for modern compilers
+SRC_URI += " \
+    file://9001-Add-the-GCC5-compiler-header-for-master-U-Boot.patch \
+    file://9002-Update-weak-alias-definitions.patch \
+    file://9003-extern-inline-is-no-longer-valid-in-GCC5-replace-wit.patch \
+    file://9004-The-picoxcell-read-write-register-functions-are-comp.patch \
+    file://9005-Use-the-proper-I-O-accessors-for-GPIO-access-and-don.patch \
+    "
+
 PV = "v2012.04"
 
 EXTRA_OEMAKE_append = " KCFLAGS=-fgnu89-inline"

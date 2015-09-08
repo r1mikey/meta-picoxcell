@@ -38,7 +38,7 @@ MACHINE_FEATURES ?= "serial"
 MACHINE_FEATURES_BACKFILL_CONSIDERED ?= "rtc"
 MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
 DISTRO_FEATURES_BACKFILL_CONSIDERED ?= "pulseaudio bluez5"
-# DEPENDS_pn-packagegroup-core-boot += "virtual/bootloader"
+DEPENDS_pn-packagegroup-core-boot += "virtual/bootloader"
 
 KERNEL_MODULE_AUTOLOAD = " \
     picoif \

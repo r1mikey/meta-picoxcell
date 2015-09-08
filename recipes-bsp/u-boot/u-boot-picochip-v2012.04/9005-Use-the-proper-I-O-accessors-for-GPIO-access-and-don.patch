@@ -1,0 +1,97 @@
+From 3dec2656048cb302709ec4768d22cf0c264097f1 Mon Sep 17 00:00:00 2001
+From: Michael van der Westhuizen <r1mikey@gmail.com>
+Date: Tue, 8 Sep 2015 11:35:10 +0200
+Subject: [PATCH 5/5] Use the proper I/O accessors for GPIO access (and don't
+ redefine provided macros)
+
+---
+ arch/arm/cpu/arm926ejs/picoxcell/gpio.c | 27 +++++++++++++--------------
+ 1 file changed, 13 insertions(+), 14 deletions(-)
+
+diff --git a/arch/arm/cpu/arm926ejs/picoxcell/gpio.c b/arch/arm/cpu/arm926ejs/picoxcell/gpio.c
+index e4bf981..9881334 100644
+--- a/arch/arm/cpu/arm926ejs/picoxcell/gpio.c
++++ b/arch/arm/cpu/arm926ejs/picoxcell/gpio.c
+@@ -17,6 +17,8 @@
+ 
+ /* Includes ---------------------------------------------------------------- */
+ #include <common.h>
++#include <asm/io.h>
++#include <linux/compiler.h>
+ #include <asm/errno.h>
+ #include <asm/arch/utilities.h>
+ #include <asm/arch/gpio.h>
+@@ -24,10 +26,7 @@
+ #include <asm/arch/picoxcell_gpio.h>
+ 
+ /* Macros ------------------------------------------------------------------ */
+-#define __iomem
+ #define _ioa (void __iomem *)
+-#define readl(addr) (picoxcell_read_register((unsigned int)addr))
+-#define writel(val, addr) (picoxcell_write_register(val, (unsigned int)addr))
+ 
+ /* The number of gpio pins that this drover can handle */
+ #define ARCH_NR_GPIOS 128
+@@ -182,14 +181,14 @@ static int armgpio_direction_input (struct gpio_chip *chip, unsigned offset)
+ 	unsigned long val, bit_offset = armgpio_offset (offset);
+ 
+ 	/* Mark the pin as an output. */
+-	val = readl (ddr);
++	val = __raw_readl (ddr);
+ 	val &= ~(1 << bit_offset);
+-	writel (val, ddr);
++	__raw_writel (val, ddr);
+ 
+ 	/* Set the pin as software controlled. */
+-	val = readl (cr);
++	val = __raw_readl (cr);
+ 	val &= ~(1 << bit_offset);
+-	writel (val, cr);
++	__raw_writel (val, cr);
+ 
+ 	return 0;
+ }
+@@ -207,14 +206,14 @@ armgpio_direction_output (struct gpio_chip *chip, unsigned offset, int value)
+ 	armgpio_set (chip, offset, value);
+ 
+ 	/* Mark the pin as an output. */
+-	val = readl (ddr);
++	val = __raw_readl (ddr);
+ 	val |= (1 << bit_offset);
+-	writel (val, ddr);
++	__raw_writel (val, ddr);
+ 
+ 	/* Set the pin as software controlled. */
+-	val = readl (cr);
++	val = __raw_readl (cr);
+ 	val &= ~(1 << bit_offset);
+-	writel (val, cr);
++	__raw_writel (val, cr);
+ 
+ 	return 0;
+ }
+@@ -224,7 +223,7 @@ static int armgpio_get (struct gpio_chip *chip, unsigned offset)
+ 	void __iomem *ext = ARMGPIO_EXT (chip->base + offset);
+ 	unsigned long bit_offset = armgpio_offset (offset);
+ 
+-	return ! !(readl (ext) & (1 << bit_offset));
++	return ! !(__raw_readl (ext) & (1 << bit_offset));
+ }
+ 
+ static void armgpio_set (struct gpio_chip *chip, unsigned offset, int value)
+@@ -232,10 +231,10 @@ static void armgpio_set (struct gpio_chip *chip, unsigned offset, int value)
+ 	void __iomem *dr = ARMGPIO_DR (chip->base + offset);
+ 	unsigned long val, bit_offset = armgpio_offset (offset);
+ 
+-	val = readl (dr);
++	val = __raw_readl (dr);
+ 	val &= ~(1 << bit_offset);
+ 	val |= (! !value << bit_offset);
+-	writel (val, dr);
++	__raw_writel (val, dr);
+ }
+ 
+ /*
+-- 
+2.1.4
+
