@@ -28,6 +28,9 @@ PREFERRED_VERSION_linux-libc-headers = "3.0"
 PREFERRED_PROVIDER_u-boot = "u-boot-picochip"
 PREFERRED_PROVIDER_virtual/bootloader = "u-boot-picochip"
 
+# older devtools are needed for this BSP
+GCCVERSION = "4.9%"
+
 _STORAGETECH_FSTYPE = '${@base_contains("UBOOT_CONFIG", "nor", "jffs2", "", d)}'
 _STORAGETECH_FSTYPE += '${@base_contains("UBOOT_CONFIG", "nand", "ubi", "", d)}'
 IMAGE_FSTYPES ?= 'tar.gz ${_STORAGETECH_FSTYPE}'
